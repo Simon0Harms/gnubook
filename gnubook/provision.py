@@ -13,6 +13,7 @@ from unittest import mock
 from sqlalchemy import MetaData, create_engine, text, types
 from sqlalchemy.engine import make_url
 
+from .i18n import _
 from .system import slug
 
 NAME_RE = re.compile(r"[a-z][a-z0-9_]{1,40}")
@@ -44,9 +45,9 @@ def exists(admin_url: str, dbname: str) -> bool:
 def create_role_and_db(admin_url: str, dbname: str) -> tuple[str, str]:
     """CREATE ROLE <dbname> LOGIN + CREATE DATABASE <dbname> OWNER <dbname>. Returns (user URL, password)."""
     if not NAME_RE.fullmatch(dbname):
-        raise ProvisionError(f"Ungültiger Datenbankname: {dbname}")
+        raise ProvisionError(_("Ungültiger Datenbankname: {name}", name=dbname))
     if exists(admin_url, dbname):
-        raise ProvisionError(f"Datenbank oder Rolle „{dbname}“ gibt es schon.")
+        raise ProvisionError(_("Datenbank oder Rolle „{name}“ gibt es schon.", name=dbname))
     password = secrets.token_urlsafe(24)
     eng = _admin_engine(admin_url)
     try:
@@ -68,7 +69,7 @@ def create_role_and_db(admin_url: str, dbname: str) -> tuple[str, str]:
 
 def drop_role_and_db(admin_url: str, dbname: str):
     if not NAME_RE.fullmatch(dbname):
-        raise ProvisionError(f"Ungültiger Datenbankname: {dbname}")
+        raise ProvisionError(_("Ungültiger Datenbankname: {name}", name=dbname))
     eng = _admin_engine(admin_url)
     try:
         with eng.connect() as c:
@@ -133,20 +134,20 @@ def import_sqlite_book(sqlite_path: str, url: str):
     with open(sqlite_path, "rb") as fh:
         head = fh.read(16)
     if head != b"SQLite format 3\x00":
-        raise ProvisionError("Die Datei ist keine GnuCash-Datei im SQLite-Format. XML-Dateien bitte in GnuCash "
-                             "Desktop öffnen und mit „Speichern unter → sqlite3“ umwandeln.")
+        raise ProvisionError(_("Die Datei ist keine GnuCash-Datei im SQLite-Format. XML-Dateien bitte in GnuCash "
+                               "Desktop öffnen und mit „Speichern unter → sqlite3“ umwandeln."))
     src = sqlite3.connect(f"file:{sqlite_path}?mode=ro", uri=True)
     try:
         tables = {r[0] for r in src.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         if not {"books", "accounts", "transactions", "splits", "versions"} <= tables:
-            raise ProvisionError("Die Datei enthält kein GnuCash-Buch.")
+            raise ProvisionError(_("Die Datei enthält kein GnuCash-Buch."))
         create_empty_book(url)  # creates the GnuCash tables with PostgreSQL types
         eng = create_engine(url)
         meta = MetaData()
         meta.reflect(bind=eng)
         missing = [t for t in tables if t not in meta.tables and not t.startswith("sqlite_")]
         if missing:
-            raise ProvisionError("Unbekannte Tabellen in der Datei: " + ", ".join(sorted(missing)))
+            raise ProvisionError(_("Unbekannte Tabellen in der Datei: {tables}", tables=", ".join(sorted(missing))))
         with eng.begin() as conn:
             for t in meta.sorted_tables:
                 conn.execute(t.delete())
@@ -157,7 +158,8 @@ def import_sqlite_book(sqlite_path: str, url: str):
                 cols = [r[1] for r in src.execute(f'PRAGMA table_info("{name}")')]
                 unknown = [c for c in cols if c not in table.c]
                 if unknown:
-                    raise ProvisionError(f"Spalten {unknown} in Tabelle {name} passen nicht zum Schema.")
+                    raise ProvisionError(_("Spalten {columns} in Tabelle {table} passen nicht zum Schema.", columns=unknown,
+                                           table=name))
                 conv = []
                 for c in cols:
                     t = table.c[c].type

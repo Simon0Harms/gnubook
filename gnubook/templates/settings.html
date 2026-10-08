@@ -1,86 +1,83 @@
 {% extends "base.html" %}
-{% block title %}Einstellungen{% endblock %}
-{% block header %}Einstellungen und Status{% endblock %}
+{% block title %}{{ _('Einstellungen') }}{% endblock %}
+{% block header %}{{ _('Einstellungen und Status') }}{% endblock %}
 {% block content %}
 <div class="row">
   <div class="col-lg-6">
     <div class="card mb-4">
-      <div class="card-header"><h3 class="card-title">GnuCash-Buch</h3></div>
+      <div class="card-header"><h3 class="card-title">{{ _('GnuCash-Buch') }}</h3></div>
       <div class="card-body small">
         <dl class="row mb-0">
-          <dt class="col-sm-4">Buch</dt><dd class="col-sm-8">{{ current_book.name }}</dd>
-          <dt class="col-sm-4">Datenbank</dt><dd class="col-sm-8 font-monospace text-break">{{ safe_url }}</dd>
-          <dt class="col-sm-4">GnuCash-Version</dt><dd class="col-sm-8">{{ schema.gnucash }}
-            {% if schema.supported %}<span class="badge text-bg-success">Schema unterstützt</span>
-            {% else %}<span class="badge text-bg-danger">Schema unbekannt – Schreiben wird verweigert</span>{% endif %}</dd>
-          <dt class="col-sm-4">Zeitzone</dt><dd class="col-sm-8">{{ current_book.book.tz.key }}</dd>
-          <dt class="col-sm-4">Konfiguration</dt><dd class="col-sm-8 font-monospace">{{ cfg.source or '(Umgebungsvariablen)' }}</dd>
+          <dt class="col-sm-4">{{ _('Buch') }}</dt><dd class="col-sm-8">{{ current_book.name }}</dd>
+          <dt class="col-sm-4">{{ _('Datenbank') }}</dt><dd class="col-sm-8 font-monospace text-break">{{ safe_url }}</dd>
+          <dt class="col-sm-4">{{ _('GnuCash-Version') }}</dt><dd class="col-sm-8">{{ schema.gnucash }}
+            {% if schema.supported %}<span class="badge text-bg-success">{{ _('Schema unterstützt') }}</span>
+            {% else %}<span class="badge text-bg-danger">{{ _('Schema unbekannt – Schreiben wird verweigert') }}</span>{% endif %}</dd>
+          <dt class="col-sm-4">{{ _('Zeitzone') }}</dt><dd class="col-sm-8">{{ current_book.book.tz.key }}</dd>
+          <dt class="col-sm-4">{{ _('Konfiguration') }}</dt><dd class="col-sm-8 font-monospace">{{ cfg.source or _('(Umgebungsvariablen)') }}</dd>
         </dl>
       </div>
     </div>
     <div class="card mb-4">
-      <div class="card-header"><h3 class="card-title">Sicherung als GnuCash-Datei</h3></div>
+      <div class="card-header"><h3 class="card-title">{{ _('Sicherung als GnuCash-Datei') }}</h3></div>
       <div class="card-body small">
         {% if backup %}
-          <p class="mb-1">Nach jeder Änderung: <code>{{ backup.path }}</code> ({{ backup.keep }} Versionen)</p>
-          {% if backup.last_error %}<p class="text-danger mb-0"><i class="bi bi-exclamation-triangle"></i> Letzte Sicherung fehlgeschlagen: {{ backup.last_error }}</p>
-          {% elif backup.last_ok %}<p class="text-success mb-0"><i class="bi bi-check-circle"></i> Zuletzt gesichert: {{ backup.last_ok }}</p>
-          {% else %}<p class="text-body-secondary mb-0">Seit dem Start noch keine Änderung.</p>{% endif %}
+          <p class="mb-1">{{ _('Nach jeder Änderung: {path} ({n} Versionen)', path='<code>%s</code>'|format(backup.path|e), n=backup.keep)|safe }}</p>
+          {% if backup.last_error %}<p class="text-danger mb-0"><i class="bi bi-exclamation-triangle"></i> {{ _('Letzte Sicherung fehlgeschlagen: {error}', error=backup.last_error) }}</p>
+          {% elif backup.last_ok %}<p class="text-success mb-0"><i class="bi bi-check-circle"></i> {{ _('Zuletzt gesichert: {when}', when=backup.last_ok) }}</p>
+          {% else %}<p class="text-body-secondary mb-0">{{ _('Seit dem Start noch keine Änderung.') }}</p>{% endif %}
         {% else %}
-          <p class="mb-0">Aus. In <code>config.toml</code> unter <code>[backup]</code> <code>gnucash_file</code> setzen.</p>
+          <p class="mb-0">{{ _('Aus. In <code>config.toml</code> unter <code>[backup]</code> <code>gnucash_file</code> setzen.')|safe }}</p>
         {% endif %}
       </div>
     </div>
     <div class="card mb-4">
-      <div class="card-header"><h3 class="card-title">Sperre (GnuCash Desktop)</h3></div>
+      <div class="card-header"><h3 class="card-title">{{ _('Sperre (GnuCash Desktop)') }}</h3></div>
       <div class="card-body small">
         {% if all_locks %}
-          <p>Einträge in der Tabelle <code>gnclock</code>:</p>
+          <p>{{ _('Einträge in der Tabelle <code>gnclock</code>:')|safe }}</p>
           <ul>{% for h, p in all_locks %}<li class="font-monospace">{{ h }} (PID {{ p }})</li>{% endfor %}</ul>
-          <p>Solange GnuCash Desktop das Buch geöffnet hat, speichert gnubook nichts. Ist GnuCash abgestürzt,
-             kann ein veralteter Eintrag übrig bleiben.</p>
+          <p>{{ _('Solange GnuCash Desktop das Buch geöffnet hat, speichert gnubook nichts. Ist GnuCash abgestürzt, kann ein veralteter Eintrag übrig bleiben.') }}</p>
           <form method="post" action="{{ url_for('views.unlock') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="confirm" value="yes" id="confirm">
-              <label class="form-check-label" for="confirm">GnuCash Desktop ist auf allen Rechnern geschlossen.</label></div>
-            <button class="btn btn-sm btn-outline-danger" type="submit">Sperreinträge entfernen</button>
+              <label class="form-check-label" for="confirm">{{ _('GnuCash Desktop ist auf allen Rechnern geschlossen.') }}</label></div>
+            <button class="btn btn-sm btn-outline-danger" type="submit">{{ _('Sperreinträge entfernen') }}</button>
           </form>
         {% else %}
-          <p class="mb-0 text-success"><i class="bi bi-unlock"></i> Keine Sperre – das Buch ist beschreibbar.</p>
+          <p class="mb-0 text-success"><i class="bi bi-unlock"></i> {{ _('Keine Sperre – das Buch ist beschreibbar.') }}</p>
         {% endif %}
       </div>
     </div>
   </div>
   <div class="col-lg-6">
     <div class="card mb-4">
-      <div class="card-header"><h3 class="card-title">FinTS-Importer (Firefly-III-API)</h3></div>
+      <div class="card-header"><h3 class="card-title">{{ _('FinTS-Importer (Firefly-III-API)') }}</h3></div>
       <div class="card-body small">
-        <p>Im Importer als <code>firefly_url</code> <code>{{ url_for('views.dashboard', _external=True).rstrip('/') }}</code>
-           eintragen und als <code>firefly_access_token</code> ein Token dieses Buchs. Jedes Token gehört zu einem
-           Benutzer und genau diesem Buch.</p>
+        <p>{{ _('Im Importer als <code>firefly_url</code> {url} eintragen und als <code>firefly_access_token</code> ein Token dieses Buchs. Jedes Token gehört zu einem Benutzer und genau diesem Buch.', url='<code>%s</code>'|format(url_for('views.dashboard', _external=True).rstrip('/')|e))|safe }}</p>
         {% if new_token %}
-          <div class="alert alert-warning"><b>Neues Token – nur jetzt sichtbar:</b><br><code class="user-select-all text-break">{{ new_token }}</code></div>
+          <div class="alert alert-warning"><b>{{ _('Neues Token – nur jetzt sichtbar:') }}</b><br><code class="user-select-all text-break">{{ new_token }}</code></div>
         {% endif %}
         <table class="table table-sm mb-2" id="api">
-          <thead><tr><th>Bezeichnung</th><th>Benutzer</th><th>zuletzt benutzt</th><th></th></tr></thead>
+          <thead><tr><th>{{ _('Bezeichnung') }}</th><th>{{ _('Benutzername') }}</th><th>{{ _('zuletzt benutzt') }}</th><th></th></tr></thead>
           <tbody>
           {% for t in tokens %}
             <tr><td>{{ t['label'] }}</td><td>{{ t['username'] }}</td><td>{{ t['last_used_at']|de_datetime if t['last_used_at'] else '–' }}</td>
               <td class="text-end"><form method="post" action="{{ url_for('views.token_delete', token_id=t['id']) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-sm btn-link text-danger p-0" data-confirm-button="Token „{{ t['label'] }}“ löschen? Der Importer kann dann nicht mehr importieren.">löschen</button></form></td></tr>
-          {% else %}<tr><td colspan="4" class="text-body-secondary">Noch kein Token – Import-API für dieses Buch aus.</td></tr>{% endfor %}
+                <button class="btn btn-sm btn-link text-danger p-0" data-confirm-button="{{ _('Token „{label}“ löschen? Der Importer kann dann nicht mehr importieren.', label=t['label']) }}">{{ _('löschen') }}</button></form></td></tr>
+          {% else %}<tr><td colspan="4" class="text-body-secondary">{{ _('Noch kein Token – Import-API für dieses Buch aus.') }}</td></tr>{% endfor %}
           </tbody>
         </table>
         <form method="post" action="{{ url_for('views.token_create') }}" class="input-group input-group-sm mb-3" style="max-width: 26rem">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <input class="form-control" name="label" placeholder="Bezeichnung, z. B. FinTS 1822">
-          <button class="btn btn-outline-success" type="submit">Token erzeugen</button>
+          <input class="form-control" name="label" placeholder="{{ _('Bezeichnung, z. B. FinTS 1822') }}">
+          <button class="btn btn-outline-success" type="submit">{{ _('Token erzeugen') }}</button>
         </form>
-        <p class="mb-1">Auffangkonto (wenn kein Gegenkonto erkannt wird): <b>{{ fallback.full_name if fallback else 'nicht gefunden – [import] fallback_account setzen!' }}</b></p>
-        {% if cfg.importer.transit_account %}<p class="mb-1">Geldtransit: <b>{{ cfg.importer.transit_account }}</b> zwischen {{ cfg.importer.transit_between|join(', ') }}</p>{% endif %}
+        <p class="mb-1">{{ _('Auffangkonto (wenn kein Gegenkonto erkannt wird):') }} <b>{{ fallback.full_name if fallback else _('nicht gefunden – [import] fallback_account setzen!') }}</b></p>
+        {% if cfg.importer.transit_account %}<p class="mb-1">{{ _('Geldtransit:') }} <b>{{ cfg.importer.transit_account }}</b> {{ _('zwischen {accounts}', accounts=cfg.importer.transit_between|join(', ')) }}</p>{% endif %}
         <table class="table table-sm mt-3 mb-0">
-          <thead><tr><th>Konto-ID</th><th>Konto</th><th>Nummer/IBAN (Kontocode)</th></tr></thead>
+          <thead><tr><th>{{ _('Konto-ID') }}</th><th>{{ _('Konto') }}</th><th>{{ _('Nummer/IBAN (Kontocode)') }}</th></tr></thead>
           <tbody>
           {% for a in importable %}
             <tr><td class="font-monospace">{{ ids[a.guid] }}</td>
@@ -94,15 +91,15 @@
   </div>
 </div>
 <div class="card mb-4">
-  <div class="card-header"><h3 class="card-title">Protokoll (Änderungen durch gnubook)</h3></div>
+  <div class="card-header"><h3 class="card-title">{{ _('Protokoll (Änderungen durch gnubook)') }}</h3></div>
   <div class="card-body p-0 table-responsive">
     <table class="table table-sm mb-0 small">
-      <thead><tr><th>Zeit</th><th>Wer</th><th>Aktion</th><th>Details</th></tr></thead>
+      <thead><tr><th>{{ _('Zeit') }}</th><th>{{ _('Wer') }}</th><th>{{ _('Aktion') }}</th><th>{{ _('Details') }}</th></tr></thead>
       <tbody>
       {% for a in audit %}
         <tr><td class="text-nowrap">{{ a['ts']|de_datetime }}</td><td>{{ a['actor'] }}</td><td>{{ a['action'] }}</td>
-            <td>{% if a['tx_guid'] %}<a href="{{ url_for('views.transaction', guid=a['tx_guid']) }}">{{ a['summary'] or 'Buchung' }}</a>{% else %}{{ a['summary'] }}{% endif %}</td></tr>
-      {% else %}<tr><td colspan="4" class="text-body-secondary">Noch keine Einträge.</td></tr>{% endfor %}
+            <td>{% if a['tx_guid'] %}<a href="{{ url_for('views.transaction', guid=a['tx_guid']) }}">{{ a['summary'] or _('Buchung') }}</a>{% else %}{{ a['summary'] }}{% endif %}</td></tr>
+      {% else %}<tr><td colspan="4" class="text-body-secondary">{{ _('Noch keine Einträge.') }}</td></tr>{% endfor %}
       </tbody>
     </table>
   </div>

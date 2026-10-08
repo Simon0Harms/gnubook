@@ -10,6 +10,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from .book import AccountIndex, Book, BookError
+from .i18n import _
 from .ledger import TxView, current_fingerprint, load_transaction
 from .money import ZERO, fmt, fraction_digits
 
@@ -26,8 +27,8 @@ class ValidationError(BookError):
 
 class ConflictError(BookError):
     def __init__(self):
-        super().__init__("Die Buchung wurde inzwischen an anderer Stelle geändert (z. B. in GnuCash Desktop). "
-                         "Bitte neu laden und die Änderung erneut vornehmen.")
+        super().__init__(_("Die Buchung wurde inzwischen an anderer Stelle geändert (z. B. in GnuCash Desktop). "
+                           "Bitte neu laden und die Änderung erneut vornehmen."))
 
 
 @dataclass
@@ -54,30 +55,31 @@ def validate(index: AccountIndex, tx: TxInput, existing: TxView | None = None) -
     """Check a transaction draft. Returns the transaction currency GUID or raises ValidationError."""
     errors = []
     if existing is not None and not existing.editable:
-        raise ValidationError(["Diese Buchung kann nur in GnuCash Desktop geändert werden: "
-                               + ", ".join(existing.readonly_reasons)])
+        raise ValidationError([_("Diese Buchung kann nur in GnuCash Desktop geändert werden: {reasons}",
+                                 reasons=", ".join(existing.readonly_reasons))])
     if not isinstance(tx.day, date) or not (1900 <= tx.day.year <= 2199):
-        errors.append("Ungültiges Buchungsdatum.")
+        errors.append(_("Ungültiges Buchungsdatum."))
     for label, value, limit in (("Beschreibung", tx.description, MAX_TEXT), ("Nummer", tx.num, MAX_TEXT),
                                 ("Notizen", tx.notes, MAX_NOTES)):
         if value and len(value) > limit:
-            errors.append(f"{label} ist zu lang (max. {limit} Zeichen).")
+            errors.append(_("{label} ist zu lang (max. {limit} Zeichen).", label=_(label), limit=limit))
     if not tx.splits:
-        errors.append("Die Buchung braucht mindestens einen Split.")
+        errors.append(_("Die Buchung braucht mindestens einen Split."))
 
     currency_guid = existing.currency_guid if existing is not None else tx.currency_guid
     accounts = []
     for i, sp in enumerate(tx.splits, 1):
         acc = index.get(sp.account_guid)
         if acc is None:
-            errors.append(f"Zeile {i}: Konto unbekannt.")
+            errors.append(_("Zeile {n}: Konto unbekannt.", n=i))
             continue
         if acc.placeholder:
-            errors.append(f"Zeile {i}: {acc.full_name} ist ein Platzhalterkonto und nimmt keine Buchungen an.")
+            errors.append(_("Zeile {n}: {account} ist ein Platzhalterkonto und nimmt keine Buchungen an.", n=i,
+                            account=acc.full_name))
         if sp.reconcile not in ("n", "c", "y"):
-            errors.append(f"Zeile {i}: ungültiger Abgleichstatus.")
+            errors.append(_("Zeile {n}: ungültiger Abgleichstatus.", n=i))
         if len(sp.memo or "") > MAX_TEXT:
-            errors.append(f"Zeile {i}: Memo zu lang.")
+            errors.append(_("Zeile {n}: Memo zu lang.", n=i))
         accounts.append(acc)
     if errors:
         raise ValidationError(errors)
@@ -86,21 +88,23 @@ def validate(index: AccountIndex, tx: TxInput, existing: TxView | None = None) -
         currency_guid = accounts[0].commodity_guid
     currency = index.commodities.get(currency_guid)
     if currency is None or not currency.is_currency:
-        raise ValidationError([f"{accounts[0].full_name} wird nicht in einer Währung geführt – "
-                               "Wertpapierbuchungen bitte in GnuCash Desktop erfassen."])
+        raise ValidationError([_("{account} wird nicht in einer Währung geführt – "
+                                 "Wertpapierbuchungen bitte in GnuCash Desktop erfassen.", account=accounts[0].full_name)])
     places = fraction_digits(currency.fraction)
     total = ZERO
     for i, (sp, acc) in enumerate(zip(tx.splits, accounts), 1):
         if acc.commodity_guid != currency_guid:
-            errors.append(f"Zeile {i}: {acc.full_name} wird in {acc.mnemonic} geführt, die Buchung in "
-                          f"{currency.mnemonic}. Buchungen über mehrere Währungen bitte in GnuCash Desktop erfassen.")
+            errors.append(_("Zeile {n}: {account} wird in {acc_currency} geführt, die Buchung in {tx_currency}. "
+                            "Buchungen über mehrere Währungen bitte in GnuCash Desktop erfassen.", n=i,
+                            account=acc.full_name, acc_currency=acc.mnemonic, tx_currency=currency.mnemonic))
         if sp.value != sp.value.quantize(Decimal(1).scaleb(-places)):
-            errors.append(f"Zeile {i}: höchstens {places} Nachkommastellen.")
+            errors.append(_("Zeile {n}: höchstens {places} Nachkommastellen.", n=i, places=places))
         elif abs(sp.value) >= MAX_AMOUNT:
-            errors.append(f"Zeile {i}: Betrag unplausibel groß.")
+            errors.append(_("Zeile {n}: Betrag unplausibel groß.", n=i))
         total += sp.value
     if total != 0:
-        errors.append(f"Die Buchung ist nicht ausgeglichen (Differenz {fmt(total, places)} {currency.mnemonic}).")
+        errors.append(_("Die Buchung ist nicht ausgeglichen (Differenz {diff} {currency}).", diff=fmt(total, places),
+                        currency=currency.mnemonic))
 
     # reconciled splits ('y') must stay as they are
     if existing is not None:
@@ -108,16 +112,18 @@ def validate(index: AccountIndex, tx: TxInput, existing: TxView | None = None) -
         new_guids = {sp.guid for sp in tx.splits if sp.guid}
         for s in existing.splits:
             if s.reconcile == "y" and s.guid not in new_guids:
-                errors.append(f"Abgeglichener Split auf {s.account.full_name} darf nicht gelöscht werden.")
+                errors.append(_("Abgeglichener Split auf {account} darf nicht gelöscht werden.",
+                                account=s.account.full_name))
         for sp in tx.splits:
             o = old.get(sp.guid) if sp.guid else None
             if sp.guid and o is None:
-                errors.append("Ein Split gehört nicht (mehr) zu dieser Buchung – bitte neu laden.")
+                errors.append(_("Ein Split gehört nicht (mehr) zu dieser Buchung – bitte neu laden."))
             elif o is not None and o.reconcile == "y" and (
                     o.account_guid != sp.account_guid or o.value != sp.value or sp.reconcile != "y"):
-                errors.append(f"Abgeglichener Split auf {o.account.full_name} kann nur in GnuCash geändert werden.")
+                errors.append(_("Abgeglichener Split auf {account} kann nur in GnuCash geändert werden.",
+                                account=o.account.full_name))
             elif (o is None or o.reconcile != "y") and sp.reconcile == "y":
-                errors.append("Den Status „abgeglichen“ (y) setzt nur der Kontenabgleich in GnuCash.")
+                errors.append(_("Den Status „abgeglichen“ (y) setzt nur der Kontenabgleich in GnuCash."))
     if errors:
         raise ValidationError(errors)
     return currency_guid
@@ -169,7 +175,7 @@ def update_transaction(book: Book, index: AccountIndex, guid: str, tx: TxInput, 
     with book.connect() as conn:
         existing = load_transaction(conn, book, index, guid)
     if existing is None:
-        raise ValidationError(["Die Buchung existiert nicht mehr."])
+        raise ValidationError([_("Die Buchung existiert nicht mehr.")])
     currency_guid = validate(index, tx, existing)
     q = Decimal(1).scaleb(-_places(index, currency_guid))
     with book.exclusive():
@@ -182,7 +188,7 @@ def update_transaction(book: Book, index: AccountIndex, guid: str, tx: TxInput, 
         try:
             s = pc.session
             ptx = s.query(Transaction).filter_by(guid=guid).one()
-            _, accs = _pc_objects(pc, currency_guid, [sp.account_guid for sp in tx.splits])
+            _pc, accs = _pc_objects(pc, currency_guid, [sp.account_guid for sp in tx.splits])
             if (ptx.description or "") != (tx.description or ""):
                 ptx.description = tx.description or ""
             if (ptx.num or "") != (tx.num or ""):
@@ -226,10 +232,10 @@ def delete_transaction(book: Book, index: AccountIndex, guid: str, expected_fing
     if existing is None:
         return
     if not existing.editable:
-        raise ValidationError(["Diese Buchung kann nur in GnuCash Desktop gelöscht werden: "
-                               + ", ".join(existing.readonly_reasons)])
+        raise ValidationError([_("Diese Buchung kann nur in GnuCash Desktop gelöscht werden: {reasons}",
+                                 reasons=", ".join(existing.readonly_reasons))])
     if any(s.reconcile == "y" for s in existing.splits):
-        raise ValidationError(["Buchungen mit abgeglichenen Splits bitte in GnuCash Desktop löschen."])
+        raise ValidationError([_("Buchungen mit abgeglichenen Splits bitte in GnuCash Desktop löschen.")])
     with book.exclusive():
         with book.connect() as conn:
             if current_fingerprint(conn, book, index, guid) != expected_fingerprint:

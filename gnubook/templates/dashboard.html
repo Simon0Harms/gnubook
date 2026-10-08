@@ -1,40 +1,40 @@
 {% extends "base.html" %}
 {% from "macros.html" import amount, cp_badge %}
-{% block title %}Übersicht{% endblock %}
-{% block header %}Übersicht{% endblock %}
+{% block title %}{{ _('Übersicht') }}{% endblock %}
+{% block header %}{{ _('Übersicht') }}{% endblock %}
 {% block actions %}
-  <a class="btn btn-success btn-sm" href="{{ url_for('views.transaction_new') }}"><i class="bi bi-plus-lg"></i> Neue Buchung</a>
+  <a class="btn btn-success btn-sm" href="{{ url_for('views.transaction_new') }}"><i class="bi bi-plus-lg"></i> {{ _('Neue Buchung') }}</a>
 {% endblock %}
 {% block content %}
 {% set cur = base.mnemonic if base else 'EUR' %}
 <div class="row">
   <div class="col-lg-3 col-6">
     <div class="small-box text-bg-success">
-      <div class="inner"><h3 class="amount-lg">{{ assets|money(cur) }}</h3><p>Vermögen</p></div>
+      <div class="inner"><h3 class="amount-lg">{{ assets|money(cur) }}</h3><p>{{ _('Vermögen') }}</p></div>
       <i class="small-box-icon bi bi-piggy-bank"></i>
-      <a href="{{ url_for('views.accounts') }}" class="small-box-footer link-light link-underline-opacity-0">Konten <i class="bi bi-arrow-right-circle"></i></a>
+      <a href="{{ url_for('views.accounts') }}" class="small-box-footer link-light link-underline-opacity-0">{{ _('Konten') }} <i class="bi bi-arrow-right-circle"></i></a>
     </div>
   </div>
   <div class="col-lg-3 col-6">
     <div class="small-box text-bg-warning">
-      <div class="inner"><h3 class="amount-lg">{{ (-liabilities)|money(cur) }}</h3><p>Verbindlichkeiten</p></div>
+      <div class="inner"><h3 class="amount-lg">{{ (-liabilities)|money(cur) }}</h3><p>{{ _('Verbindlichkeiten') }}</p></div>
       <i class="small-box-icon bi bi-credit-card"></i>
-      <a href="{{ url_for('views.accounts') }}" class="small-box-footer link-dark link-underline-opacity-0">Konten <i class="bi bi-arrow-right-circle"></i></a>
+      <a href="{{ url_for('views.accounts') }}" class="small-box-footer link-dark link-underline-opacity-0">{{ _('Konten') }} <i class="bi bi-arrow-right-circle"></i></a>
     </div>
   </div>
   <div class="col-lg-3 col-6">
     <div class="small-box text-bg-primary">
-      <div class="inner"><h3 class="amount-lg">{{ (assets + liabilities)|money(cur) }}</h3><p>Nettovermögen (heute)</p></div>
+      <div class="inner"><h3 class="amount-lg">{{ (assets + liabilities)|money(cur) }}</h3><p>{{ _('Nettovermögen (heute)') }}</p></div>
       <i class="small-box-icon bi bi-graph-up"></i>
-      <span class="small-box-footer">Stand {{ today|de_date }}</span>
+      <span class="small-box-footer">{{ _('Stand {day}', day=today|de_date) }}</span>
     </div>
   </div>
   <div class="col-lg-3 col-6">
     {% set open = cp_summary.open %}
     <div class="small-box {{ 'text-bg-danger' if open else 'text-bg-success' }}">
-      <div class="inner"><h3>{{ open }} offen</h3><p>Saldo-Prüfpunkte <span class="opacity-75">· {{ cp_summary.ok }} ok{% if cp_summary.accepted %} · {{ cp_summary.accepted }} akz.{% endif %}</span></p></div>
+      <div class="inner"><h3>{{ _('{n} offen', n=open) }}</h3><p>{{ _('Saldo-Prüfpunkte') }} <span class="opacity-75">· {{ _('{n} ok', n=cp_summary.ok) }}{% if cp_summary.accepted %} · {{ _('{n} akz.', n=cp_summary.accepted) }}{% endif %}</span></p></div>
       <i class="small-box-icon bi bi-clipboard-check"></i>
-      <a href="{{ url_for('views.checkpoints') }}" class="small-box-footer link-light link-underline-opacity-0">Prüfpunkte <i class="bi bi-arrow-right-circle"></i></a>
+      <a href="{{ url_for('views.checkpoints') }}" class="small-box-footer link-light link-underline-opacity-0">{{ _('Prüfpunkte') }} <i class="bi bi-arrow-right-circle"></i></a>
     </div>
   </div>
 </div>
@@ -42,51 +42,51 @@
 {% if open_imports %}
 <div class="alert alert-info d-flex align-items-center gap-2">
   <i class="bi bi-bank"></i>
-  <div>{{ open_imports }} importierte Buchung(en) brauchen eine Zuordnung oder sind mögliche Duplikate.
-    <a href="{{ url_for('views.imports') }}" class="alert-link">Jetzt ansehen</a></div>
+  <div>{{ _('{n} importierte Buchung(en) brauchen eine Zuordnung oder sind mögliche Duplikate.', n=open_imports) }}
+    <a href="{{ url_for('views.imports') }}" class="alert-link">{{ _('Jetzt ansehen') }}</a></div>
 </div>
 {% endif %}
 
 <div class="row">
   <div class="col-lg-7">
     <div class="card mb-4">
-      <div class="card-header"><h3 class="card-title">Bankkonten</h3></div>
+      <div class="card-header"><h3 class="card-title">{{ _('Bankkonten') }}</h3></div>
       <div class="card-body p-0">
         <table class="table table-hover mb-0 align-middle">
-          <thead><tr><th>Konto</th><th class="text-end">Saldo</th><th class="text-center">Prüfpunkt</th></tr></thead>
+          <thead><tr><th>{{ _('Konto') }}</th><th class="text-end">{{ _('Saldo') }}</th><th class="text-center">{{ _('Prüfpunkt') }}</th></tr></thead>
           <tbody>
           {% for acc in bank_accounts %}
             {% set t = totals.get(acc.guid) %}
             {% set ch = checks.get(acc.guid) %}
             <tr class="clickable {{ 'table-warning' if acc.is_imbalance }}" data-href="{{ url_for('views.register', guid=acc.guid) }}">
               <td><a href="{{ url_for('views.register', guid=acc.guid) }}" class="link-body-emphasis link-underline-opacity-0">{{ acc.name }}</a>
-                {% if acc.is_imbalance %}<span class="badge text-bg-warning ms-1" title="Hier landen Buchungen ohne Gegenkonto">bitte zuordnen</span>{% endif %}
+                {% if acc.is_imbalance %}<span class="badge text-bg-warning ms-1" title="{{ _('Hier landen Buchungen ohne Gegenkonto') }}">{{ _('bitte zuordnen') }}</span>{% endif %}
                 <div class="small text-body-secondary">{{ acc.full_name.rsplit(':', 1)[0] if ':' in acc.full_name else '' }}</div></td>
               <td class="text-end">{{ amount(acc.display(t.value) if t else 0, acc.mnemonic, colored=False) }}</td>
               <td class="text-center">
                 {% if ch and ch.last %}
                   {{ cp_badge(ch.last.status) }}<div class="small text-body-secondary">{{ ch.last.stand_date|de_date }}</div>
-                  {% if ch.counts.open %}<a class="small link-danger" href="{{ url_for('views.checkpoints') }}">{{ ch.counts.open }} offen</a>{% endif %}
+                  {% if ch.counts.open %}<a class="small link-danger" href="{{ url_for('views.checkpoints') }}">{{ _('{n} offen', n=ch.counts.open) }}</a>{% endif %}
                 {% else %}<span class="text-body-tertiary small">–</span>{% endif %}
               </td>
             </tr>
           {% else %}
-            <tr><td colspan="3" class="text-body-secondary">Keine Bankkonten gefunden.</td></tr>
+            <tr><td colspan="3" class="text-body-secondary">{{ _('Keine Bankkonten gefunden.') }}</td></tr>
           {% endfor %}
           </tbody>
         </table>
       </div>
-      {% if last_import %}<div class="card-footer small text-body-secondary">Letzter Bankimport: {{ last_import|de_datetime }}</div>{% endif %}
+      {% if last_import %}<div class="card-footer small text-body-secondary">{{ _('Letzter Bankimport: {when}', when=last_import|de_datetime) }}</div>{% endif %}
     </div>
   </div>
   <div class="col-lg-5">
     <div class="card mb-4">
-      <div class="card-header"><h3 class="card-title">Einnahmen und Ausgaben</h3>
-        <div class="card-tools small text-body-secondary">letzte 12 Monate</div></div>
+      <div class="card-header"><h3 class="card-title">{{ _('Einnahmen und Ausgaben') }}</h3>
+        <div class="card-tools small text-body-secondary">{{ _('letzte 12 Monate') }}</div></div>
       <div class="card-body">
-        <div class="mini-chart" role="img" aria-label="Balkendiagramm Einnahmen und Ausgaben je Monat">
+        <div class="mini-chart" role="img" aria-label="{{ _('Balkendiagramm Einnahmen und Ausgaben je Monat') }}">
           {% for key, inc, exp in months %}
-            <div class="mini-chart-col" title="{{ key }}: Einnahmen {{ inc|money(cur) }}, Ausgaben {{ exp|money(cur) }}">
+            <div class="mini-chart-col" title="{{ _('{month}: Einnahmen {income}, Ausgaben {expense}', month=key, income=inc|money(cur), expense=exp|money(cur)) }}">
               <div class="mini-chart-bars">
                 <div class="bar bar-in" style="height: {{ [((inc if inc > 0 else 0) / peak * 100)|round(1), 100]|min }}%"></div>
                 <div class="bar bar-out" style="height: {{ [((exp if exp > 0 else 0) / peak * 100)|round(1), 100]|min }}%"></div>
@@ -96,8 +96,8 @@
           {% endfor %}
         </div>
         <div class="d-flex justify-content-between small mt-3">
-          <span><span class="legend legend-in"></span> Einnahmen {{ month[0] }}: <b>{{ month[1]|money(cur) }}</b></span>
-          <span><span class="legend legend-out"></span> Ausgaben: <b>{{ month[2]|money(cur) }}</b></span>
+          <span><span class="legend legend-in"></span> {{ _('Einnahmen {month}:', month=month[0]) }} <b>{{ month[1]|money(cur) }}</b></span>
+          <span><span class="legend legend-out"></span> {{ _('Ausgaben:') }} <b>{{ month[2]|money(cur) }}</b></span>
         </div>
       </div>
     </div>
@@ -105,15 +105,15 @@
 </div>
 
 <div class="card mb-4">
-  <div class="card-header"><h3 class="card-title">Zuletzt erfasst</h3></div>
+  <div class="card-header"><h3 class="card-title">{{ _('Zuletzt erfasst') }}</h3></div>
   <div class="card-body p-0">
     <table class="table table-sm table-hover mb-0 align-middle">
-      <thead><tr><th>Datum</th><th>Beschreibung</th><th>Konten</th><th class="text-end">Betrag</th></tr></thead>
+      <thead><tr><th>{{ _('Datum') }}</th><th>{{ _('Beschreibung') }}</th><th>{{ _('Konten') }}</th><th class="text-end">{{ _('Betrag') }}</th></tr></thead>
       <tbody>
       {% for t in recent %}
         <tr class="clickable" data-href="{{ url_for('views.transaction', guid=t.tx_guid) }}">
           <td class="text-nowrap">{{ t.day|de_date }}</td>
-          <td><a class="link-body-emphasis link-underline-opacity-0" href="{{ url_for('views.transaction', guid=t.tx_guid) }}">{{ t.description or '(ohne Beschreibung)' }}</a></td>
+          <td><a class="link-body-emphasis link-underline-opacity-0" href="{{ url_for('views.transaction', guid=t.tx_guid) }}">{{ t.description or _('(ohne Beschreibung)') }}</a></td>
           <td class="small text-body-secondary">{{ t.accounts|join(' · ') }}</td>
           <td class="text-end text-nowrap amount">{{ t.amount|money(t.currency) }}</td>
         </tr>

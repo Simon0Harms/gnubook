@@ -7,6 +7,7 @@ from decimal import Decimal
 from flask import Flask, current_app, g
 
 from .. import __version__
+from ..i18n import LANGUAGES, current_language, gettext
 from ..money import fmt, symbol_for
 
 
@@ -29,6 +30,7 @@ def register(app: Flask):
     app.register_blueprint(views.bp)
     app.register_blueprint(admin.bp)
     app.register_blueprint(api.bp)
+    app.jinja_env.globals["_"] = gettext
 
     @app.template_filter("money")
     def money_filter(value, mnemonic: str | None = None, places: int = 2, sign: bool = False):
@@ -91,7 +93,8 @@ def register(app: Flask):
         user = g.get("user")
         return {"app_version": __version__, "app_title": registry().cfg.app.title,
                 "today": ctx.book.today() if ctx else date.today(), "current_book": ctx, "current_user": user,
-                "my_books": registry().system.user_books(user["id"]) if user else []}
+                "my_books": registry().system.user_books(user["id"]) if user else [],
+                "lang": current_language(), "languages": LANGUAGES}
 
     @app.after_request
     def security_headers(resp):

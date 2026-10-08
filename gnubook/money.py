@@ -4,6 +4,8 @@ from __future__ import annotations
 import re
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
+from .i18n import _
+
 ZERO = Decimal(0)
 
 
@@ -75,13 +77,13 @@ def parse_number(text: str) -> Decimal:
     """Parse one number written the German way ("1.234,56", "1234,56") or plainly ("1234.56")."""
     s = text.strip().replace("'", "").replace(" ", "").replace(" ", "")
     if not s:
-        raise AmountError("leerer Betrag")
+        raise AmountError(_("leerer Betrag"))
     if "," in s:
         if s.count(",") > 1:
-            raise AmountError(f"ungültiger Betrag: {text}")
+            raise AmountError(_("ungültiger Betrag: {text}", text=text))
         int_part, frac = s.split(",")
         if "." in int_part and not re.fullmatch(r"\d{1,3}(\.\d{3})+", int_part):
-            raise AmountError(f"ungültiger Betrag: {text}")
+            raise AmountError(_("ungültiger Betrag: {text}", text=text))
         s = int_part.replace(".", "") + "." + frac
     elif s.count(".") == 1:
         int_part, frac = s.split(".")
@@ -90,12 +92,12 @@ def parse_number(text: str) -> Decimal:
             s = int_part + frac
     elif s.count(".") > 1:
         if not re.fullmatch(r"\d{1,3}(\.\d{3})+", s):
-            raise AmountError(f"ungültiger Betrag: {text}")
+            raise AmountError(_("ungültiger Betrag: {text}", text=text))
         s = s.replace(".", "")
     try:
         return Decimal(s)
     except InvalidOperation as exc:
-        raise AmountError(f"ungültiger Betrag: {text}") from exc
+        raise AmountError(_("ungültiger Betrag: {text}", text=text)) from exc
 
 
 class _Parser:
@@ -116,7 +118,7 @@ class _Parser:
                 continue
             m = _NUM_RE.match(text, pos)
             if not m:
-                raise AmountError(f"unerwartetes Zeichen „{ch}“")
+                raise AmountError(_("unerwartetes Zeichen „{char}“", char=ch))
             self.tokens.append(parse_number(m.group()))
             pos = m.end()
         self.i = 0
@@ -146,7 +148,7 @@ class _Parser:
                 value = value * rhs
             else:
                 if rhs == 0:
-                    raise AmountError("Division durch 0")
+                    raise AmountError(_("Division durch 0"))
                 value = value / rhs
         return value
 
@@ -159,11 +161,11 @@ class _Parser:
         if tok == "(":
             value = self.expr()
             if self.take() != ")":
-                raise AmountError("fehlende Klammer")
+                raise AmountError(_("fehlende Klammer"))
             return value
         if isinstance(tok, Decimal):
             return tok
-        raise AmountError("unvollständiger Ausdruck")
+        raise AmountError(_("unvollständiger Ausdruck"))
 
 
 def parse_amount(text: str | None, fraction: int = 100) -> Decimal | None:
@@ -175,7 +177,7 @@ def parse_amount(text: str | None, fraction: int = 100) -> Decimal | None:
         return None
     value = p.expr()
     if p.peek() is not None:
-        raise AmountError(f"ungültiger Ausdruck: {text}")
+        raise AmountError(_("ungültiger Ausdruck: {text}", text=text))
     return quantize(value, fraction)
 
 

@@ -7,6 +7,7 @@ import tempfile
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, session, url_for
 
 from ..book import Book
+from ..i18n import _
 from ..system import UserError, mask_url
 from . import registry
 from .auth import login_required
@@ -24,16 +25,16 @@ def _test_book(url: str, timezone: str) -> str | None:
         finally:
             b.dispose()
     except Exception as exc:  # noqa: BLE001
-        return f"Verbindung oder Buch ungültig: {exc}"
+        return _("Verbindung oder Buch ungültig: {error}", error=exc)
     if not info["supported"]:
-        return f"GnuCash-Version {info['gnucash']} wird nicht unterstützt (nur lesen wäre möglich)."
+        return _("GnuCash-Version {version} wird nicht unterstützt (nur lesen wäre möglich).", version=info["gnucash"])
     return None
 
 
 def _save_upload():
     f = request.files.get("file")
     if f is None or not f.filename:
-        raise UserError("Bitte eine .gnucash-Datei (SQLite-Format) auswählen.")
+        raise UserError(_("Bitte eine .gnucash-Datei (SQLite-Format) auswählen."))
     tmpdir = registry().data / "tmp"
     tmpdir.mkdir(parents=True, exist_ok=True)
     fd, path = tempfile.mkstemp(suffix=".gnucash", dir=tmpdir)
@@ -68,11 +69,11 @@ def users():
                     _create_book(request.form.get("book_name") or request.form.get("username", ""),
                                  request.form.get("content", "simple"), [uid, g.user["id"]], True)
                 except UserError as exc:
-                    flash(f"Benutzer angelegt, aber kein Buch: {exc}", "warning")
+                    flash(_("Benutzer angelegt, aber kein Buch: {error}", error=exc), "warning")
                     return redirect(url_for("admin.users"))
-                flash("Benutzer und Buch angelegt.", "success")
+                flash(_("Benutzer und Buch angelegt."), "success")
                 return redirect(url_for("admin.books"))
-            flash("Benutzer angelegt.", "success")
+            flash(_("Benutzer angelegt."), "success")
             return redirect(url_for("admin.users"))
         except UserError as exc:
             flash(str(exc), "danger")
@@ -91,19 +92,19 @@ def user_update(user_id):
     try:
         if action == "delete":
             if user_id == g.user["id"]:
-                raise UserError("Den eigenen Benutzer kann man nicht löschen.")
+                raise UserError(_("Den eigenen Benutzer kann man nicht löschen."))
             system.delete_user(user_id)
-            flash("Benutzer gelöscht.", "success")
+            flash(_("Benutzer gelöscht."), "success")
         elif action == "password":
             system.set_password(user_id, request.form.get("password", ""))
-            flash("Passwort gesetzt.", "success")
+            flash(_("Passwort gesetzt."), "success")
         else:
             system.update_user(user_id, request.form.get("is_admin") == "1", request.form.get("active") == "1")
             with system.conn() as c:
                 c.execute("DELETE FROM user_books WHERE user_id = ?", (user_id,))
                 c.executemany("INSERT INTO user_books (user_id, book_id) VALUES (?, ?)",
                               [(user_id, int(b)) for b in request.form.getlist("books")])
-            flash("Gespeichert.", "success")
+            flash(_("Gespeichert."), "success")
     except UserError as exc:
         flash(str(exc), "danger")
     return redirect(url_for("admin.users"))
@@ -127,7 +128,7 @@ def books():
                     backup = reg.default_backup_file(form["name"])
                 bid = system.add_book(form["name"], form["url"], form["timezone"] or "Europe/Berlin", backup)
                 system.set_book_users(bid, request.form.getlist("users") + [str(g.user["id"])])
-                flash(f"Buch „{form['name']}“ verbunden.", "success")
+                flash(_("Buch „{name}“ verbunden.", name=form["name"]), "success")
                 return redirect(url_for("admin.books"))
             except UserError as exc:
                 flash(str(exc), "danger")
@@ -144,7 +145,7 @@ def book_create():
         _create_book(request.form.get("name", ""), request.form.get("content", "empty"),
                      [int(u) for u in request.form.getlist("users")] + [g.user["id"]],
                      request.form.get("backup") == "1")
-        flash("Buch angelegt.", "success")
+        flash(_("Buch angelegt."), "success")
     except UserError as exc:
         flash(str(exc), "danger")
     return redirect(url_for("admin.books"))
@@ -161,7 +162,7 @@ def book_update(book_id):
     if request.form.get("action") in ("delete", "drop"):
         drop = request.form.get("action") == "drop"
         if drop and request.form.get("confirm_name", "").strip() != row["name"]:
-            flash("Zum Löschen der Datenbank bitte den Buchnamen genau eintippen.", "danger")
+            flash(_("Zum Löschen der Datenbank bitte den Buchnamen genau eintippen."), "danger")
             return redirect(url_for("admin.books"))
         try:
             saved = reg.remove_book(book_id, drop_database=drop)
@@ -169,9 +170,11 @@ def book_update(book_id):
             flash(str(exc), "danger")
             return redirect(url_for("admin.books"))
         if drop:
-            flash(f"Buch „{row['name']}“ und seine Datenbank gelöscht. Letzte Sicherung: {saved}", "success")
+            flash(_("Buch „{name}“ und seine Datenbank gelöscht. Letzte Sicherung: {saved}", name=row["name"], saved=saved),
+                  "success")
         else:
-            flash(f"Verbindung zu „{row['name']}“ entfernt. Die GnuCash-Datenbank selbst ist unverändert.", "success")
+            flash(_("Verbindung zu „{name}“ entfernt. Die GnuCash-Datenbank selbst ist unverändert.", name=row["name"]),
+                  "success")
         return redirect(url_for("admin.books"))
     url = request.form.get("url", "").strip() or row["url"]  # empty field keeps the stored URL (password)
     tz = request.form.get("timezone", "").strip() or row["timezone"]
@@ -182,5 +185,5 @@ def book_update(book_id):
             return redirect(url_for("admin.books"))
     system.update_book(book_id, request.form.get("name", row["name"]), url, tz, request.form.get("backup_file", ""))
     system.set_book_users(book_id, request.form.getlist("users"))
-    flash("Gespeichert.", "success")
+    flash(_("Gespeichert."), "success")
     return redirect(url_for("admin.books"))

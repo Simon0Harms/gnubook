@@ -10,6 +10,7 @@ from decimal import Decimal
 from sqlalchemy import text
 
 from .book import Account, AccountIndex, Book, convert
+from .i18n import _
 from .money import ZERO, gnc_decimal
 
 CHUNK = 400  # stay below SQLite's bound-parameter limit
@@ -141,7 +142,7 @@ def annotate_rows(conn, index: AccountIndex, rows: list[RegisterRow]):
     for row in rows:
         others = [(sg, ag) for sg, ag in splits_by_tx[row.tx_guid] if sg != row.split_guid]
         names = []
-        for _, ag in others:
+        for _side, ag in others:
             acc = index.get(ag)
             names.append(acc.full_name if acc else "?")
         row.others = names
@@ -225,19 +226,19 @@ def load_transaction(conn, book: Book, index: AccountIndex, guid: str) -> TxView
     tx.fingerprint = fingerprint(tx)
     reasons = []
     if tx.txn_type:
-        reasons.append("Rechnung/Zahlung aus dem GnuCash-Geschäftsmodul")
+        reasons.append(_("Rechnung/Zahlung aus dem GnuCash-Geschäftsmodul"))
     if slots.get("trans-read-only"):
-        reasons.append("in GnuCash als schreibgeschützt markiert")
+        reasons.append(_("in GnuCash als schreibgeschützt markiert"))
     if any(s.lot_guid for s in splits):
-        reasons.append("Splits sind Losen (Lots) zugeordnet")
+        reasons.append(_("Splits sind Losen (Lots) zugeordnet"))
     if currency is None or not currency.is_currency:
-        reasons.append("unbekannte Transaktionswährung")
+        reasons.append(_("unbekannte Transaktionswährung"))
     for s in splits:
         if s.account is None:
-            reasons.append("Split auf einem unbekannten Konto")
+            reasons.append(_("Split auf einem unbekannten Konto"))
             break
         if s.account.commodity_guid != tx.currency_guid:
-            reasons.append(f"Split in Fremdwährung/Wertpapier ({s.account.full_name})")
+            reasons.append(_("Split in Fremdwährung/Wertpapier ({account})", account=s.account.full_name))
             break
     tx.readonly_reasons = reasons
     return tx
@@ -364,7 +365,7 @@ def monthly_income_expense(conn, book: Book, index: AccountIndex, months: int = 
     today = book.today()
     y, m = today.year, today.month
     keys = []
-    for _ in range(months):
+    for _i in range(months):
         keys.append(f"{y:04d}-{m:02d}")
         m -= 1
         if m == 0:

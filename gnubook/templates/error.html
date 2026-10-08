@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Fehler {{ code }}{% endblock %}
-{% block header %}Fehler {{ code }}{% endblock %}
+{% block title %}{{ _('Fehler {code}', code=code) }}{% endblock %}
+{% block header %}{{ _('Fehler {code}', code=code) }}{% endblock %}
 {% block content %}
 <div class="card"><div class="card-body">
   <p class="mb-3">{{ message }}</p>
-  <a class="btn btn-outline-secondary" href="{{ url_for('views.dashboard') }}"><i class="bi bi-house"></i> Zur Übersicht</a>
+  <a class="btn btn-outline-secondary" href="{{ url_for('views.dashboard') }}"><i class="bi bi-house"></i> {{ _('Zur Übersicht') }}</a>
 </div></div>
 {% endblock %}

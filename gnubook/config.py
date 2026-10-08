@@ -35,6 +35,8 @@ class AppConfig:
     behind_proxy: bool = False
     session_days: int = 14
     title: str = "gnubook"
+    # default user-interface language: "de" or "en" (each user can switch in the user menu)
+    language: str = "de"
 
 
 @dataclass

@@ -10,7 +10,9 @@ PostgreSQL (or SQLite). It looks and feels a bit like [Firefly III](https://www.
 data remains an ordinary GnuCash book. GnuCash Desktop can open the same database whenever gnubook is not
 writing to it.
 
-The user interface is in German.
+The user interface is available in German and English. Each user switches the language in the user menu
+(or below the login form); the choice is kept in a browser cookie. `[app] language` sets the default.
+Amounts and dates keep the German format (`1.234,56`, `31.12.2026`) in both languages.
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
@@ -129,6 +131,7 @@ can be overridden with an environment variable
 |---|---|
 | `[app] secret_key` | Random string, at least 32 characters (`init-config` creates one) |
 | `[app] data_dir` | gnubook's own data: users, books, tokens (`system.sqlite`) and per-book data |
+| `[app] language` | Default user-interface language, `de` (default) or `en`; users can switch in the user menu |
 | `[app] session_cookie_secure`, `behind_proxy` | Set both to `true` behind an HTTPS reverse proxy |
 | `[api] expose_iban` | Report IBANs to the importer (default `false`, see [docs/FINTS.md](docs/FINTS.md)) |
 | `[import] fallback_account` | Account for bank lines without a known counter account (default `Ausgleichskonto-EUR`/`Imbalance-EUR`) |
@@ -178,6 +181,9 @@ pytest                                    # SQLite
 GNUBOOK_TEST_PG_URL=postgresql://user:pw@127.0.0.1:5432 pytest    # also PostgreSQL (user needs CREATEDB)
 GNUCASH_PYTHON=/usr/bin/python3 pytest tests/test_gnucash_compat.py  # read back with the real GnuCash engine (apt install python3-gnucash)
 ```
+
+New user-interface texts are written in German inside `_()` (Python and templates) and need an English
+entry in `gnubook/i18n_en.py`; `tests/test_i18n.py` fails when one is missing.
 
 `scripts/screenshots.mjs` regenerates the screenshots from the demo book. Never use real data for
 screenshots.

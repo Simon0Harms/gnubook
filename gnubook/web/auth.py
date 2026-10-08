@@ -8,6 +8,7 @@ from functools import wraps
 
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, session, url_for
 
+from ..i18n import COOKIE as LANG_COOKIE, _, normalize
 from ..system import UserError
 from . import registry
 
@@ -29,7 +30,7 @@ def check_csrf():
     sent = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token") or ""
     expected = session.get("csrf") or ""
     if not expected or not hmac.compare_digest(sent, expected):
-        abort(400, description="Ungültiges oder fehlendes CSRF-Token – bitte Seite neu laden.")
+        abort(400, description=_("Ungültiges oder fehlendes CSRF-Token – bitte Seite neu laden."))
 
 
 def _load_user():
@@ -103,7 +104,7 @@ def login():
         ip = _client_ip()
         now = time.time()
         if system.login_failures(ip, FAILURE_WINDOW, now) >= MAX_FAILURES:
-            flash("Zu viele Fehlversuche – bitte 15 Minuten warten.", "danger")
+            flash(_("Zu viele Fehlversuche – bitte 15 Minuten warten."), "danger")
             return render_template("auth/login.html"), 429
         user = system.authenticate(request.form.get("username", "").strip(), request.form.get("password", ""))
         if user is not None:
@@ -116,7 +117,7 @@ def login():
             return redirect(_safe_next(request.args.get("next")))
         system.add_login_failure(ip, now)
         time.sleep(0.5)
-        flash("Benutzername oder Passwort falsch.", "danger")
+        flash(_("Benutzername oder Passwort falsch."), "danger")
         return render_template("auth/login.html"), 401
     if _load_user() is not None:
         return redirect(url_for("views.dashboard"))
@@ -127,8 +128,21 @@ def login():
 def logout():
     check_csrf()
     session.clear()
-    flash("Abgemeldet.", "info")
+    flash(_("Abgemeldet."), "info")
     return redirect(url_for("auth.login"))
+
+
+@bp.route("/language/<code>", methods=["POST"])
+def set_language(code):
+    """Switch the user-interface language (cookie, works before login too)."""
+    check_csrf()
+    lang = normalize(code)
+    if lang is None:
+        abort(404)
+    resp = redirect(_safe_next(request.form.get("next")))
+    resp.set_cookie(LANG_COOKIE, lang, max_age=365 * 24 * 3600, samesite="Lax",
+                    secure=registry().cfg.app.session_cookie_secure, httponly=True)
+    return resp
 
 
 @bp.route("/book/<int:book_id>", methods=["POST"])
@@ -146,13 +160,13 @@ def change_password():
     system = registry().system
     if request.method == "POST":
         if system.authenticate(g.user["username"], request.form.get("old", "")) is None:
-            flash("Das bisherige Passwort stimmt nicht.", "danger")
+            flash(_("Das bisherige Passwort stimmt nicht."), "danger")
         elif request.form.get("new", "") != request.form.get("new2", ""):
-            flash("Die neuen Passwörter stimmen nicht überein.", "danger")
+            flash(_("Die neuen Passwörter stimmen nicht überein."), "danger")
         else:
             try:
                 system.set_password(g.user["id"], request.form.get("new", ""))
-                flash("Passwort geändert.", "success")
+                flash(_("Passwort geändert."), "success")
                 return redirect(url_for("views.dashboard"))
             except UserError as exc:
                 flash(str(exc), "danger")

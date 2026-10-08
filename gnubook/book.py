@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.exc import SAWarning
 
+from .i18n import _
 from .money import ZERO, gnc_decimal
 
 warnings.filterwarnings("ignore", category=SAWarning)
@@ -55,9 +56,9 @@ class WriteLockError(BookError):
 
     def __init__(self, holders):
         self.holders = holders
-        who = ", ".join(f"{h} (PID {p})" for h, p in holders) or "unbekannt"
-        super().__init__(f"Das Buch ist gesperrt – GnuCash Desktop hat es geöffnet: {who}. "
-                         "Bitte GnuCash schließen und erneut versuchen.")
+        who = ", ".join(f"{h} (PID {p})" for h, p in holders) or _("unbekannt")
+        super().__init__(_("Das Buch ist gesperrt – GnuCash Desktop hat es geöffnet: {who}. "
+                           "Bitte GnuCash schließen und erneut versuchen.", who=who))
 
 
 @dataclass
@@ -96,7 +97,7 @@ class Account:
 
     @property
     def type_label(self) -> str:
-        return TYPE_LABELS.get(self.type, self.type)
+        return _(TYPE_LABELS[self.type]) if self.type in TYPE_LABELS else self.type
 
     @property
     def mnemonic(self) -> str:
@@ -338,8 +339,8 @@ class Book:
             self._schema_ok = bool(self.schema_info()["supported"])
             self._schema_checked = now
         if not self._schema_ok:
-            raise BookError("Unbekannte GnuCash-Datenbankversion – gnubook schreibt aus Sicherheitsgründen nicht. "
-                            "Bitte gnubook aktualisieren.")
+            raise BookError(_("Unbekannte GnuCash-Datenbankversion – gnubook schreibt aus Sicherheitsgründen nicht. "
+                              "Bitte gnubook aktualisieren."))
 
     @contextmanager
     def exclusive(self, wait_seconds: float = 8.0):
@@ -350,7 +351,7 @@ class Book:
         self.ensure_writable_schema()
         pid = os.getpid()
         if not self._write_mutex.acquire(timeout=wait_seconds):
-            raise BookError("Eine andere Schreiboperation läuft noch – bitte erneut versuchen.")
+            raise BookError(_("Eine andere Schreiboperation läuft noch – bitte erneut versuchen."))
         try:
             deadline = time.monotonic() + wait_seconds
             while True:
@@ -367,7 +368,7 @@ class Book:
                 if not busy:
                     break
                 if time.monotonic() > deadline:  # another gnubook worker is writing
-                    raise BookError("Das Buch wird gerade von einem anderen gnubook-Prozess geschrieben.")
+                    raise BookError(_("Das Buch wird gerade von einem anderen gnubook-Prozess geschrieben."))
                 time.sleep(0.2)
             # re-check: GnuCash may have opened the book between our check and insert
             foreign = [(h, p) for h, p in self.lock_holders() if h != LOCK_TAG]

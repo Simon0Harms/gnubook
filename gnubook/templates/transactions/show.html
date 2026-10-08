@@ -1,32 +1,32 @@
 {% extends "base.html" %}
 {% from "macros.html" import amount, reconcile_badge %}
-{% block title %}Buchung{% endblock %}
-{% block header %}{{ tx.description or '(ohne Beschreibung)' }}{% endblock %}
-{% block subheader %}<div class="small text-body-secondary">Buchung #{{ tx_id }} · {{ tx.day|de_date }}{% if tx.num %} · Nr. {{ tx.num }}{% endif %} · erfasst {{ tx.enter_date|de_datetime }}</div>{% endblock %}
+{% block title %}{{ _('Buchung') }}{% endblock %}
+{% block header %}{{ tx.description or _('(ohne Beschreibung)') }}{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">{{ _('Buchung #{id}', id=tx_id) }} · {{ tx.day|de_date }}{% if tx.num %} · {{ _('Nr.') }} {{ tx.num }}{% endif %} · {{ _('erfasst {when}', when=tx.enter_date|de_datetime) }}</div>{% endblock %}
 {% block actions %}
-  {% if back %}<a class="btn btn-outline-secondary btn-sm" href="{{ back }}"><i class="bi bi-arrow-left"></i> Zurück</a>{% endif %}
+  {% if back %}<a class="btn btn-outline-secondary btn-sm" href="{{ back }}"><i class="bi bi-arrow-left"></i> {{ _('Zurück') }}</a>{% endif %}
   {% if tx.editable %}
-    <a class="btn btn-primary btn-sm {{ 'disabled' if book_lock() }}" href="{{ url_for('views.transaction_edit', guid=tx.guid, back=back) }}"><i class="bi bi-pencil"></i> Bearbeiten</a>
-    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('views.transaction_new', copy=tx.guid, back=back) }}"><i class="bi bi-copy"></i> Kopieren</a>
+    <a class="btn btn-primary btn-sm {{ 'disabled' if book_lock() }}" href="{{ url_for('views.transaction_edit', guid=tx.guid, back=back) }}"><i class="bi bi-pencil"></i> {{ _('Bearbeiten') }}</a>
+    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('views.transaction_new', copy=tx.guid, back=back) }}"><i class="bi bi-copy"></i> {{ _('Kopieren') }}</a>
   {% endif %}
 {% endblock %}
 {% block content %}
 {% if not tx.editable %}
-<div class="alert alert-warning"><i class="bi bi-lock"></i> Nur in GnuCash Desktop änderbar: {{ tx.readonly_reasons|join(', ') }}.</div>
+<div class="alert alert-warning"><i class="bi bi-lock"></i> {{ _('Nur in GnuCash Desktop änderbar: {reasons}.', reasons=tx.readonly_reasons|join(', ')) }}</div>
 {% endif %}
 <div class="row">
   <div class="col-lg-8">
     <div class="card mb-4">
-      <div class="card-header"><h3 class="card-title">Splits</h3>
-        <div class="card-tools small text-body-secondary">Währung {{ tx.currency.mnemonic if tx.currency else '?' }}</div></div>
+      <div class="card-header"><h3 class="card-title">{{ _('Splits') }}</h3>
+        <div class="card-tools small text-body-secondary">{{ _('Währung {currency}', currency=tx.currency.mnemonic if tx.currency else '?') }}</div></div>
       <div class="card-body p-0">
         <table class="table table-sm mb-0 align-middle">
-          <thead><tr><th>Konto</th><th>Memo</th><th class="text-center">R</th><th class="text-end">Soll</th><th class="text-end">Haben</th></tr></thead>
+          <thead><tr><th>{{ _('Konto') }}</th><th>{{ _('Memo') }}</th><th class="text-center">R</th><th class="text-end">{{ _('Soll') }}</th><th class="text-end">{{ _('Haben') }}</th></tr></thead>
           <tbody>
           {% for s in tx.splits %}
             <tr>
               <td>{% if s.account %}<a class="link-body-emphasis link-underline-opacity-0" href="{{ url_for('views.register', guid=s.account_guid) }}">{{ s.account.full_name }}</a>{% else %}?{% endif %}
-                {% if s.account and s.account.commodity_guid != tx.currency_guid %}<div class="small text-body-secondary">Menge {{ s.quantity|money(s.account.mnemonic, places=4) }}</div>{% endif %}</td>
+                {% if s.account and s.account.commodity_guid != tx.currency_guid %}<div class="small text-body-secondary">{{ _('Menge {amount}', amount=s.quantity|money(s.account.mnemonic, places=4)) }}</div>{% endif %}</td>
               <td class="small">{{ s.memo }}{% if s.action %} <span class="badge text-bg-light">{{ s.action }}</span>{% endif %}</td>
               <td class="text-center">{{ reconcile_badge(s.reconcile) }}</td>
               <td class="text-end text-nowrap amount">{{ s.value|money if s.value > 0 }}{{ '0,00' if s.value == 0 }}</td>
@@ -38,24 +38,24 @@
       </div>
     </div>
     {% if tx.notes %}
-    <div class="card mb-4"><div class="card-header"><h3 class="card-title">Notizen</h3></div>
+    <div class="card mb-4"><div class="card-header"><h3 class="card-title">{{ _('Notizen') }}</h3></div>
       <div class="card-body"><div class="notes">{{ tx.notes }}</div></div></div>
     {% endif %}
   </div>
   <div class="col-lg-4">
     {% for r, p in records %}
     <div class="card mb-4">
-      <div class="card-header"><h3 class="card-title"><i class="bi bi-bank"></i> Bankimport</h3></div>
+      <div class="card-header"><h3 class="card-title"><i class="bi bi-bank"></i> {{ _('Bankimport') }}</h3></div>
       <div class="card-body small">
         <dl class="row mb-0">
-          <dt class="col-5">Importiert</dt><dd class="col-7">{{ r['created_at']|de_datetime }}</dd>
-          <dt class="col-5">Ergebnis</dt><dd class="col-7">{{ STATUS_LABELS.get(r['status'], r['status']) }}</dd>
-          <dt class="col-5">Gegenkonto aus</dt><dd class="col-7">{{ SOURCE_LABELS.get(r['source'], r['source']) }}</dd>
-          {% if r['counterparty_name'] %}<dt class="col-5">Gegenseite</dt><dd class="col-7">{{ r['counterparty_name'] }}</dd>{% endif %}
+          <dt class="col-5">{{ _('Importiert') }}</dt><dd class="col-7">{{ r['created_at']|de_datetime }}</dd>
+          <dt class="col-5">{{ _('Ergebnis') }}</dt><dd class="col-7">{{ _(STATUS_LABELS.get(r['status'], r['status'])) }}</dd>
+          <dt class="col-5">{{ _('Gegenkonto aus') }}</dt><dd class="col-7">{{ _(SOURCE_LABELS.get(r['source'], r['source'])) }}</dd>
+          {% if r['counterparty_name'] %}<dt class="col-5">{{ _('Gegenseite') }}</dt><dd class="col-7">{{ r['counterparty_name'] }}</dd>{% endif %}
           {% if r['counterparty_iban'] %}<dt class="col-5">IBAN</dt><dd class="col-7 font-monospace">{{ r['counterparty_iban']|iban }}</dd>{% endif %}
-          {% if p.get('sepa_ct_id') %}<dt class="col-5">End-to-End-Ref.</dt><dd class="col-7 font-monospace text-break">{{ p.get('sepa_ct_id') }}</dd>{% endif %}
-          {% if p.get('notes') and p.get('notes') != r['counterparty_name'] %}<dt class="col-5">Hinweis</dt><dd class="col-7">{{ p.get('notes') }}</dd>{% endif %}
-          {% if r['candidate_tx_guid'] %}<dt class="col-5">Mögliches Duplikat von</dt><dd class="col-7"><a href="{{ url_for('views.transaction', guid=r['candidate_tx_guid']) }}">Buchung ansehen</a></dd>{% endif %}
+          {% if p.get('sepa_ct_id') %}<dt class="col-5">{{ _('End-to-End-Ref.') }}</dt><dd class="col-7 font-monospace text-break">{{ p.get('sepa_ct_id') }}</dd>{% endif %}
+          {% if p.get('notes') and p.get('notes') != r['counterparty_name'] %}<dt class="col-5">{{ _('Hinweis') }}</dt><dd class="col-7">{{ p.get('notes') }}</dd>{% endif %}
+          {% if r['candidate_tx_guid'] %}<dt class="col-5">{{ _('Mögliches Duplikat von') }}</dt><dd class="col-7"><a href="{{ url_for('views.transaction', guid=r['candidate_tx_guid']) }}">{{ _('Buchung ansehen') }}</a></dd>{% endif %}
         </dl>
       </div>
     </div>
@@ -63,11 +63,11 @@
     {% if tx.editable %}
     <div class="card border-danger-subtle mb-4">
       <div class="card-body">
-        <form method="post" action="{{ url_for('views.transaction_delete', guid=tx.guid) }}" data-confirm="Buchung „{{ tx.description }}“ wirklich löschen?">
+        <form method="post" action="{{ url_for('views.transaction_delete', guid=tx.guid) }}" data-confirm="{{ _('Buchung „{description}“ wirklich löschen?', description=tx.description) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="fingerprint" value="{{ tx.fingerprint }}">
           <input type="hidden" name="back" value="{{ back or '' }}">
-          <button class="btn btn-outline-danger btn-sm" type="submit" {{ 'disabled' if book_lock() }}><i class="bi bi-trash"></i> Buchung löschen</button>
+          <button class="btn btn-outline-danger btn-sm" type="submit" {{ 'disabled' if book_lock() }}><i class="bi bi-trash"></i> {{ _('Buchung löschen') }}</button>
         </form>
       </div>
     </div>

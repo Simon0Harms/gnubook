@@ -1,17 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Bankimport{% endblock %}
-{% block header %}Bankimport{% endblock %}
-{% block subheader %}<div class="small text-body-secondary">Buchungen, die der FinTS-Importer über die API geliefert hat</div>{% endblock %}
+{% block title %}{{ _('Bankimport') }}{% endblock %}
+{% block header %}{{ _('Bankimport') }}{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">{{ _('Buchungen, die der FinTS-Importer über die API geliefert hat') }}</div>{% endblock %}
 {% block actions %}
   <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('views.imports', all=None if show_all else '1') }}">
-    {{ 'Nur zu prüfende' if show_all else 'Alle Importe anzeigen' }}</a>
+    {{ _('Nur zu prüfende') if show_all else _('Alle Importe anzeigen') }}</a>
 {% endblock %}
 {% block content %}
 {% if not rows %}
   <div class="card"><div class="card-body text-body-secondary">
-    {{ 'Noch keine Importe.' if show_all else 'Nichts zu prüfen – alle importierten Buchungen haben ein Gegenkonto und keine Duplikat-Verdachtsfälle.' }}
-    Den FinTS-Importer auf <code>{{ url_for('views.dashboard', _external=True) }}</code> zeigen lassen – Details unter
-    <a href="{{ url_for('views.settings') }}">Einstellungen</a>.
+    {{ _('Noch keine Importe.') if show_all else _('Nichts zu prüfen – alle importierten Buchungen haben ein Gegenkonto und keine Duplikat-Verdachtsfälle.') }}
+    {{ _('Den FinTS-Importer auf {url} zeigen lassen – Details unter {settings}.', url='<code>%s</code>'|format(url_for('views.dashboard', _external=True)|e), settings='<a href="%s">%s</a>'|format(url_for('views.settings'), _('Einstellungen')|e))|safe }}
   </div></div>
 {% else %}
 <form method="post" action="{{ url_for('views.imports_review') }}" id="review-form">
@@ -19,13 +18,13 @@
   <input type="hidden" name="all" value="{{ '1' if show_all else '' }}">
   <div class="card">
     <div class="card-header d-flex flex-wrap gap-2 align-items-center">
-      <button class="btn btn-sm btn-success" type="submit"><i class="bi bi-check2-all"></i> Ausgewählte als geprüft markieren</button>
-      <button class="btn btn-sm btn-outline-secondary" type="button" data-select-all="#review-form input[name=id]">alle auswählen</button>
-      <span class="small text-body-secondary ms-auto">Gegenkonto „{{ fallback.full_name if fallback else 'Auffangkonto' }}“ = keine Zuordnung gefunden</span>
+      <button class="btn btn-sm btn-success" type="submit"><i class="bi bi-check2-all"></i> {{ _('Ausgewählte als geprüft markieren') }}</button>
+      <button class="btn btn-sm btn-outline-secondary" type="button" data-select-all="#review-form input[name=id]">{{ _('alle auswählen') }}</button>
+      <span class="small text-body-secondary ms-auto">{{ _('Gegenkonto „{account}“ = keine Zuordnung gefunden', account=fallback.full_name if fallback else _('Auffangkonto')) }}</span>
     </div>
     <div class="card-body p-0 table-responsive">
       <table class="table table-sm table-hover mb-0 align-middle">
-        <thead><tr><th></th><th>Datum</th><th>Konto</th><th>Beschreibung</th><th>Gegenkonto (aktuell)</th><th class="text-end">Betrag</th><th>Ergebnis</th></tr></thead>
+        <thead><tr><th></th><th>{{ _('Datum') }}</th><th>{{ _('Konto') }}</th><th>{{ _('Beschreibung') }}</th><th>{{ _('Gegenkonto (aktuell)') }}</th><th class="text-end">{{ _('Betrag') }}</th><th>{{ _('Ergebnis') }}</th></tr></thead>
         <tbody>
         {% for row in rows %}{% set r = row.r %}
           <tr class="{{ 'table-warning' if r['status'] == 'possible_duplicate' }} {{ 'text-body-secondary' if r['reviewed'] }}">
@@ -33,14 +32,14 @@
             <td class="text-nowrap">{{ r['day']|de_date }}<div class="small text-body-tertiary">{{ r['created_at']|de_datetime }}</div></td>
             <td class="small">{{ row.account.name if row.account else '?' }}</td>
             <td>{% if row.exists %}<a class="link-body-emphasis link-underline-opacity-0" href="{{ url_for('views.transaction', guid=r['tx_guid'], back=request.full_path) }}">{{ r['description'] }}</a>
-                {% else %}<span class="text-decoration-line-through">{{ r['description'] }}</span> <span class="badge text-bg-light">gelöscht</span>{% endif %}</td>
+                {% else %}<span class="text-decoration-line-through">{{ r['description'] }}</span> <span class="badge text-bg-light">{{ _('gelöscht') }}</span>{% endif %}</td>
             <td class="small {{ 'text-warning-emphasis fw-semibold' if row.on_fallback }}">{{ row.counter if row.counter is not none else '' }}</td>
             <td class="text-end text-nowrap amount {{ r['amount']|amount_class }}">{{ r['amount']|money }}</td>
             <td class="small">
-              {{ STATUS_LABELS.get(r['status'], r['status']) }}
-              {% if r['source'] and r['status'] != 'matched' %}<div class="text-body-tertiary">{{ SOURCE_LABELS.get(r['source'], r['source']) }}</div>{% endif %}
-              {% if r['candidate_tx_guid'] %}<div><a href="{{ url_for('views.transaction', guid=r['candidate_tx_guid'], back=request.full_path) }}">ähnliche Buchung</a></div>{% endif %}
-              {% if r['reviewed'] %}<div><i class="bi bi-check2"></i> geprüft</div>{% endif %}
+              {{ _(STATUS_LABELS.get(r['status'], r['status'])) }}
+              {% if r['source'] and r['status'] != 'matched' %}<div class="text-body-tertiary">{{ _(SOURCE_LABELS.get(r['source'], r['source'])) }}</div>{% endif %}
+              {% if r['candidate_tx_guid'] %}<div><a href="{{ url_for('views.transaction', guid=r['candidate_tx_guid'], back=request.full_path) }}">{{ _('ähnliche Buchung') }}</a></div>{% endif %}
+              {% if r['reviewed'] %}<div><i class="bi bi-check2"></i> {{ _('geprüft') }}</div>{% endif %}
             </td>
           </tr>
         {% endfor %}

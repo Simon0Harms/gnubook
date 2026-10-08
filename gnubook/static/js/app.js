@@ -2,6 +2,20 @@
 (function () {
   'use strict';
 
+  /* UI texts in English (German is the default; <html lang> is set by the server) */
+  var EN = {
+    'Konto wählen …': 'Choose account …',
+    'Eingabefehler': 'Input error',
+    'Bitte die markierten Beträge korrigieren.': 'Please correct the highlighted amounts.',
+    'Die Buchung ist nicht ausgeglichen (Differenz {diff}). „Ausgleichen“ übernimmt die Differenz in eine offene Zeile.':
+      'The transaction is not balanced (difference {diff}). “Balance” puts the difference into an empty row.'
+  };
+  function t(text, vars) {
+    var s = document.documentElement.lang === 'en' && EN[text] ? EN[text] : text;
+    Object.keys(vars || {}).forEach(function (k) { s = s.split('{' + k + '}').join(vars[k]); });
+    return s;
+  }
+
   function store(key, value) {
     try {
       if (value === undefined) { return localStorage.getItem(key); }
@@ -190,7 +204,7 @@
     var initSelect = function (sel) {
       if (typeof TomSelect === 'undefined' || sel.disabled || sel.tomselect) { return; }
       new TomSelect(sel, {
-        maxOptions: 400, allowEmptyOption: true, placeholder: 'Konto wählen …',
+        maxOptions: 400, allowEmptyOption: true, placeholder: t('Konto wählen …'),
         searchField: ['text'], sortField: [{ field: '$score' }, { field: '$order' }],
         onChange: function () { touched = true; },
       });
@@ -238,7 +252,7 @@
         });
       });
       total = Math.round(total * 100) / 100;
-      imbalanceEl.textContent = bad ? 'Eingabefehler' : fmt(total);
+      imbalanceEl.textContent = bad ? t('Eingabefehler') : fmt(total);
       imbalanceBox.classList.toggle('unbalanced', bad || total !== 0);
       imbalanceBox.classList.toggle('balanced', !bad && total === 0);
       return bad ? NaN : total;
@@ -295,11 +309,11 @@
       var total = recalc();
       if (isNaN(total)) {
         ev.preventDefault();
-        window.alert('Bitte die markierten Beträge korrigieren.');
+        window.alert(t('Bitte die markierten Beträge korrigieren.'));
       } else if (total !== 0) {
         ev.preventDefault();
-        window.alert('Die Buchung ist nicht ausgeglichen (Differenz ' + fmt(total) + '). ' +
-                     '„Ausgleichen“ übernimmt die Differenz in eine offene Zeile.');
+        window.alert(t('Die Buchung ist nicht ausgeglichen (Differenz {diff}). ' +
+                       '„Ausgleichen“ übernimmt die Differenz in eine offene Zeile.', { diff: fmt(total) }));
       }
     });
 

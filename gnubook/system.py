@@ -21,6 +21,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from .appdb import AppDB, now_iso
 from .book import Book
 from .config import Config
+from .i18n import _
 from .importer import Importer
 
 SCHEMA = """
@@ -121,13 +122,13 @@ class SystemDB:
     @staticmethod
     def _check_password(password: str):
         if len(password or "") < MIN_PASSWORD:
-            raise UserError(f"Das Passwort muss mindestens {MIN_PASSWORD} Zeichen haben.")
+            raise UserError(_("Das Passwort muss mindestens {n} Zeichen haben.", n=MIN_PASSWORD))
 
     def add_user(self, username: str, password: str | None = None, is_admin: bool = False,
                  password_hash: str | None = None) -> int:
         username = (username or "").strip()
         if not re.fullmatch(r"[A-Za-z0-9._@-]{2,64}", username):
-            raise UserError("Benutzername: 2–64 Zeichen, nur Buchstaben, Ziffern und . _ @ -")
+            raise UserError(_("Benutzername: 2–64 Zeichen, nur Buchstaben, Ziffern und . _ @ -"))
         if password_hash is None:
             self._check_password(password)
             password_hash = generate_password_hash(password)
@@ -137,7 +138,7 @@ class SystemDB:
                                      "VALUES (?, ?, ?, ?)", (username, password_hash, int(is_admin),
                                                             now_iso())).lastrowid)
         except sqlite3.IntegrityError:
-            raise UserError(f"Benutzer „{username}“ gibt es schon.")
+            raise UserError(_("Benutzer „{name}“ gibt es schon.", name=username))
 
     def set_password(self, user_id: int, password: str):
         self._check_password(password)
@@ -150,7 +151,7 @@ class SystemDB:
                 others = c.execute("SELECT COUNT(*) FROM users WHERE is_admin = 1 AND active = 1 AND id <> ?",
                                    (user_id,)).fetchone()[0]
                 if others == 0:
-                    raise UserError("Es muss mindestens ein aktiver Administrator bleiben.")
+                    raise UserError(_("Es muss mindestens ein aktiver Administrator bleiben."))
             c.execute("UPDATE users SET is_admin = ?, active = ? WHERE id = ?", (int(is_admin), int(active), user_id))
 
     def delete_user(self, user_id: int):
@@ -170,10 +171,10 @@ class SystemDB:
     def add_book(self, name: str, url: str, timezone: str = "Europe/Berlin", backup_file: str = "",
                  managed_db: str = "") -> int:
         if not name.strip() or not url.strip():
-            raise UserError("Name und Datenbank-URL sind nötig.")
+            raise UserError(_("Name und Datenbank-URL sind nötig."))
         with self.conn() as c:
             if c.execute("SELECT 1 FROM books WHERE name = ?", (name.strip(),)).fetchone():
-                raise UserError(f"Ein Buch „{name.strip()}“ gibt es schon.")
+                raise UserError(_("Ein Buch „{name}“ gibt es schon.", name=name.strip()))
             return int(c.execute("INSERT INTO books (name, url, timezone, backup_file, created_at, managed_db) "
                                  "VALUES (?, ?, ?, ?, ?, ?)", (name.strip(), url.strip(), timezone, backup_file,
                                                                now_iso(), managed_db)).lastrowid)
@@ -345,11 +346,11 @@ class Registry:
 
         admin_url = self.cfg.postgres.admin_url
         if not admin_url:
-            raise UserError("Neue Datenbanken anlegen ist aus: [postgres] admin_url fehlt in config.toml.")
+            raise UserError(_("Neue Datenbanken anlegen ist aus: [postgres] admin_url fehlt in config.toml."))
         if not name.strip():
-            raise UserError("Bitte einen Namen angeben.")
+            raise UserError(_("Bitte einen Namen angeben."))
         if any(b["name"] == name.strip() for b in self.system.books()):
-            raise UserError(f"Ein Buch „{name.strip()}“ gibt es schon.")
+            raise UserError(_("Ein Buch „{name}“ gibt es schon.", name=name.strip()))
         dbname = provision.db_name_for(name)
         try:
             url, password = provision.create_role_and_db(admin_url, dbname)
@@ -362,7 +363,7 @@ class Registry:
                 provision.create_empty_book(url, template="simple" if content == "simple" else "none")
         except Exception as exc:
             provision.drop_role_and_db(admin_url, dbname)  # nothing half-created stays behind
-            raise UserError(f"Buch konnte nicht angelegt werden: {exc}")
+            raise UserError(_("Buch konnte nicht angelegt werden: {error}", error=exc))
         bid = self.system.add_book(name, url, self.cfg.book.timezone,
                                    self.default_backup_file(name) if backup else "", managed_db=dbname)
         self.system.set_book_users(bid, users)
@@ -382,7 +383,7 @@ class Registry:
         saved = None
         if drop_database:
             if not row["managed_db"] or not self.cfg.postgres.admin_url:
-                raise UserError("Nur von gnubook angelegte Datenbanken können hier gelöscht werden.")
+                raise UserError(_("Nur von gnubook angelegte Datenbanken können hier gelöscht werden."))
             from datetime import datetime
 
             ctx = self.context(book_id)
@@ -400,6 +401,6 @@ class Registry:
 
     def dispose(self):
         with self._lock:
-            for _, ctx in self._contexts.values():
+            for _book, ctx in self._contexts.values():
                 ctx.book.dispose()
             self._contexts.clear()
