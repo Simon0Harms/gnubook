@@ -55,6 +55,9 @@ keep = 10
 # users can copy the .gnucash backup into their own Nextcloud (Einstellungen → Nextcloud)
 enabled = true
 allow_http = false
+# stored Nextcloud passwords are encrypted with a key derived from this value (default: [app] secret_key).
+# Changing it makes them unreadable – users then connect their Nextcloud again.
+# encryption_key = ""
 
 [import.iban_map]
 # "DE00123456780000000000" = "Aktiva:Barvermögen:Girokonto"

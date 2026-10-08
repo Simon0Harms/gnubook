@@ -15,6 +15,7 @@ dependencies = [
     "piecash==1.2.1",
     "SQLAlchemy>=1.4.49,<1.5",
     "gunicorn>=22",
+    "cryptography>=42",
 ]
 
 [project.optional-dependencies]

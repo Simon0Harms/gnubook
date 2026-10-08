@@ -88,6 +88,15 @@ class Client:
     app_password: str
     user_id: str = ""  # WebDAV user id; may differ from the login name (e.g. e-mail login)
     timeout: float = TIMEOUT
+    dav_root: str = ""  # set for a public share: WebDAV root of the shared folder
+
+    @classmethod
+    def for_share(cls, server: str, token: str, password: str, legacy: bool = False, timeout: float = TIMEOUT):
+        """Client for a public share link (folder shared with edit permission). Only that folder is reachable."""
+        if legacy:  # Nextcloud < 29: user name = share token
+            return cls(server, token, password, timeout=timeout, dav_root=f"{server}/public.php/webdav")
+        return cls(server, "anonymous", password, timeout=timeout,
+                   dav_root=f"{server}/public.php/dav/files/{quote(token, safe='')}")
 
     # ---------------------------------------------------------------- low level
     def _request(self, method: str, url: str, data=None, headers=None, ok=(200, 201, 204, 207)):
@@ -111,7 +120,7 @@ class Client:
     @staticmethod
     def _explain(code: int, method: str) -> str:
         if code == 401:
-            return _("Anmeldung an der Nextcloud abgelehnt (App-Passwort prüfen).")
+            return _("Anmeldung an der Nextcloud abgelehnt (App- bzw. Freigabe-Passwort prüfen).")
         if code == 403:
             return _("Keine Schreibrechte im Zielordner.")
         if code == 404:
@@ -124,7 +133,12 @@ class Client:
 
     def _dav(self, path: str) -> str:
         segs = [quote(s, safe="") for s in path.split("/") if s]
-        return f"{self.server}/remote.php/dav/files/{quote(self.user_id or self.login, safe='')}/" + "/".join(segs)
+        root = self.dav_root or f"{self.server}/remote.php/dav/files/{quote(self.user_id or self.login, safe='')}"
+        return f"{root}/" + "/".join(segs)
+
+    def probe(self):
+        """Checks that the WebDAV root is reachable with these credentials."""
+        self._request("PROPFIND", self._dav("/"), data=b"", headers={"Depth": "0"}, ok=(207,))
 
     # ---------------------------------------------------------------- API
     def whoami(self) -> dict:
@@ -185,6 +199,40 @@ class Client:
     def revoke(self):
         """Deletes the app password on the server (on disconnect). Errors are ignored by the caller."""
         self._request("DELETE", f"{self.server}/ocs/v2.php/core/apppassword", ok=(200,))
+
+
+def client_for(row, password: str, timeout: float = TIMEOUT) -> Client:
+    """Client from a stored connection (nextcloud_accounts row) and its decrypted password."""
+    if row["kind"] == "share":
+        return Client.for_share(row["server"], row["login"], password, bool(row["legacy"]), timeout)
+    return Client(row["server"], row["login"], password, row["dav_user"], timeout)
+
+
+# ------------------------------------------------------------------------------------------ share links
+
+def parse_share_link(link: str, allow_http: bool = False) -> tuple[str, str]:
+    """'https://cloud.example.org/s/AbC123' (also with index.php) -> (server, token)."""
+    link = (link or "").strip()
+    m = re.match(r"^(.*?)/(?:index\.php/)?s/([A-Za-z0-9]{8,64})/?(?:[?#].*)?$", link)
+    if not m:
+        raise NextcloudError(_("Das ist kein Nextcloud-Freigabelink (…/s/…)."))
+    return normalize_server(m.group(1), allow_http), m.group(2)
+
+
+def connect_share(server: str, token: str, password: str, timeout: float = TIMEOUT) -> tuple[Client, bool]:
+    """Finds the WebDAV endpoint of a share (new public.php/dav, else legacy public.php/webdav).
+
+    Returns (client, legacy). Raises the error of the new endpoint when neither works.
+    """
+    first = None
+    for legacy in (False, True):
+        client = Client.for_share(server, token, password, legacy, timeout)
+        try:
+            client.probe()
+            return client, legacy
+        except NextcloudError as exc:
+            first = first or exc
+    raise first
 
 
 # ------------------------------------------------------------------------------------------ login flow v2

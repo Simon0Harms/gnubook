@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS login_failures (ip TEXT NOT NULL, ts REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS nextcloud_accounts (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     server TEXT NOT NULL, login TEXT NOT NULL, app_password TEXT NOT NULL, dav_user TEXT NOT NULL DEFAULT '',
-    display_name TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
+    display_name TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'account', legacy INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS nextcloud_targets (
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -81,8 +82,9 @@ def mask_url(url: str) -> str:
 
 
 class SystemDB:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, box=None):
         self.path = Path(path)
+        self.box = box  # crypto.SecretBox for stored Nextcloud passwords
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         with self.conn() as c:
@@ -93,6 +95,10 @@ class SystemDB:
             if "profile" not in cols:  # before 0.4.0
                 c.execute("ALTER TABLE books ADD COLUMN profile TEXT NOT NULL DEFAULT 'de'")
                 c.execute("ALTER TABLE books ADD COLUMN import_settings TEXT NOT NULL DEFAULT '{}'")
+            nc_cols = {r[1] for r in c.execute("PRAGMA table_info(nextcloud_accounts)")}
+            if "kind" not in nc_cols:  # first Nextcloud version (account only)
+                c.execute("ALTER TABLE nextcloud_accounts ADD COLUMN kind TEXT NOT NULL DEFAULT 'account'")
+                c.execute("ALTER TABLE nextcloud_accounts ADD COLUMN legacy INTEGER NOT NULL DEFAULT 0")
             if "language" not in {r[1] for r in c.execute("PRAGMA table_info(users)")}:
                 c.execute("ALTER TABLE users ADD COLUMN language TEXT NOT NULL DEFAULT ''")
         try:
@@ -290,11 +296,27 @@ class SystemDB:
             return c.execute("SELECT * FROM nextcloud_accounts WHERE user_id = ?", (user_id,)).fetchone()
 
     def set_nextcloud_account(self, user_id: int, server: str, login: str, app_password: str, dav_user: str,
-                              display_name: str = ""):
+                              display_name: str = "", kind: str = "account", legacy: bool = False):
+        """Stores a connection; the password is encrypted (crypto.SecretBox). kind: 'account' or 'share'."""
+        secret = self.box.encrypt(app_password)
         with self.conn() as c:
             c.execute("INSERT OR REPLACE INTO nextcloud_accounts (user_id, server, login, app_password, dav_user, "
-                      "display_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                      (user_id, server, login, app_password, dav_user, display_name, now_iso()))
+                      "display_name, created_at, kind, legacy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                      (user_id, server, login, secret, dav_user, display_name, now_iso(), kind, int(legacy)))
+
+    def nextcloud_password(self, row) -> str:
+        return self.box.decrypt(row["app_password"])
+
+    def encrypt_nextcloud_passwords(self) -> int:
+        """Encrypts passwords stored before encryption existed. Returns the number of rows changed."""
+        if self.box is None or not self.box.available:
+            return 0
+        with self.conn() as c:
+            rows = c.execute("SELECT user_id, app_password FROM nextcloud_accounts").fetchall()
+            plain = [r for r in rows if not self.box.is_encrypted(r["app_password"])]
+            c.executemany("UPDATE nextcloud_accounts SET app_password = ? WHERE user_id = ?",
+                          [(self.box.encrypt(r["app_password"]), r["user_id"]) for r in plain])
+        return len(plain)
 
     def delete_nextcloud_account(self, user_id: int):
         with self.conn() as c:
@@ -319,7 +341,8 @@ class SystemDB:
         """Active targets of a book whose user still may use it, joined with the user's account."""
         with self.conn() as c:
             return c.execute(
-                "SELECT t.user_id, t.folder, t.filename, a.server, a.login, a.app_password, a.dav_user, u.username "
+                "SELECT t.user_id, t.folder, t.filename, a.server, a.login, a.app_password, a.dav_user, a.kind, "
+                "a.legacy, u.username "
                 "FROM nextcloud_targets t JOIN nextcloud_accounts a ON a.user_id = t.user_id "
                 "JOIN users u ON u.id = t.user_id JOIN user_books ub ON ub.user_id = t.user_id AND ub.book_id = t.book_id "
                 "WHERE t.book_id = ? AND t.enabled = 1 AND u.active = 1 ORDER BY t.user_id", (book_id,)).fetchall()
@@ -357,7 +380,11 @@ class Registry:
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.data = Path(cfg.app.data_dir)
-        self.system = SystemDB(self.data / "system.sqlite")
+        from .crypto import SecretBox
+
+        self.box = SecretBox(cfg.nextcloud.encryption_key or cfg.app.secret_key)
+        self.system = SystemDB(self.data / "system.sqlite", self.box)
+        self.system.encrypt_nextcloud_passwords()
         self._contexts: dict[int, tuple[tuple, BookContext]] = {}
         self._lock = threading.Lock()
         self.bootstrap()
@@ -492,10 +519,19 @@ class Registry:
             provision.drop_role_and_db(self.cfg.postgres.admin_url, row["managed_db"])
         return saved
 
-    def nextcloud_uploads(self, book_id: int):
+    def nextcloud_uploads(self, book_id: int) -> list[dict]:
+        """Upload targets of a book with decrypted passwords (only ever held in memory)."""
         if not self.cfg.nextcloud.enabled:
             return []
-        return self.system.nextcloud_uploads(book_id)
+        out = []
+        for row in self.system.nextcloud_uploads(book_id):
+            item = dict(row)
+            try:
+                item["app_password"] = self.system.nextcloud_password(row)
+            except Exception as exc:  # noqa: BLE001 – key changed: report per user instead of failing all
+                item["app_password"], item["error"] = "", str(exc)
+            out.append(item)
+        return out
 
     def default_backup_file(self, name: str) -> str:
         return str(self.data / "backup" / f"{slug(name)}.gnucash")

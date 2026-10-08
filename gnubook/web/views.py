@@ -653,17 +653,24 @@ def _nextcloud_view(st) -> dict:
         return {"nc_enabled": False}
     uid = g.user["id"]
     target = reg.system.nextcloud_target(uid, st.id)
+    account = reg.system.nextcloud_account(uid)
     status = st.backup.remote_status.get(uid) if st.backup is not None else None
     from ..system import slug
 
-    return {"nc_enabled": True, "nc_account": reg.system.nextcloud_account(uid), "nc_target": target,
-            "nc_status": status, "nc_default_folder": "/gnubook", "nc_default_file": f"{slug(st.name)}.gnucash"}
+    return {"nc_enabled": True, "nc_account": account, "nc_target": target,
+            "nc_status": status,
+            "nc_default_folder": "/" if (account and account["kind"] == "share") else "/gnubook", "nc_default_file": f"{slug(st.name)}.gnucash"}
 
 
 def _nc_client(account):
-    from ..nextcloud import Client
+    from ..crypto import SecretError
+    from ..nextcloud import NextcloudError, client_for
 
-    return Client(account["server"], account["login"], account["app_password"], account["dav_user"])
+    try:
+        password = registry().system.nextcloud_password(account)
+    except SecretError as exc:
+        raise NextcloudError(_("Gespeichertes Passwort nicht lesbar – bitte Nextcloud trennen und neu verbinden.")) from exc
+    return client_for(account, password)
 
 
 def _nc_settings():
@@ -694,6 +701,28 @@ def nextcloud_connect():
             raise NextcloudError(_("Bitte Benutzer und App-Passwort angeben."))
         _nc_store(server, login, password)
         flash(_("Nextcloud verbunden."), "success")
+    except NextcloudError as exc:
+        flash(str(exc), "danger")
+    return _nc_settings()
+
+
+@bp.route("/settings/nextcloud/share", methods=["POST"])
+@login_required
+def nextcloud_share():
+    """Connect via a public share link of one folder (edit permission): gnubook only reaches that folder."""
+    from ..nextcloud import NextcloudError, connect_share, parse_share_link
+
+    cfg = registry().cfg.nextcloud
+    if not cfg.enabled:
+        abort(404)
+    try:
+        server, token = parse_share_link(request.form.get("link", ""), cfg.allow_http)
+        password = request.form.get("share_password", "")
+        client, legacy = connect_share(server, token, password)
+        client.test_write("/")
+        registry().system.set_nextcloud_account(g.user["id"], server, token, password, "", "", "share", legacy)
+        state().appdb.audit(session.get("user", "?"), "nextcloud-connect", None, f"Freigabe @ {server}")
+        flash(_("Freigabe verbunden. gnubook kann nur in diesen einen Ordner schreiben."), "success")
     except NextcloudError as exc:
         flash(str(exc), "danger")
     return _nc_settings()
@@ -743,7 +772,8 @@ def nextcloud_disconnect():
     account = reg.system.nextcloud_account(g.user["id"])
     if account is not None:
         try:
-            _nc_client(account).revoke()
+            if account["kind"] == "account":  # a share link is deleted by the user in Nextcloud
+                _nc_client(account).revoke()
         except Exception:  # noqa: BLE001 – the app password may already be gone
             pass
         reg.system.delete_nextcloud_account(g.user["id"])

@@ -96,6 +96,8 @@ class NextcloudConfig:
     enabled: bool = True
     # allow http:// servers (only for tests or a trusted LAN)
     allow_http: bool = False
+    # key for the stored Nextcloud passwords; empty = derived from [app] secret_key
+    encryption_key: str = ""
 
 
 @dataclass

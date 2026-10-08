@@ -11,10 +11,12 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import pytest
 
 from gnubook.backup import BackupWriter
-from gnubook.nextcloud import Client, NextcloudError, clean_filename, clean_folder, normalize_server
+from gnubook.nextcloud import (Client, NextcloudError, clean_filename, clean_folder, normalize_server,
+                               parse_share_link)
 from gnubook.writer import SplitInput, TxInput, create_transaction
 
 LOGIN, APP_PW, DAV_USER = "simon@example.org", "app-pw-123", "simon"
+SHARE, SHARE_PW = "AbCdEf123456", "share-pw-1"
 
 
 class FakeNextcloud(BaseHTTPRequestHandler):
@@ -26,8 +28,22 @@ class FakeNextcloud(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
+    legacy_only = False
+
+    def _basic(self, user, pw):
+        return "Basic " + base64.b64encode(f"{user}:{pw}".encode()).decode()
+
     def _auth(self):
-        expected = "Basic " + base64.b64encode(f"{LOGIN}:{APP_PW}".encode()).decode()
+        path = urlsplit(self.path).path
+        if path.startswith("/public.php/dav/"):
+            if self.legacy_only:
+                self._send(404)
+                return False
+            expected = self._basic("anonymous", SHARE_PW)
+        elif path.startswith("/public.php/webdav"):
+            expected = self._basic(SHARE, SHARE_PW)
+        else:
+            expected = self._basic(LOGIN, APP_PW)
         if self.headers.get("Authorization") != expected:
             self.send_response(401)
             self.end_headers()
@@ -41,11 +57,20 @@ class FakeNextcloud(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    PREFIXES = (f"/remote.php/dav/files/{DAV_USER}", f"/public.php/dav/files/{SHARE}", "/public.php/webdav")
+
+    def _prefix(self):
+        p = unquote(urlsplit(self.path).path)
+        return next(x for x in self.PREFIXES if p.startswith(x))
+
     def _path(self):
         p = unquote(urlsplit(self.path).path)
-        prefix = f"/remote.php/dav/files/{DAV_USER}"
-        assert p.startswith(prefix), p
-        return "/" + p[len(prefix):].strip("/")
+        pre = self._prefix()
+        # a share sees only its folder: map into /Geteilt/gnubook
+        inner = "/" + p[len(pre):].strip("/")
+        if pre.startswith("/public.php"):
+            inner = ("/Share" + inner).rstrip("/") if inner != "/" else "/Share"
+        return inner
 
     def _body(self):
         return self.rfile.read(int(self.headers.get("Content-Length") or 0))
@@ -109,11 +134,12 @@ class FakeNextcloud(BaseHTTPRequestHandler):
             return
         self._body()
         p = self._path()
-        base = f"/remote.php/dav/files/{DAV_USER}"
+        base = self._prefix()
+        shown = (lambda e: e[len("/Share"):] or "/") if base.startswith("/public.php") else (lambda e: e)
         entries = [p] + sorted(d for d in self.dirs if d != p and (d.rsplit("/", 1)[0] or "/") == p)
         xml = '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">'
         for e in entries:
-            xml += (f"<d:response><d:href>{base}{e.rstrip('/')}/</d:href><d:propstat><d:prop><d:resourcetype>"
+            xml += (f"<d:response><d:href>{base}{shown(e).rstrip('/')}/</d:href><d:propstat><d:prop><d:resourcetype>"
                     "<d:collection/></d:resourcetype></d:prop></d:propstat></d:response>")
         xml += "</d:multistatus>"
         self._send(207, xml.encode(), "application/xml")
@@ -121,7 +147,8 @@ class FakeNextcloud(BaseHTTPRequestHandler):
 
 @pytest.fixture
 def nc():
-    handler = type("H", (FakeNextcloud,), {"files": {}, "dirs": {"/"}, "flow_done": False, "readonly": set()})
+    handler = type("H", (FakeNextcloud,), {"files": {}, "dirs": {"/", "/Share"}, "flow_done": False,
+                                         "readonly": set(), "legacy_only": False})
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     handler.url = f"http://127.0.0.1:{server.server_port}"
@@ -163,11 +190,11 @@ def test_client_upload_and_folders(nc, tmp_path):
     f.write_bytes(b"two")
     c.upload(f, "/Finanzen/Gnu Cash", "Haushalt ä.gnucash")  # overwrite in place (keeps Nextcloud versions)
     assert nc.files["/Finanzen/Gnu Cash/Haushalt ä.gnucash"] == b"two"
-    assert c.folders("/") == ["Finanzen"]
+    assert c.folders("/") == ["Finanzen", "Share"]
     assert c.folders("/Finanzen") == ["Gnu Cash"]
     c.test_write("/Neu")
     assert "/Neu" in nc.dirs and not any(k.startswith("/Neu/") for k in nc.files)
-    with pytest.raises(NextcloudError, match="App-Passwort"):
+    with pytest.raises(NextcloudError, match="Passwort"):
         Client(nc.url, LOGIN, "falsch", DAV_USER).whoami()
     nc.readonly.add("/Geteilt")
     nc.dirs.add("/Geteilt")
@@ -176,7 +203,7 @@ def test_client_upload_and_folders(nc, tmp_path):
 
 
 def test_backup_writer_uploads_without_local_file(state, nc, tmp_path):
-    target = {"user_id": 1, "server": nc.url, "login": LOGIN, "app_password": APP_PW, "dav_user": DAV_USER,
+    target = {"user_id": 1, "kind": "account", "legacy": 0, "server": nc.url, "login": LOGIN, "app_password": APP_PW, "dav_user": DAV_USER,
               "folder": "/gnubook", "filename": "buch.gnucash"}
     bw = BackupWriter(state.book, "", keep=3, delay=0, remote=lambda: [target], work_dir=tmp_path / "work")
     bw.run_now()
@@ -212,12 +239,14 @@ def test_web_flow(app, client, state, nc):
     r = client.post("/settings/nextcloud/flow/poll", headers={"X-CSRF-Token": client.csrf})
     assert r.json == {"status": "done"}
     acc = reg.system.nextcloud_account(1)
-    assert acc["dav_user"] == DAV_USER and acc["app_password"] == APP_PW
+    assert acc["dav_user"] == DAV_USER and acc["kind"] == "account"
+    assert acc["app_password"].startswith("enc:v1:") and APP_PW not in acc["app_password"]  # encrypted at rest
+    assert reg.system.nextcloud_password(acc) == APP_PW
     assert "Verbunden als" in _settings(client)
 
     # folder picker
     nc.dirs.add("/Finanzen")
-    assert client.get("/settings/nextcloud/folders?path=/").json["folders"] == ["Finanzen"]
+    assert client.get("/settings/nextcloud/folders?path=/").json["folders"] == ["Finanzen", "Share"]
     assert client.get("/settings/nextcloud/folders?path=/../x").status_code == 400
 
     # target: write test, then upload after a change
@@ -270,3 +299,54 @@ def test_disabled_in_config(app, client):
     assert "Sicherung in meine Nextcloud" not in _settings(client)
     r = client.post("/settings/nextcloud/connect", data={"csrf_token": client.csrf, "server": "https://x"})
     assert r.status_code == 404
+
+
+def test_parse_share_link():
+    assert parse_share_link("https://cloud.example.org/s/AbCdEf123456") == ("https://cloud.example.org", SHARE)
+    assert parse_share_link("https://x.org/nc/index.php/s/AbCdEf123456/") == ("https://x.org/nc", SHARE)
+    for bad in ("https://x.org/apps/files", "https://x.org/s/a"):
+        with pytest.raises(NextcloudError):
+            parse_share_link(bad)
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_share_link_only_reaches_its_folder(app, client, state, nc, legacy):
+    reg = app.extensions["gnubook"]
+    reg.cfg.nextcloud.allow_http = True
+    nc.legacy_only = legacy
+    client.post("/settings/nextcloud/share", data={"csrf_token": client.csrf, "link": f"{nc.url}/s/{SHARE}",
+                                                    "share_password": "falsch"})
+    assert reg.system.nextcloud_account(1) is None
+    client.post("/settings/nextcloud/share", data={"csrf_token": client.csrf, "link": f"{nc.url}/s/{SHARE}",
+                                                    "share_password": SHARE_PW})
+    acc = reg.system.nextcloud_account(1)
+    assert (acc["kind"], acc["login"], bool(acc["legacy"])) == ("share", SHARE, legacy)
+    assert SHARE_PW not in acc["app_password"]
+    page = client.get("/settings").text
+    assert "freigegebenen Ordner" in page and 'value="/"' in page  # default target: the shared folder itself
+
+    client.post("/settings/nextcloud/target", data={"csrf_token": client.csrf, "folder": "/Jahre",
+                                                     "filename": "Haushalt", "enabled": "1"})
+    state.backup.run_now()
+    assert "/Share/Jahre/Haushalt.gnucash" in nc.files  # inside the shared folder only
+    assert client.get("/settings/nextcloud/folders?path=/").json["folders"] == ["Jahre"]
+    client.post("/settings/nextcloud/disconnect", data={"csrf_token": client.csrf})
+    assert reg.system.nextcloud_account(1) is None
+
+
+def test_plaintext_passwords_are_migrated_and_key_change_is_reported(app, state, nc):
+    reg = app.extensions["gnubook"]
+    with reg.system.conn() as c:  # row as written by the first Nextcloud version
+        c.execute("INSERT INTO nextcloud_accounts (user_id, server, login, app_password, dav_user, created_at) "
+                  "VALUES (1, ?, ?, ?, ?, 'x')", (nc.url, LOGIN, APP_PW, DAV_USER))
+    reg.system.set_nextcloud_target(1, state.id, "/gnubook", "b.gnucash")
+    assert reg.system.encrypt_nextcloud_passwords() == 1
+    assert reg.system.nextcloud_account(1)["app_password"].startswith("enc:v1:")
+    assert reg.nextcloud_uploads(state.id)[0]["app_password"] == APP_PW
+
+    from gnubook.crypto import SecretBox
+    reg.system.box = SecretBox("anderer-schluessel-" + "x" * 30)
+    item = reg.nextcloud_uploads(state.id)[0]
+    assert item["error"] and item["app_password"] == ""
+    state.backup.run_now()
+    assert "entschlüsseln" in state.backup.remote_status[1]["error"]

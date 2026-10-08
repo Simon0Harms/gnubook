@@ -56,9 +56,12 @@ German format in both languages.
     opens directly in GnuCash Desktop), with rotation of older versions.
 - **Backups as `.gnucash` file.** A nightly timer saves the whole book as a SQLite GnuCash file that GnuCash
   Desktop opens directly (`gnubook backup`).
-- **Optional copy into your own Nextcloud.** Each user can connect their Nextcloud (login flow or app password)
-  and choose a folder and file name per book under *Einstellungen*. After every change gnubook uploads the
-  `.gnucash` file via WebDAV; Nextcloud's versions app keeps the older states.
+- **Optional copy into your own Nextcloud.** Each user connects either a password-protected share link of one
+  folder (recommended: gnubook can only write into that folder) or the whole account (login flow / app
+  password), and chooses a folder and file name per book under *Einstellungen*. After every change gnubook
+  uploads the `.gnucash` file via WebDAV; Nextcloud's versions app keeps the older states. Stored passwords
+  are encrypted with a key from `config.toml` (not stored in `data/`); the running server can still read them,
+  since it uploads in the background.
 - **Several users and books.** Every user logs in with their own password. Every book is its own GnuCash
   database. Books can be shared, and a user with several books switches between them in the header.
   Administrators manage users and books in the web UI.
@@ -158,6 +161,7 @@ or on the command line. Every value can be overridden with an environment variab
 | `[backup] keep` | Versions of the per-book `.gnucash` copy to keep (the file itself is set per book under *Bücher*) |
 | `[nextcloud] enabled` | Let users upload the `.gnucash` copy into their own Nextcloud (default `true`) |
 | `[nextcloud] allow_http` | Also accept `http://` Nextcloud addresses (default `false`) |
+| `[nextcloud] encryption_key` | Key for the stored Nextcloud passwords; empty = derived from `[app] secret_key`. Changing it means users connect again |
 | `[postgres] admin_url` | Role with `CREATEROLE` and `CREATEDB` (no superuser) that lets gnubook create a database per new book |
 | `[[checkpoints.patterns]]` | Own balance-line patterns (`stand` regex, `keyword`), used with every bank profile |
 

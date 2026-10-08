@@ -108,7 +108,7 @@ class BackupWriter:
     """Writes the .gnucash copy in the background after changes (coalesces bursts, e.g. imports).
 
     `path` is the local file ('' = no local copy). `remote` returns the Nextcloud targets of the book
-    (rows with user_id, server, login, app_password, dav_user, folder, filename); it is asked on every run,
+    (dicts with user_id, kind, server, login, decrypted app_password, dav_user, legacy, folder, filename); it is asked on every run,
     so targets added in the settings take effect without a restart. Without a local file the copy is built
     in `work_dir` and removed after the uploads.
     """
@@ -180,15 +180,16 @@ class BackupWriter:
                     source.unlink(missing_ok=True)
 
     def _upload(self, source: Path, targets, now: str):
-        from .nextcloud import Client
+        from .nextcloud import client_for
 
         seen = set()
         for t in targets:
             seen.add(t["user_id"])
             st = self.remote_status.setdefault(t["user_id"], {"ok": None, "error": None})
             try:
-                Client(t["server"], t["login"], t["app_password"], t["dav_user"]).upload(
-                    source, t["folder"], t["filename"])
+                if t.get("error"):
+                    raise RuntimeError(t["error"])
+                client_for(t, t["app_password"]).upload(source, t["folder"], t["filename"])
                 st.update(ok=now, error=None)
             except Exception as exc:  # noqa: BLE001 – one failing Nextcloud must not stop the others
                 st["error"] = str(exc)
