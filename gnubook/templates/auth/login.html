@@ -45,6 +45,14 @@
         <div class="d-grid"><button type="submit" class="btn btn-success">{{ _("Anmelden") }}</button></div>
       </form>
       {% endif %}
+      {% if demo_enabled %}
+      <div class="text-center text-body-secondary small my-3">{{ _("oder") }}</div>
+      <form method="post" action="{{ url_for('auth.demo') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="d-grid"><button type="submit" class="btn btn-outline-secondary"><i class="bi bi-eye"></i> {{ _("Demo ansehen") }}</button></div>
+        <p class="small text-body-secondary mt-2 mb-0 text-center">{% if demo_writable %}{{ _("Ohne Anmeldung: ein fiktives Buch mit Beispieldaten.") }}{% else %}{{ _("Ohne Anmeldung: ein fiktives Buch mit Beispieldaten, nur zum Ansehen.") }}{% endif %}</p>
+      </form>
+      {% endif %}
     </div>
     <div class="card-footer text-center small">
       {% for code, label in LANGUAGES.items() %}{% if not loop.first %} · {% endif %}{% if code == lang %}<b>{{ label }}</b>{% else %}<form method="post" action="{{ url_for('auth.set_language', code=code) }}" class="d-inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ (request.script_root + request.full_path) if request.args.get('next') is none else request.args.get('next') }}"><button type="submit" class="btn btn-link btn-sm p-0 align-baseline">{{ label }}</button></form>{% endif %}{% endfor %}

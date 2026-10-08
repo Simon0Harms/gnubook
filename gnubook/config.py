@@ -37,6 +37,10 @@ class AppConfig:
     title: str = "gnubook"
     # default UI language for users without their own choice: "de" or "en"
     language: str = "de"
+    # "Demo ansehen" on the login page: all visitors share one read-only demo book (fictional data)
+    demo: bool = True
+    # let demo visitors change the shared demo book (default false = read-only); changes are visible to all
+    demo_writable: bool = False
 
 
 @dataclass

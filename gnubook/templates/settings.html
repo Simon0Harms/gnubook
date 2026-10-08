@@ -146,11 +146,13 @@
           {% else %}<tr><td colspan="4" class="text-body-secondary">{{ _("Noch kein Token – Import-API für dieses Buch aus.") }}</td></tr>{% endfor %}
           </tbody>
         </table>
+        {% if not current_user['is_demo'] %}
         <form method="post" action="{{ url_for('views.token_create') }}" class="input-group input-group-sm mb-3" style="max-width: 26rem">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input class="form-control" name="label" placeholder="{{ _("Bezeichnung, z. B. FinTS 1822") }}">
           <button class="btn btn-outline-success" type="submit">{{ _("Token erzeugen") }}</button>
         </form>
+        {% endif %}
         <p class="mb-1">{{ _("Auffangkonto (wenn kein Gegenkonto erkannt wird):") }} <b>{{ fallback.full_name if fallback else _('nicht gefunden – [import] fallback_account setzen!') }}</b></p>
         {% if cfg.importer.transit_account %}<p class="mb-1">{{ _("Geldtransit:") }} <b>{{ cfg.importer.transit_account }}</b> zwischen {{ cfg.importer.transit_between|join(', ') }}</p>{% endif %}
         <table class="table table-sm mt-3 mb-0">

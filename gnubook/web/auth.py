@@ -60,7 +60,8 @@ def _select_book(user):
     return g.ctx
 
 
-def login_required(view=None, *, book: bool = True, admin: bool = False):
+def login_required(view=None, *, book: bool = True, admin: bool = False, demo_ok: bool = False,
+                   demo_never: bool = False):
     """Requires a logged-in user; by default also a book the user may use (else: page 'keine Bücher')."""
     def decorate(fn):
         @wraps(fn)
@@ -71,6 +72,11 @@ def login_required(view=None, *, book: bool = True, admin: bool = False):
                     next=request.script_root + request.full_path if request.method == "GET" else None))
             if request.method in ("POST", "PUT", "PATCH", "DELETE"):
                 check_csrf()
+                # the shared demo is read-only unless [app] demo_writable; some things never (demo_never)
+                writable = registry().cfg.app.demo_writable and not demo_never
+                if user["is_demo"] and not demo_ok and not writable:
+                    flash(_("Die Demo ist schreibgeschützt – Änderungen sind nicht möglich."), "warning")
+                    return redirect(_safe_next(_referrer_path()))
             if admin and not user["is_admin"]:
                 abort(403)
             ctx = _select_book(user)
@@ -83,6 +89,16 @@ def login_required(view=None, *, book: bool = True, admin: bool = False):
 
 def _client_ip() -> str:
     return request.remote_addr or "?"
+
+
+def _referrer_path() -> str | None:
+    """Path of the referring page of this site (for going back after a refused change)."""
+    from urllib.parse import urlsplit
+
+    ref = urlsplit(request.referrer or "")
+    if ref.netloc and ref.netloc != request.host:
+        return None
+    return (ref.path + ("?" + ref.query if ref.query else "")) or None
 
 
 def _safe_next(target: str | None) -> str:
@@ -126,6 +142,27 @@ def login():
     return render_template("auth/login.html")
 
 
+@bp.route("/demo", methods=["POST"])
+def demo():
+    """Log in as the shared demo user ([app] demo); read-only unless [app] demo_writable."""
+    reg = registry()
+    if not reg.cfg.app.demo:
+        abort(404)
+    check_csrf()
+    user = reg.demo_user()
+    session.clear()
+    session.permanent = False
+    session["user_id"] = user["id"]
+    session["user"] = user["username"]
+    csrf_token()
+    return redirect(url_for("views.dashboard"))
+
+
+def is_demo_user() -> bool:
+    user = g.get("user") or _load_user()
+    return bool(user is not None and user["is_demo"])
+
+
 @bp.route("/logout", methods=["POST"])
 def logout():
     check_csrf()
@@ -135,7 +172,7 @@ def logout():
 
 
 @bp.route("/book/<int:book_id>", methods=["POST"])
-@login_required(book=False)
+@login_required(book=False, demo_ok=True)
 def switch_book(book_id):
     if not registry().system.may_use(g.user["id"], book_id):
         abort(403)
@@ -154,18 +191,19 @@ def set_language(code):
     resp = redirect(_safe_next(request.form.get("next")))
     resp.set_cookie("gnubook_lang", code, max_age=365 * 86400, samesite="Lax", httponly=True)
     user = _load_user()
-    if user is not None:
+    if user is not None and not user["is_demo"]:
         registry().system.set_language(user["id"], code)
     return resp
 
 
 @bp.route("/account/language", methods=["POST"])
-@login_required(book=False)
+@login_required(book=False, demo_ok=True)
 def account_language():
     from ..i18n import LANGUAGES
 
     code = request.form.get("language", "")
-    registry().system.set_language(g.user["id"], code)
+    if not g.user["is_demo"]:  # the shared demo user keeps no language; the cookie is enough
+        registry().system.set_language(g.user["id"], code)
     resp = redirect(url_for("auth.change_password"))
     if code in LANGUAGES:
         resp.set_cookie("gnubook_lang", code, max_age=365 * 86400, samesite="Lax", httponly=True)
@@ -175,7 +213,7 @@ def account_language():
 
 
 @bp.route("/account/password", methods=["GET", "POST"])
-@login_required(book=False)
+@login_required(book=False, demo_never=True)
 def change_password():
     system = registry().system
     if request.method == "POST":

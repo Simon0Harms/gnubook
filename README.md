@@ -141,6 +141,10 @@ gnubook book-add Demo sqlite:////tmp/demo.gnucash --user demo
 gnubook serve                  # http://127.0.0.1:8080
 ```
 
+The login page also has a *Demo ansehen* button (`[app] demo`, on by default): it opens one shared,
+demo book without an account, next to the real books of the instance. It is read-only unless
+`[app] demo_writable = true`.
+
 ## Installation
 
 For a Proxmox LXC with the book in a separate PostgreSQL LXC, see **[docs/INSTALL.md](docs/INSTALL.md)**.
@@ -168,6 +172,8 @@ or on the command line. Every value can be overridden with an environment variab
 | `[app] secret_key` | Random string, at least 32 characters (`init-config` creates one) |
 | `[app] data_dir` | gnubook's own data: users, books, tokens (`system.sqlite`) and per-book data |
 | `[app] language` | Default UI language for users without their own choice: `de` (default) or `en` |
+| `[app] demo` | Show *Demo ansehen* on the login page: all visitors share one read-only demo book with fictional data (default `true`; `false` turns it off) |
+| `[app] demo_writable` | Let demo visitors change the shared demo book (default `false` = read-only). Changes are visible to all visitors; the book is rebuilt every month |
 | `[app] session_cookie_secure`, `behind_proxy` | Set both to `true` behind an HTTPS reverse proxy |
 | `[api] expose_iban` | Report IBANs to the importer (default `false`, see [docs/FINTS.md](docs/FINTS.md)) |
 | `[import] fallback_account` | Account for bank lines without a known counter account (default `Ausgleichskonto-EUR`/`Imbalance-EUR`) |

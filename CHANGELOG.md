@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Demo from the login page (`[app] demo`, on by default): *Demo ansehen* logs in as a shared, read-only
+  demo user. Its book is the synthetic demo book, rebuilt monthly so the data reaches the current month.
+  Every change is refused unless `[app] demo_writable = true`; never API tokens, Nextcloud or password
+  change
 - Net worth report (*Nettovermögen*): monthly assets, liabilities and net worth as a line chart (server-side
   SVG), historical prices for securities and foreign currencies, change over the period, composition by
   account group, monthly table; linked from the dashboard

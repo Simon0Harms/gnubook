@@ -670,4 +670,11 @@ EN = {
     'Zusammensetzung': 'Composition',
     'seit {day}': 'since {day}',
     '{n} Konten in anderen Währungen oder Wertpapieren ohne Kurs wurden nicht berücksichtigt.': '{n} accounts in other currencies or securities without a price were left out.',
+    # demo mode
+    "Demo ansehen": "Try the demo",
+    "Ohne Anmeldung: ein fiktives Buch mit Beispieldaten, nur zum Ansehen.": "No login needed: a fictional book with sample data, read-only.",
+    "Demo: fiktives Buch mit Beispieldaten, nur zum Ansehen – Änderungen sind nicht möglich.": "Demo: a fictional book with sample data, read-only – changes are not possible.",
+    "Ohne Anmeldung: ein fiktives Buch mit Beispieldaten.": "No login needed: a fictional book with sample data.",
+    "Demo: fiktives Buch mit Beispieldaten, das sich alle Besucher teilen – Änderungen sind für alle sichtbar.": "Demo: a fictional book with sample data shared by all visitors – changes are visible to everyone.",
+    "Die Demo ist schreibgeschützt – Änderungen sind nicht möglich.": "The demo is read-only – changes are not possible.",
 }

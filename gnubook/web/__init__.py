@@ -112,7 +112,8 @@ def register(app: Flask):
         ctx = g.get("ctx")
         user = g.get("user")
         return {"lang": g.get("lang", "de"), "app_version": __version__, "app_title": registry().cfg.app.title,
-                "today": ctx.book.today() if ctx else date.today(), "current_book": ctx, "current_user": user,
+                "today": ctx.book.today() if ctx else date.today(),
+                "demo_enabled": registry().cfg.app.demo, "demo_writable": registry().cfg.app.demo_writable, "current_book": ctx, "current_user": user,
                 "my_books": registry().system.user_books(user["id"]) if user else []}
 
     @app.after_request

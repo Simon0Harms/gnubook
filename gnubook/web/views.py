@@ -25,6 +25,18 @@ from .auth import login_required
 log = logging.getLogger("gnubook.web")
 bp = Blueprint("views", __name__)
 
+
+# demo users may look around and book, but nothing that reaches outside their copy of the demo book
+DEMO_BLOCKED = ("views.nextcloud", "views.token")
+
+
+@bp.before_request
+def _demo_guard():
+    from .auth import is_demo_user
+
+    if request.endpoint and request.endpoint.startswith(DEMO_BLOCKED) and is_demo_user():
+        abort(403)
+
 PAGE_SIZE = 100
 COLUMN_LABELS = {
     "BANK": ("Einzahlung", "Auszahlung"), "ASSET": ("Zunahme", "Abnahme"), "CASH": ("Einnahme", "Ausgabe"),
@@ -649,7 +661,7 @@ def settings():
 
 def _nextcloud_view(st) -> dict:
     reg = registry()
-    if not reg.cfg.nextcloud.enabled:
+    if not reg.cfg.nextcloud.enabled or g.user["is_demo"]:
         return {"nc_enabled": False}
     uid = g.user["id"]
     target = reg.system.nextcloud_target(uid, st.id)

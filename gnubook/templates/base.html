@@ -124,6 +124,12 @@
     </div>
     <div class="app-content">
       <div class="container-fluid">
+        {% if current_user and current_user['is_demo'] %}
+          <div class="alert alert-info py-2 small d-flex align-items-center gap-2" role="status">
+            <i class="bi bi-eye"></i>
+            <span>{% if demo_writable %}{{ _("Demo: fiktives Buch mit Beispieldaten, das sich alle Besucher teilen – Änderungen sind für alle sichtbar.") }}{% else %}{{ _("Demo: fiktives Buch mit Beispieldaten, nur zum Ansehen – Änderungen sind nicht möglich.") }}{% endif %}</span>
+          </div>
+        {% endif %}
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% for cat, msg in messages %}
             <div class="alert alert-{{ cat if cat != 'message' else 'info' }} alert-dismissible fade show" role="alert">

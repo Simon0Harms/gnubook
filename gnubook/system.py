@@ -9,6 +9,7 @@ from __future__ import annotations
 from .i18n import gettext as _
 
 import hashlib
+import os
 import re
 import secrets
 import shutil
@@ -101,6 +102,8 @@ class SystemDB:
                 c.execute("ALTER TABLE nextcloud_accounts ADD COLUMN legacy INTEGER NOT NULL DEFAULT 0")
             if "language" not in {r[1] for r in c.execute("PRAGMA table_info(users)")}:
                 c.execute("ALTER TABLE users ADD COLUMN language TEXT NOT NULL DEFAULT ''")
+            if "is_demo" not in {r[1] for r in c.execute("PRAGMA table_info(users)")}:
+                c.execute("ALTER TABLE users ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0")
         try:
             self.path.chmod(0o600)  # contains database URLs with passwords
         except OSError:
@@ -123,8 +126,22 @@ class SystemDB:
 
     # ------------------------------------------------------------------ users
     def users(self):
+        """Real users; temporary demo users are left out (see demo_users)."""
         with self.conn() as c:
-            return c.execute("SELECT * FROM users ORDER BY username").fetchall()
+            return c.execute("SELECT * FROM users WHERE is_demo = 0 ORDER BY username").fetchall()
+
+    def demo_users(self):
+        with self.conn() as c:
+            return c.execute("SELECT * FROM users WHERE is_demo = 1 ORDER BY created_at").fetchall()
+
+    def add_demo_user(self, username: str) -> int:
+        import secrets
+
+        with self.conn() as c:
+            return int(c.execute("INSERT INTO users (username, password_hash, is_admin, created_at, is_demo) "
+                                 "VALUES (?, ?, 0, ?, 1)",  # random hash: a demo user can never log in by password
+                                 (username, generate_password_hash(secrets.token_urlsafe(32)),
+                                  now_iso())).lastrowid)
 
     def user(self, user_id):
         with self.conn() as c:
@@ -387,6 +404,7 @@ class Registry:
         self.system.encrypt_nextcloud_passwords()
         self._contexts: dict[int, tuple[tuple, BookContext]] = {}
         self._lock = threading.Lock()
+        self._demo_lock = threading.Lock()
         self.bootstrap()
 
     def bootstrap(self):
@@ -532,6 +550,49 @@ class Registry:
                 item["app_password"], item["error"] = "", str(exc)
             out.append(item)
         return out
+
+    # ------------------------------------------------------------------ demo
+    DEMO_USER = "demo"
+    DEMO_BOOK = "Demo"
+
+    def demo_user(self):
+        """The shared read-only demo user; its demo book ends with the current month (rebuilt monthly)."""
+        from datetime import date
+
+        from .demo import create_demo_book
+
+        with self._demo_lock:
+            user = next(iter(self.system.demo_users()), None)
+            if user is None:
+                name = self.DEMO_USER
+                if self.system.user_by_name(name) is not None:  # a real user already has that name
+                    name = f"demo-{secrets.token_hex(3)}"
+                user = self.system.user(self.system.add_demo_user(name))
+            today = date.today()
+            path = (self.data / "demo" / f"demo-{today:%Y%m}.gnucash").resolve()
+            url = f"sqlite:///{path}"
+            books = self.system.user_books(user["id"])
+            if books and books[0]["url"] == url and path.exists():
+                return user
+            if not path.exists():
+                months = 14
+                m0 = today.year * 12 + today.month - 1 - (months - 1)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                tmp = path.with_name(f"{path.stem}.{secrets.token_hex(4)}.tmp")
+                create_demo_book(str(tmp), start=date(m0 // 12, m0 % 12 + 1, 1), months=months)
+                os.replace(tmp, path)  # atomic: other workers never see half a file
+            if books:
+                # new URL: every worker reloads its cached context (the cache key contains the URL)
+                self.system.update_book(books[0]["id"], books[0]["name"], url, books[0]["timezone"], "")
+            else:
+                name = self.DEMO_BOOK
+                if any(b["name"] == name for b in self.system.books()):
+                    name = f"Demo {secrets.token_hex(2)}"
+                self.system.grant(user["id"], self.system.add_book(name, url, self.cfg.book.timezone))
+            for old in path.parent.glob("demo-*.gnucash"):
+                if old != path:
+                    old.unlink(missing_ok=True)
+            return self.system.user(user["id"])
 
     def default_backup_file(self, name: str) -> str:
         return str(self.data / "backup" / f"{slug(name)}.gnucash")
