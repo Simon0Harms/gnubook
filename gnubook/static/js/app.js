@@ -354,4 +354,65 @@
     });
     recalc();
   }
+
+  /* ---------------------------------------------------------------- Nextcloud: login flow and folder picker */
+  var ncFlow = document.getElementById('nc-flow');
+  if (ncFlow) {
+    ncFlow.addEventListener('click', function () {
+      var status = document.getElementById('nc-flow-status');
+      var csrf = ncFlow.getAttribute('data-csrf');
+      var win = window.open('about:blank', '_blank');
+      var body = new URLSearchParams({ server: document.getElementById('nc-server').value });
+      status.textContent = '…';
+      fetch(ncFlow.getAttribute('data-url'), { method: 'POST', credentials: 'same-origin', body: body,
+                                               headers: { 'X-CSRF-Token': csrf } })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.error) { if (win) { win.close(); } status.textContent = d.error; return; }
+          if (win) { win.location = d.login; } else { window.open(d.login, '_blank'); }
+          status.textContent = ncFlow.getAttribute('data-wait') || '';
+          var tries = 0;
+          var timer = setInterval(function () {
+            if (++tries > 120) { clearInterval(timer); status.textContent = ''; return; }
+            fetch(ncFlow.getAttribute('data-poll'), { method: 'POST', credentials: 'same-origin',
+                                                       headers: { 'X-CSRF-Token': csrf } })
+              .then(function (r) { return r.json(); })
+              .then(function (p) {
+                if (p.status === 'pending') { return; }
+                clearInterval(timer);
+                if (p.error) { status.textContent = p.error; return; }
+                window.location.reload();
+              }).catch(function () {});
+          }, 3000);
+        }).catch(function () { if (win) { win.close(); } });
+    });
+  }
+  var ncBrowse = document.getElementById('nc-browse');
+  if (ncBrowse) {
+    var ncInput = document.getElementById('nc-folder');
+    var ncBox = document.getElementById('nc-folders');
+    var ncList = document.getElementById('nc-folders-list');
+    var ncPath = document.getElementById('nc-folders-path');
+    var ncItem = function (label, target) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'list-group-item list-group-item-action py-1';
+      b.textContent = label;
+      b.addEventListener('click', function () { ncInput.value = target; ncLoad(target); });
+      ncList.appendChild(b);
+    };
+    var ncLoad = function (path) {
+      fetch(ncBrowse.getAttribute('data-url') + '?path=' + encodeURIComponent(path), { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          ncBox.hidden = false;
+          ncList.textContent = '';
+          if (d.error) { ncPath.textContent = d.error; return; }
+          ncPath.textContent = d.path;
+          if (d.path !== '/') { ncItem('..', d.path.replace(/\/[^/]+$/, '') || '/'); }
+          d.folders.forEach(function (name) { ncItem('📁 ' + name, (d.path === '/' ? '' : d.path) + '/' + name); });
+        }).catch(function () {});
+    };
+    ncBrowse.addEventListener('click', function () { ncLoad(ncInput.value || '/'); });
+  }
 })();

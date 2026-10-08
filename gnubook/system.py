@@ -50,6 +50,17 @@ CREATE TABLE IF NOT EXISTS api_tokens (
     last_used_at TEXT
 );
 CREATE TABLE IF NOT EXISTS login_failures (ip TEXT NOT NULL, ts REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS nextcloud_accounts (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    server TEXT NOT NULL, login TEXT NOT NULL, app_password TEXT NOT NULL, dav_user TEXT NOT NULL DEFAULT '',
+    display_name TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS nextcloud_targets (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    folder TEXT NOT NULL, filename TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (user_id, book_id)
+);
 """
 
 MIN_PASSWORD = 10
@@ -273,6 +284,46 @@ class SystemDB:
             return None
         return self.user(row["user_id"]), row["book_id"]
 
+    # ------------------------------------------------------------------ Nextcloud (per user)
+    def nextcloud_account(self, user_id):
+        with self.conn() as c:
+            return c.execute("SELECT * FROM nextcloud_accounts WHERE user_id = ?", (user_id,)).fetchone()
+
+    def set_nextcloud_account(self, user_id: int, server: str, login: str, app_password: str, dav_user: str,
+                              display_name: str = ""):
+        with self.conn() as c:
+            c.execute("INSERT OR REPLACE INTO nextcloud_accounts (user_id, server, login, app_password, dav_user, "
+                      "display_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                      (user_id, server, login, app_password, dav_user, display_name, now_iso()))
+
+    def delete_nextcloud_account(self, user_id: int):
+        with self.conn() as c:
+            c.execute("DELETE FROM nextcloud_targets WHERE user_id = ?", (user_id,))
+            c.execute("DELETE FROM nextcloud_accounts WHERE user_id = ?", (user_id,))
+
+    def nextcloud_target(self, user_id, book_id):
+        with self.conn() as c:
+            return c.execute("SELECT * FROM nextcloud_targets WHERE user_id = ? AND book_id = ?",
+                             (user_id, book_id)).fetchone()
+
+    def set_nextcloud_target(self, user_id: int, book_id: int, folder: str, filename: str, enabled: bool = True):
+        with self.conn() as c:
+            c.execute("INSERT OR REPLACE INTO nextcloud_targets (user_id, book_id, folder, filename, enabled) "
+                      "VALUES (?, ?, ?, ?, ?)", (user_id, book_id, folder, filename, int(enabled)))
+
+    def delete_nextcloud_target(self, user_id: int, book_id: int):
+        with self.conn() as c:
+            c.execute("DELETE FROM nextcloud_targets WHERE user_id = ? AND book_id = ?", (user_id, book_id))
+
+    def nextcloud_uploads(self, book_id: int):
+        """Active targets of a book whose user still may use it, joined with the user's account."""
+        with self.conn() as c:
+            return c.execute(
+                "SELECT t.user_id, t.folder, t.filename, a.server, a.login, a.app_password, a.dav_user, u.username "
+                "FROM nextcloud_targets t JOIN nextcloud_accounts a ON a.user_id = t.user_id "
+                "JOIN users u ON u.id = t.user_id JOIN user_books ub ON ub.user_id = t.user_id AND ub.book_id = t.book_id "
+                "WHERE t.book_id = ? AND t.enabled = 1 AND u.active = 1 ORDER BY t.user_id", (book_id,)).fetchall()
+
     # ------------------------------------------------------------------ login throttle
     def login_failures(self, ip: str, window: float, now: float) -> int:
         with self.conn() as c:
@@ -351,11 +402,13 @@ class Registry:
             book.profile = get_profile(row["profile"] or "de", self.cfg.checkpoints.patterns)
             ctx = BookContext(book_id, row["name"], self.cfg, book, appdb,
                               Importer(book, appdb, self.import_config(row)))
-            if row["backup_file"]:
-                from .backup import BackupWriter
+            from .backup import BackupWriter
 
-                ctx.backup = BackupWriter(book, row["backup_file"], self.cfg.backup.keep)
-                book.after_write.append(ctx.backup.request)
+            # always present: the local file is optional, Nextcloud targets can be added at any time
+            ctx.backup = BackupWriter(book, row["backup_file"], self.cfg.backup.keep,
+                                      remote=lambda bid=book_id: self.nextcloud_uploads(bid),
+                                      work_dir=self.data / "backup" / "tmp")
+            book.after_write.append(ctx.backup.request)
             self._contexts[book_id] = (key, ctx)
             return ctx
 
@@ -438,6 +491,11 @@ class Registry:
         if drop_database:
             provision.drop_role_and_db(self.cfg.postgres.admin_url, row["managed_db"])
         return saved
+
+    def nextcloud_uploads(self, book_id: int):
+        if not self.cfg.nextcloud.enabled:
+            return []
+        return self.system.nextcloud_uploads(book_id)
 
     def default_backup_file(self, name: str) -> str:
         return str(self.data / "backup" / f"{slug(name)}.gnucash")

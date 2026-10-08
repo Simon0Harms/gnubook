@@ -56,6 +56,9 @@ German format in both languages.
     opens directly in GnuCash Desktop), with rotation of older versions.
 - **Backups as `.gnucash` file.** A nightly timer saves the whole book as a SQLite GnuCash file that GnuCash
   Desktop opens directly (`gnubook backup`).
+- **Optional copy into your own Nextcloud.** Each user can connect their Nextcloud (login flow or app password)
+  and choose a folder and file name per book under *Einstellungen*. After every change gnubook uploads the
+  `.gnucash` file via WebDAV; Nextcloud's versions app keeps the older states.
 - **Several users and books.** Every user logs in with their own password. Every book is its own GnuCash
   database. Books can be shared, and a user with several books switches between them in the header.
   Administrators manage users and books in the web UI.
@@ -153,6 +156,8 @@ or on the command line. Every value can be overridden with an environment variab
 | `[import] transit_account`, `transit_between` | Book transfers between the listed accounts through a transit account |
 | `[import] match_days`, `transfer_match_days` | Window for linking bank lines to existing bookings (3 / 7 days) |
 | `[backup] keep` | Versions of the per-book `.gnucash` copy to keep (the file itself is set per book under *Bücher*) |
+| `[nextcloud] enabled` | Let users upload the `.gnucash` copy into their own Nextcloud (default `true`) |
+| `[nextcloud] allow_http` | Also accept `http://` Nextcloud addresses (default `false`) |
 | `[postgres] admin_url` | Role with `CREATEROLE` and `CREATEDB` (no superuser) that lets gnubook create a database per new book |
 | `[[checkpoints.patterns]]` | Own balance-line patterns (`stand` regex, `keyword`), used with every bank profile |
 

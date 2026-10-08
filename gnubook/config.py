@@ -91,6 +91,14 @@ class BackupConfig:
 
 
 @dataclass
+class NextcloudConfig:
+    # users may copy the .gnucash backup into their own Nextcloud (WebDAV)
+    enabled: bool = True
+    # allow http:// servers (only for tests or a trusted LAN)
+    allow_http: bool = False
+
+
+@dataclass
 class Config:
     book: BookConfig = field(default_factory=BookConfig)
     app: AppConfig = field(default_factory=AppConfig)
@@ -99,6 +107,7 @@ class Config:
     backup: BackupConfig = field(default_factory=BackupConfig)
     postgres: PostgresConfig = field(default_factory=PostgresConfig)
     checkpoints: CheckpointsConfig = field(default_factory=CheckpointsConfig)
+    nextcloud: NextcloudConfig = field(default_factory=NextcloudConfig)
     source: str = ""
 
     @property
@@ -132,7 +141,8 @@ def load_config(path: str | os.PathLike | None = None, env: dict | None = None) 
             with open(cand, "rb") as fh:
                 data = tomllib.load(fh)
             sections = {"book": cfg.book, "app": cfg.app, "api": cfg.api, "import": cfg.importer, "backup": cfg.backup,
-                        "postgres": cfg.postgres, "checkpoints": cfg.checkpoints}
+                        "postgres": cfg.postgres, "checkpoints": cfg.checkpoints,
+                        "nextcloud": cfg.nextcloud}
             for name, values in data.items():
                 if name not in sections:
                     raise ConfigError(f"Unbekannter Konfigurationsabschnitt [{name}] in {cand}")
@@ -144,7 +154,7 @@ def load_config(path: str | os.PathLike | None = None, env: dict | None = None) 
         raise ConfigError(f"Konfigurationsdatei {explicit} nicht gefunden")
 
     for section_name, obj in (("BOOK", cfg.book), ("APP", cfg.app), ("API", cfg.api), ("IMPORT", cfg.importer), ("BACKUP", cfg.backup),
-                              ("POSTGRES", cfg.postgres)):
+                              ("POSTGRES", cfg.postgres), ("NEXTCLOUD", cfg.nextcloud)):
         for key in vars(obj):
             env_key = f"GNUBOOK_{section_name}_{key.upper()}"
             if env_key in env:

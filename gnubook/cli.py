@@ -51,6 +51,11 @@ transfer_match_days = 7
 # number of .gnucash versions kept per book (the file itself is set per book under "Bücher")
 keep = 10
 
+[nextcloud]
+# users can copy the .gnucash backup into their own Nextcloud (Einstellungen → Nextcloud)
+enabled = true
+allow_http = false
+
 [import.iban_map]
 # "DE00123456780000000000" = "Aktiva:Barvermögen:Girokonto"
 """

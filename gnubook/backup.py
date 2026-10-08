@@ -105,17 +105,26 @@ def rotate(directory, prefix: str, keep: int):
 
 
 class BackupWriter:
-    """Writes the .gnucash copy in the background after changes (coalesces bursts, e.g. imports)."""
+    """Writes the .gnucash copy in the background after changes (coalesces bursts, e.g. imports).
 
-    def __init__(self, book, path: str, keep: int = 10, delay: float = 3.0):
+    `path` is the local file ('' = no local copy). `remote` returns the Nextcloud targets of the book
+    (rows with user_id, server, login, app_password, dav_user, folder, filename); it is asked on every run,
+    so targets added in the settings take effect without a restart. Without a local file the copy is built
+    in `work_dir` and removed after the uploads.
+    """
+
+    def __init__(self, book, path: str, keep: int = 10, delay: float = 3.0, remote=None, work_dir=None):
         self.book = book
-        self.path = Path(path)
+        self.path = Path(path) if path else None
         self.keep = keep
         self.delay = delay
+        self.remote = remote
+        self.work_dir = Path(work_dir) if work_dir else None
         self._pending = threading.Event()
         self._lock = threading.Lock()
         self.last_ok: str | None = None
         self.last_error: str | None = None
+        self.remote_status: dict[int, dict] = {}  # user id -> {"ok": time, "error": text}
         threading.Thread(target=self._loop, daemon=True, name="gnucash-backup").start()
 
     def request(self):
@@ -130,19 +139,63 @@ class BackupWriter:
         for f in old[:-(self.keep - 1)]:
             f.unlink(missing_ok=True)
 
+    def _targets(self):
+        if self.remote is None:
+            return []
+        try:
+            return list(self.remote())
+        except Exception:  # noqa: BLE001
+            log.exception("Nextcloud-Ziele konnten nicht gelesen werden")
+            return []
+
     def run_now(self):
         with self._lock:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
+            targets = self._targets()
+            if self.path is None and not targets:
+                return
+            now = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
             try:
-                tmp_target = self.path.with_name(self.path.name + ".new")
-                write_gnucash_file(self.book.engine, tmp_target)
-                self._rotate()
-                os.replace(tmp_target, self.path)
-                self.last_ok = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+                if self.path is not None:
+                    self.path.parent.mkdir(parents=True, exist_ok=True)
+                    tmp_target = self.path.with_name(self.path.name + ".new")
+                    write_gnucash_file(self.book.engine, tmp_target)
+                    self._rotate()
+                    os.replace(tmp_target, self.path)
+                    source = self.path
+                else:
+                    base = self.work_dir or Path(".")
+                    base.mkdir(parents=True, exist_ok=True)
+                    source = base / f"upload-{threading.get_ident()}.gnucash"
+                    write_gnucash_file(self.book.engine, source)
+                self.last_ok = now
                 self.last_error = None
             except Exception as exc:  # never break the actual write
                 self.last_error = str(exc)
                 log.exception("GnuCash-Sicherung fehlgeschlagen")
+                return
+            try:
+                self._upload(source, targets, now)
+            finally:
+                if self.path is None:
+                    source.unlink(missing_ok=True)
+
+    def _upload(self, source: Path, targets, now: str):
+        from .nextcloud import Client
+
+        seen = set()
+        for t in targets:
+            seen.add(t["user_id"])
+            st = self.remote_status.setdefault(t["user_id"], {"ok": None, "error": None})
+            try:
+                Client(t["server"], t["login"], t["app_password"], t["dav_user"]).upload(
+                    source, t["folder"], t["filename"])
+                st.update(ok=now, error=None)
+            except Exception as exc:  # noqa: BLE001 – one failing Nextcloud must not stop the others
+                st["error"] = str(exc)
+                log.warning("Nextcloud-Upload für Benutzer %s fehlgeschlagen: %s", t["user_id"], exc)
+        for uid in list(self.remote_status):
+            if uid not in seen:
+                del self.remote_status[uid]
 
     def _loop(self):
         while True:

@@ -21,16 +21,77 @@
     <div class="card mb-4">
       <div class="card-header"><h3 class="card-title">{{ _("Sicherung als GnuCash-Datei") }}</h3></div>
       <div class="card-body small">
-        {% if backup %}
+        {% if backup and backup.path %}
           <p class="mb-1">{{ _("Nach jeder Änderung:") }} <code>{{ backup.path }}</code> ({{ backup.keep }} Versionen)</p>
           {% if backup.last_error %}<p class="text-danger mb-0"><i class="bi bi-exclamation-triangle"></i> {{ _('Letzte Sicherung fehlgeschlagen:') }} {{ backup.last_error }}</p>
           {% elif backup.last_ok %}<p class="text-success mb-0"><i class="bi bi-check-circle"></i> {{ _('Zuletzt gesichert:') }} {{ backup.last_ok }}</p>
           {% else %}<p class="text-body-secondary mb-0">{{ _("Seit dem Start noch keine Änderung.") }}</p>{% endif %}
         {% else %}
-          <p class="mb-0">{{ _("Aus. In") }} <code>{{ _("config.toml") }}</code> {{ _("unter") }} <code>{{ _("[backup]") }}</code> <code>{{ _("gnucash_file") }}</code> {{ _("setzen.") }}</p>
+          <p class="mb-0">{{ _("Lokal aus. In") }} <code>{{ _("config.toml") }}</code> {{ _("unter") }} <code>{{ _("[backup]") }}</code> <code>{{ _("gnucash_file") }}</code> {{ _("setzen.") }}</p>
         {% endif %}
       </div>
     </div>
+    {% if nc_enabled %}
+    <div class="card mb-4" id="nextcloud">
+      <div class="card-header"><h3 class="card-title"><i class="bi bi-cloud-arrow-up"></i> {{ _("Sicherung in meine Nextcloud") }}</h3></div>
+      <div class="card-body small">
+        {% if not nc_account %}
+          <p>{{ _("Optional: Nach jeder Änderung landet eine Kopie dieses Buchs als .gnucash-Datei in deiner eigenen Nextcloud. Ältere Stände hebt Nextcloud selbst als Versionen auf.") }}</p>
+          <div class="mb-2"><label class="form-label">{{ _("Adresse der Nextcloud") }}</label>
+            <input class="form-control form-control-sm" id="nc-server" name="server" form="nc-manual" placeholder="https://cloud.example.org"></div>
+          <button type="button" class="btn btn-sm btn-success" id="nc-flow" data-url="{{ url_for('views.nextcloud_flow_start') }}"
+                  data-poll="{{ url_for('views.nextcloud_flow_poll') }}" data-csrf="{{ csrf_token() }}"
+                  data-wait="{{ _('Bitte im neuen Fenster bei der Nextcloud bestätigen …') }}">
+            <i class="bi bi-box-arrow-in-right"></i> {{ _("Bei der Nextcloud anmelden") }}</button>
+          <span class="ms-2 text-body-secondary" id="nc-flow-status"></span>
+          <details class="mt-3"><summary>{{ _("App-Passwort von Hand eintragen") }}</summary>
+            <p class="mt-2 mb-2">{{ _("In der Nextcloud unter Persönliche Einstellungen → Sicherheit → „Neues App-Passwort erstellen“. Nie das normale Passwort verwenden.") }}</p>
+            <form method="post" action="{{ url_for('views.nextcloud_connect') }}" id="nc-manual" class="row g-2">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <div class="col-sm-5"><input class="form-control form-control-sm" name="login" placeholder="{{ _('Benutzer') }}" autocomplete="off"></div>
+              <div class="col-sm-5"><input class="form-control form-control-sm" name="app_password" type="password" placeholder="{{ _('App-Passwort') }}" autocomplete="new-password"></div>
+              <div class="col-sm-2"><button class="btn btn-sm btn-outline-success w-100" type="submit">{{ _("Verbinden") }}</button></div>
+            </form>
+          </details>
+        {% else %}
+          <p class="mb-2"><i class="bi bi-check-circle text-success"></i> {{ _("Verbunden als") }} <b>{{ nc_account['display_name'] or nc_account['login'] }}</b>
+            {{ _("mit") }} <code>{{ nc_account['server'] }}</code></p>
+          <form method="post" action="{{ url_for('views.nextcloud_target') }}" class="row g-2 align-items-end">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-sm-7"><label class="form-label">{{ _("Zielordner") }}</label>
+              <div class="input-group input-group-sm">
+                <input class="form-control font-monospace" id="nc-folder" name="folder" value="{{ nc_target['folder'] if nc_target else nc_default_folder }}">
+                <button type="button" class="btn btn-outline-secondary" id="nc-browse" data-url="{{ url_for('views.nextcloud_folders') }}" title="{{ _('Ordner auswählen') }}"><i class="bi bi-folder2-open"></i></button>
+              </div></div>
+            <div class="col-sm-5"><label class="form-label">{{ _("Dateiname") }}</label>
+              <input class="form-control form-control-sm font-monospace" name="filename" value="{{ nc_target['filename'] if nc_target else nc_default_file }}"></div>
+            <div class="col-12" id="nc-folders" hidden>
+              <div class="border rounded p-2"><div class="mb-1"><code id="nc-folders-path"></code></div><div class="list-group list-group-flush" id="nc-folders-list"></div></div></div>
+            <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" value="1" id="nc-enabled" {% if not nc_target or nc_target['enabled'] %}checked{% endif %}>
+              <label class="form-check-label" for="nc-enabled">{{ _("Dieses Buch nach jeder Änderung in meine Nextcloud hochladen") }}</label></div></div>
+            <div class="col-12"><button class="btn btn-sm btn-success" type="submit">{{ _("Speichern und Schreibtest") }}</button></div>
+          </form>
+          {% if nc_target %}
+            <hr>
+            {% if nc_status and nc_status.error %}<p class="text-danger mb-1"><i class="bi bi-exclamation-triangle"></i> {{ _('Letzter Upload fehlgeschlagen:') }} {{ nc_status.error }}</p>
+            {% elif nc_status and nc_status.ok %}<p class="text-success mb-1"><i class="bi bi-check-circle"></i> {{ _('Zuletzt hochgeladen:') }} {{ nc_status.ok }}</p>
+            {% elif nc_target['enabled'] %}<p class="text-body-secondary mb-1">{{ _("Seit dem Start noch nicht hochgeladen.") }}</p>{% endif %}
+            <div class="d-flex gap-2">
+              {% if nc_target['enabled'] %}<form method="post" action="{{ url_for('views.nextcloud_upload_now') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-secondary" type="submit">{{ _("Jetzt hochladen") }}</button></form>{% endif %}
+              <form method="post" action="{{ url_for('views.nextcloud_target_delete') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-danger" type="submit">{{ _("Ziel entfernen") }}</button></form>
+            </div>
+          {% endif %}
+          <hr>
+          <form method="post" action="{{ url_for('views.nextcloud_disconnect') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-link text-danger p-0" data-confirm-button="{{ _('Nextcloud trennen? Das App-Passwort wird gelöscht und für keines deiner Bücher wird mehr hochgeladen.') }}">{{ _("Nextcloud trennen") }}</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
     <div class="card mb-4">
       <div class="card-header"><h3 class="card-title">{{ _("Sperre (GnuCash Desktop)") }}</h3></div>
       <div class="card-body small">

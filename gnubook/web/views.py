@@ -642,7 +642,173 @@ def settings():
                            cfg=st.cfg, fallback=st.importer.fallback_account(idx, idx.root.commodity_guid),
                            audit=st.appdb.audit_log(60), all_locks=st.book.lock_holders(),
                            backup=st.backup, tokens=registry().system.tokens(st.id),
-                           new_token=session.pop("new_token", None))
+                           new_token=session.pop("new_token", None), **_nextcloud_view(st))
+
+
+# ------------------------------------------------------------------------------------------ Nextcloud
+
+def _nextcloud_view(st) -> dict:
+    reg = registry()
+    if not reg.cfg.nextcloud.enabled:
+        return {"nc_enabled": False}
+    uid = g.user["id"]
+    target = reg.system.nextcloud_target(uid, st.id)
+    status = st.backup.remote_status.get(uid) if st.backup is not None else None
+    from ..system import slug
+
+    return {"nc_enabled": True, "nc_account": reg.system.nextcloud_account(uid), "nc_target": target,
+            "nc_status": status, "nc_default_folder": "/gnubook", "nc_default_file": f"{slug(st.name)}.gnucash"}
+
+
+def _nc_client(account):
+    from ..nextcloud import Client
+
+    return Client(account["server"], account["login"], account["app_password"], account["dav_user"])
+
+
+def _nc_settings():
+    return redirect(url_for("views.settings") + "#nextcloud")
+
+
+def _nc_store(server: str, login: str, app_password: str):
+    """Checks the credentials and stores them for the current user."""
+    from ..nextcloud import Client
+
+    info = Client(server, login, app_password).whoami()
+    registry().system.set_nextcloud_account(g.user["id"], server, login, app_password, info["id"], info["display"])
+    state().appdb.audit(session.get("user", "?"), "nextcloud-connect", None, f"{login} @ {server}")
+
+
+@bp.route("/settings/nextcloud/connect", methods=["POST"])
+@login_required
+def nextcloud_connect():
+    from ..nextcloud import NextcloudError, normalize_server
+
+    if not registry().cfg.nextcloud.enabled:
+        abort(404)
+    try:
+        server = normalize_server(request.form.get("server", ""), registry().cfg.nextcloud.allow_http)
+        login = request.form.get("login", "").strip()
+        password = request.form.get("app_password", "").strip()
+        if not login or not password:
+            raise NextcloudError(_("Bitte Benutzer und App-Passwort angeben."))
+        _nc_store(server, login, password)
+        flash(_("Nextcloud verbunden."), "success")
+    except NextcloudError as exc:
+        flash(str(exc), "danger")
+    return _nc_settings()
+
+
+@bp.route("/settings/nextcloud/flow", methods=["POST"])
+@login_required
+def nextcloud_flow_start():
+    from ..nextcloud import NextcloudError, login_flow_start, normalize_server
+
+    if not registry().cfg.nextcloud.enabled:
+        abort(404)
+    try:
+        server = normalize_server(request.form.get("server", ""), registry().cfg.nextcloud.allow_http)
+        flow = login_flow_start(server)
+    except NextcloudError as exc:
+        return jsonify({"error": str(exc)}), 400
+    session["nc_flow"] = {"server": server, "token": flow["token"], "endpoint": flow["endpoint"]}
+    return jsonify({"login": flow["login"]})
+
+
+@bp.route("/settings/nextcloud/flow/poll", methods=["POST"])
+@login_required
+def nextcloud_flow_poll():
+    from ..nextcloud import NextcloudError, login_flow_poll
+
+    flow = session.get("nc_flow")
+    if not flow:
+        return jsonify({"error": _("Keine Anmeldung bei der Nextcloud gestartet.")}), 400
+    try:
+        result = login_flow_poll(flow["server"], flow["endpoint"], flow["token"])
+        if result is None:
+            return jsonify({"status": "pending"})
+        session.pop("nc_flow", None)
+        _nc_store(flow["server"], result["login"], result["app_password"])
+    except NextcloudError as exc:
+        session.pop("nc_flow", None)
+        return jsonify({"error": str(exc)}), 400
+    flash(_("Nextcloud verbunden."), "success")
+    return jsonify({"status": "done"})
+
+
+@bp.route("/settings/nextcloud/disconnect", methods=["POST"])
+@login_required
+def nextcloud_disconnect():
+    reg = registry()
+    account = reg.system.nextcloud_account(g.user["id"])
+    if account is not None:
+        try:
+            _nc_client(account).revoke()
+        except Exception:  # noqa: BLE001 – the app password may already be gone
+            pass
+        reg.system.delete_nextcloud_account(g.user["id"])
+        state().appdb.audit(session.get("user", "?"), "nextcloud-disconnect", None, account["server"])
+    flash(_("Nextcloud getrennt."), "success")
+    return _nc_settings()
+
+
+@bp.route("/settings/nextcloud/target", methods=["POST"])
+@login_required
+def nextcloud_target():
+    from ..nextcloud import NextcloudError, clean_filename, clean_folder
+
+    reg, st = registry(), state()
+    account = reg.system.nextcloud_account(g.user["id"])
+    if account is None:
+        flash(_("Zuerst eine Nextcloud verbinden."), "warning")
+        return _nc_settings()
+    try:
+        folder = clean_folder(request.form.get("folder", ""))
+        filename = clean_filename(request.form.get("filename", ""))
+        enabled = request.form.get("enabled") == "1"
+        if enabled:
+            _nc_client(account).test_write(folder)
+        reg.system.set_nextcloud_target(g.user["id"], st.id, folder, filename, enabled)
+        st.appdb.audit(session.get("user", "?"), "nextcloud-target", None, f"{folder.rstrip('/')}/{filename}")
+        if enabled:
+            st.backup.request()
+            flash(_("Gespeichert. Schreibtest erfolgreich – die Datei wird jetzt hochgeladen."), "success")
+        else:
+            flash(_("Gespeichert. Upload in die Nextcloud ist für dieses Buch aus."), "success")
+    except NextcloudError as exc:
+        flash(_("Nicht gespeichert: {a0}", a0=exc), "danger")
+    return _nc_settings()
+
+
+@bp.route("/settings/nextcloud/target/delete", methods=["POST"])
+@login_required
+def nextcloud_target_delete():
+    registry().system.delete_nextcloud_target(g.user["id"], state().id)
+    flash(_("Nextcloud-Ziel entfernt. Die Datei in der Nextcloud bleibt erhalten."), "success")
+    return _nc_settings()
+
+
+@bp.route("/settings/nextcloud/upload", methods=["POST"])
+@login_required
+def nextcloud_upload_now():
+    state().backup.request()
+    flash(_("Sicherung angestoßen."), "info")
+    return _nc_settings()
+
+
+@bp.route("/settings/nextcloud/folders")
+@login_required
+def nextcloud_folders():
+    from ..nextcloud import NextcloudError, clean_folder
+
+    account = registry().system.nextcloud_account(g.user["id"])
+    if account is None:
+        return jsonify({"error": _("Zuerst eine Nextcloud verbinden.")}), 400
+    try:
+        folder = clean_folder(request.args.get("path", "/"))
+        return jsonify({"path": folder, "folders": _nc_client(account).folders(folder)})
+    except NextcloudError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 @bp.route("/settings/token", methods=["POST"])
