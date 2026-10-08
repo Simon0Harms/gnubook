@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Suche{% endblock %}
+{% block header %}Buchungen suchen{% endblock %}
+{% block content %}
+<div class="card mb-3">
+  <div class="card-body">
+    <form class="row g-2 align-items-end" method="get">
+      <div class="col-md-6"><label class="form-label small" for="q">Text, Nummer, Memo, Notiz oder Betrag</label>
+        <input class="form-control" type="search" id="q" name="q" value="{{ q }}" autofocus></div>
+      <div class="col-auto"><label class="form-label small" for="from">von</label><input class="form-control" type="date" id="from" name="from" value="{{ d_from or '' }}"></div>
+      <div class="col-auto"><label class="form-label small" for="to">bis</label><input class="form-control" type="date" id="to" name="to" value="{{ d_to or '' }}"></div>
+      <div class="col-auto"><button class="btn btn-primary" type="submit"><i class="bi bi-search"></i> Suchen</button></div>
+    </form>
+  </div>
+</div>
+{% if q %}
+<div class="card">
+  <div class="card-header"><h3 class="card-title">{{ results|length }} Treffer{% if results|length >= 300 %} (die neuesten 300){% endif %}</h3></div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-hover mb-0 align-middle">
+      <thead><tr><th>Datum</th><th>Beschreibung</th><th>Konten</th><th class="text-end">Betrag</th></tr></thead>
+      <tbody>
+      {% for t in results %}
+        <tr class="clickable" data-href="{{ url_for('views.transaction', guid=t.tx_guid, back=request.full_path) }}">
+          <td class="text-nowrap">{{ t.day|de_date }}</td>
+          <td><a class="link-body-emphasis link-underline-opacity-0" href="{{ url_for('views.transaction', guid=t.tx_guid, back=request.full_path) }}">{{ t.description or '(ohne Beschreibung)' }}</a>{% if t.num %} <span class="small text-body-secondary">Nr. {{ t.num }}</span>{% endif %}</td>
+          <td class="small text-body-secondary">{{ t.accounts|join(' · ') }}</td>
+          <td class="text-end text-nowrap amount">{{ t.amount|money(t.currency) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="text-body-secondary p-3">Nichts gefunden.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

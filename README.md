@@ -1,0 +1,184 @@
+# gnubook
+
+> [!WARNING]
+> **Unofficial project, written by an AI.** gnubook was created by an AI assistant (Claude by Anthropic)
+> on behalf of its maintainer. It is not affiliated with GnuCash, Firefly III or piecash.
+> gnubook **writes into your GnuCash book**. Keep backups, try it on a copy first, and use it at your own risk.
+
+gnubook is a small self-hosted web frontend for a [GnuCash](https://www.gnucash.org/) book stored in
+PostgreSQL (or SQLite). It looks and feels a bit like [Firefly III](https://www.firefly-iii.org/), but the
+data remains an ordinary GnuCash book. GnuCash Desktop can open the same database whenever gnubook is not
+writing to it.
+
+The user interface is in German.
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+<sub>All screenshots show the synthetic demo book (`gnubook demo-book`). Names and numbers are made up.</sub>
+
+## Features
+
+- **Dashboard.** It shows net worth, bank accounts with the status of their balance checkpoints, income and
+  expenses for the last 12 months, and recently entered bookings.
+- **Accounts and registers.** The account tree shows balances in GnuCash's sign convention. Each account has
+  a register with running balance, text, amount and date filters, and paging. Placeholder accounts can be
+  shown with their sub-accounts.
+- **Transactions with free splits:**
+  - Any number of accounts per transaction. 0,00 splits are allowed.
+  - Amounts are entered the German way, and simple arithmetic works (`12,90+3,50`).
+  - Descriptions are suggested as you type, and a known description fills in its splits like GnuCash's
+    quick-fill.
+  - Bookings can be edited, copied and deleted.
+- **Bank balance checkpoints.** Banks write the statement balance into the closing line
+  (`ENTGELTABSCHLUSS **ENDSALDO** 1.234,56H STAND29.05.2026 1.239,51H`, `… Kontostand am 31.03.2026 47,11 +`).
+  - gnubook recomputes every checkpoint after each change and warns when one breaks.
+  - It shows in which period a difference appeared.
+  - Known differences can be accepted. If an accepted difference changes, it is reported again.
+  - `gnubook check-balances` does the same check for cron. See [docs/CHECKPOINTS.md](docs/CHECKPOINTS.md).
+- **Bank import** with [bnw/firefly-iii-fints-importer](https://github.com/bnw/firefly-iii-fints-importer).
+  gnubook implements the part of the Firefly III API that the importer uses. See [docs/FINTS.md](docs/FINTS.md).
+  - **Duplicates.** Exact re-imports are rejected. Bank lines that are already in the book (for example
+    imported earlier by GnuCash itself) are linked instead of booked twice.
+  - **Own accounts.** Transfers between your own accounts are booked once, even though both banks report
+    them.
+  - **Counter account.** It comes from your own accounts (IBAN), the book's history for the counterparty,
+    GnuCash's Bayesian import map, or a fallback account, in this order.
+  - **Zero amounts.** 0,00 closing lines become single-split bookings, so their balance can be checked.
+  - **Review.** A page lists new imports and possible duplicates for checking.
+- **Safety:**
+  - gnubook never writes while GnuCash Desktop has the book open (table `gnclock`), and it holds the lock
+    itself while writing.
+  - Changes made elsewhere in the meantime are detected before saving.
+  - Unknown GnuCash database versions are only read, never written.
+  - Every change is logged in an audit log.
+- Dark mode and a layout that works on phones.
+
+| Register | Transaction with splits |
+|---|---|
+| ![Register](docs/screenshots/register.png) | ![Splits](docs/screenshots/split-form.png) |
+| **Balance checkpoints** | **Bank import review** |
+| ![Checkpoints](docs/screenshots/checkpoints.png) | ![Imports](docs/screenshots/imports.png) |
+
+## How it works
+
+- **Reading** is plain SQL on the GnuCash tables. The day of a booking is GnuCash's `post_date` in the
+  configured time zone, so it matches what GnuCash Desktop shows.
+- **Writing** goes through [piecash](https://github.com/sdementen/piecash). gnubook validates every booking
+  first:
+  - the booking is balanced and uses one currency;
+  - no placeholder accounts are used;
+  - reconciled splits stay unchanged;
+  - nobody changed the booking in the meantime.
+
+  New bookings get GnuCash's conventions (`post_date` 10:59 UTC, `date-posted` slot, notes slot).
+- **Locking.** For every write gnubook checks `gnclock`, inserts its own lock row, writes, and removes the
+  row again. While GnuCash Desktop has the book open, gnubook is read-only.
+- **gnubook's own data** lives in a small SQLite database under `data_dir`. It holds numeric API ids, import
+  records, accepted checkpoint differences and the audit log. Nothing extra is stored in the GnuCash book.
+
+## Requirements
+
+- A GnuCash book in an SQL database, created by GnuCash 3.0 or newer (tested with 5.5). PostgreSQL is
+  recommended; SQLite works too. MySQL has not been tested.
+- Python 3.11 or newer, for example Debian 12/13 or Ubuntu 22.04+.
+
+## Try it with the demo book
+
+```bash
+git clone https://github.com/Simon0Harms/gnubook.git && cd gnubook
+python3 -m venv .venv && . .venv/bin/activate
+pip install -e .
+gnubook demo-book /tmp/demo.gnucash
+gnubook init-config config.toml --url sqlite:////tmp/demo.gnucash --data-dir ./data --username demo
+gnubook hash-password          # put the result into config.toml as password_hash
+gnubook --config config.toml serve   # http://127.0.0.1:8080
+```
+
+## Installation
+
+For a Proxmox LXC with the book in a separate PostgreSQL LXC, see **[docs/INSTALL.md](docs/INSTALL.md)**.
+In short:
+
+```bash
+# in a Debian 12/13 LXC, as root
+apt-get install -y curl
+curl -fsSL https://raw.githubusercontent.com/Simon0Harms/gnubook/main/deploy/install.sh \
+  | GNUBOOK_REPO=https://github.com/Simon0Harms/gnubook.git bash
+```
+
+Everything lives under `/opt/gnubook`: code, virtualenv, `config.toml`, `data/` and `backup/`. gnubook runs
+as the systemd service `gnubook` (gunicorn, port 8080). Run `gnubook-update` to update.
+
+## Configuration
+
+`/opt/gnubook/config.toml` (TOML). Every value can be overridden with an environment variable
+`GNUBOOK_<SECTION>_<KEY>`, for example `GNUBOOK_BOOK_URL`.
+
+| Key | Meaning |
+|---|---|
+| `[book] url` | SQLAlchemy URL of the book, e.g. `postgresql://gnucash:PW@10.0.0.20:5432/gnucash` or `sqlite:////path/book.gnucash` |
+| `[book] timezone` | Time zone GnuCash Desktop runs in (default `Europe/Berlin`) |
+| `[app] secret_key` | Random string, at least 32 characters (`init-config` creates one) |
+| `[app] username`, `password_hash` | Login. Create the hash with `gnubook hash-password` |
+| `[app] data_dir` | gnubook's own SQLite database |
+| `[app] session_cookie_secure`, `behind_proxy` | Set both to `true` behind an HTTPS reverse proxy |
+| `[api] token_sha256` | Enables the import API. Create the token with `gnubook gen-token` |
+| `[api] expose_iban` | Report IBANs to the importer (default `false`, see [docs/FINTS.md](docs/FINTS.md)) |
+| `[import] fallback_account` | Account for bank lines without a known counter account (default `Ausgleichskonto-EUR`/`Imbalance-EUR`) |
+| `[import] accounts` | Only these accounts are offered to the importer (default: all bank, asset, cash and credit accounts) |
+| `[import] iban_map` | IBAN → account, for own accounts gnubook cannot find by account code or GnuCash online-banking data |
+| `[import] transit_account`, `transit_between` | Book transfers between the listed accounts through a transit account |
+| `[import] match_days`, `transfer_match_days` | Window for linking bank lines to existing bookings (3 / 7 days) |
+
+## Command line
+
+| Command | Purpose |
+|---|---|
+| `gnubook check` | Check the configuration, the database connection, the GnuCash version and the lock |
+| `gnubook hash-password` | Create a password hash |
+| `gnubook gen-token` | Create an API token for the FinTS importer |
+| `gnubook check-balances [--account NAME] [--show-all] [--accept-open]` | Recompute all balance checkpoints. Exit code 1 means open differences |
+| `gnubook demo-book PATH` | Create the synthetic demo book |
+| `gnubook init-config PATH` | Create a configuration file with a random `secret_key` |
+| `gnubook serve` | Development server. In production use gunicorn, see `deploy/` |
+
+## Working alongside GnuCash Desktop
+
+- gnubook writes only while GnuCash Desktop has the book closed. The header shows *„GnuCash Desktop geöffnet
+  – nur lesen“* while it is open. Imports sent during that time are rejected with a message, so run the
+  importer again later.
+- GnuCash Desktop loads the whole book when it opens. Bookings gnubook made appear the next time you open
+  the book in GnuCash.
+- If GnuCash crashes, its lock row may stay behind. *Einstellungen* shows it and can remove it.
+
+## Limitations
+
+- Bookings that involve other currencies, securities, lots or GnuCash's business features are shown, but
+  they can only be changed in GnuCash Desktop.
+- There are no reports, budgets, scheduled transactions or reconciliation workflow. Use GnuCash Desktop for
+  those.
+- There is one login user.
+- The import API covers what bnw/firefly-iii-fints-importer needs, not all of Firefly III's API.
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+pytest                                    # SQLite
+GNUBOOK_TEST_PG_URL=postgresql://user:pw@127.0.0.1:5432 pytest    # also PostgreSQL (user needs CREATEDB)
+GNUCASH_PYTHON=/usr/bin/python3 pytest tests/test_gnucash_compat.py  # read back with the real GnuCash engine (apt install python3-gnucash)
+```
+
+`scripts/screenshots.mjs` regenerates the screenshots from the demo book. Never use real data for
+screenshots.
+
+## License
+
+GPL-3.0-or-later, see [LICENSE](LICENSE). Bundled front-end libraries:
+
+- [AdminLTE](https://adminlte.io/) (MIT)
+- [Bootstrap](https://getbootstrap.com/) (MIT)
+- [Bootstrap Icons](https://icons.getbootstrap.com/) (MIT)
+- [Tom Select](https://tom-select.js.org/) (Apache-2.0)
+
+Their license files are in `gnubook/static/vendor/`.

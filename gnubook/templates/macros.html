@@ -1,0 +1,33 @@
+{% macro amount(value, mnemonic=None, colored=True, sign=False) -%}
+<span class="amount {{ value|amount_class if colored else value|neg_class }}">{{ value|money(mnemonic, sign=sign) }}</span>
+{%- endmacro %}
+
+{% macro cp_badge(status) -%}
+{% if status == 'ok' %}<span class="badge text-bg-success"><i class="bi bi-check-lg"></i> stimmt</span>
+{% elif status == 'accepted' %}<span class="badge text-bg-secondary" title="Abweichung akzeptiert"><i class="bi bi-check2-circle"></i> akzeptiert</span>
+{% else %}<span class="badge text-bg-danger"><i class="bi bi-exclamation-triangle"></i> weicht ab</span>{% endif %}
+{%- endmacro %}
+
+{% macro reconcile_badge(state) -%}
+{% if state == 'c' %}<span class="badge rounded-pill text-bg-info" title="bestätigt (cleared)">c</span>
+{% elif state == 'y' %}<span class="badge rounded-pill text-bg-success" title="abgeglichen (reconciled)">y</span>
+{% elif state == 'v' %}<span class="badge rounded-pill text-bg-secondary" title="storniert (voided)">v</span>
+{% else %}<span class="text-body-tertiary" title="nicht abgeglichen">n</span>{% endif %}
+{%- endmacro %}
+
+{% macro pagination(page, pages, endpoint) -%}
+{% if pages > 1 %}
+<nav aria-label="Seiten"><ul class="pagination pagination-sm mb-0 flex-wrap">
+  {% set args = request.args.to_dict() %}
+  <li class="page-item {{ 'disabled' if page <= 1 }}"><a class="page-link" href="{{ url_for(endpoint, **dict(args, page=page-1, **kwargs)) }}">«</a></li>
+  {% for p in range(1, pages + 1) %}
+    {% if p == 1 or p == pages or (p >= page - 2 and p <= page + 2) %}
+      <li class="page-item {{ 'active' if p == page }}"><a class="page-link" href="{{ url_for(endpoint, **dict(args, page=p, **kwargs)) }}">{{ p }}</a></li>
+    {% elif p == page - 3 or p == page + 3 %}
+      <li class="page-item disabled"><span class="page-link">…</span></li>
+    {% endif %}
+  {% endfor %}
+  <li class="page-item {{ 'disabled' if page >= pages }}"><a class="page-link" href="{{ url_for(endpoint, **dict(args, page=page+1, **kwargs)) }}">»</a></li>
+</ul></nav>
+{% endif %}
+{%- endmacro %}

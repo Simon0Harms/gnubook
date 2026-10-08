@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "macros.html" import amount %}
+{% block title %}Konten{% endblock %}
+{% block header %}Konten{% endblock %}
+{% block actions %}
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('views.accounts', hidden=None if show_hidden else '1') }}">
+    <i class="bi {{ 'bi-eye-slash' if show_hidden else 'bi-eye' }}"></i> {{ 'Ausgeblendete verbergen' if show_hidden else 'Ausgeblendete zeigen' }}</a>
+{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex flex-wrap gap-2 align-items-center">
+    <input type="search" class="form-control form-control-sm w-auto" id="tree-filter" placeholder="Konto filtern …">
+    <div class="btn-group btn-group-sm">
+      <button type="button" class="btn btn-outline-secondary" data-tree="expand"><i class="bi bi-arrows-expand"></i> alle auf</button>
+      <button type="button" class="btn btn-outline-secondary" data-tree="collapse"><i class="bi bi-arrows-collapse"></i> alle zu</button>
+    </div>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-hover mb-0 align-middle account-tree" id="account-tree">
+      <thead><tr><th>Konto</th><th class="d-none d-md-table-cell">Kontonummer / IBAN</th><th class="d-none d-lg-table-cell">Typ</th><th class="text-end">Saldo</th></tr></thead>
+      <tbody>
+      {% for acc in rows %}
+        {% set t = totals.get(acc.guid) %}
+        <tr data-guid="{{ acc.guid }}" data-parent="{{ acc.parent_guid }}" data-depth="{{ acc.depth }}"
+            data-name="{{ acc.full_name|lower }}" class="{{ 'text-body-secondary' if acc.hidden }}">
+          <td>
+            <span class="tree-indent" style="--depth: {{ acc.depth }}"></span>
+            {% if acc.children %}<button type="button" class="btn btn-link btn-sm p-0 tree-toggle" aria-label="auf-/zuklappen"><i class="bi bi-chevron-down"></i></button>
+            {% else %}<span class="tree-spacer"></span>{% endif %}
+            <a href="{{ url_for('views.register', guid=acc.guid) }}" class="link-underline-opacity-0 {{ 'fw-semibold link-body-emphasis' if acc.depth == 0 else 'link-body-emphasis' }}">{{ acc.name }}</a>
+            {% if acc.placeholder %}<i class="bi bi-folder2 text-body-tertiary ms-1" title="Platzhalter"></i>{% endif %}
+            {% if acc.hidden %}<i class="bi bi-eye-slash ms-1" title="ausgeblendet"></i>{% endif %}
+            {% if acc.description %}<span class="small text-body-secondary ms-2 d-none d-xl-inline">{{ acc.description }}</span>{% endif %}
+          </td>
+          <td class="d-none d-md-table-cell small font-monospace">{{ acc.code }}</td>
+          <td class="d-none d-lg-table-cell small">{{ acc.type_label }}{% if acc.mnemonic and acc.mnemonic != 'EUR' %} · {{ acc.mnemonic }}{% endif %}</td>
+          <td class="text-end text-nowrap {{ 'fw-semibold' if acc.children }}">
+            {% if t %}{{ amount(acc.display(t.value), acc.mnemonic, colored=False) }}{% if not t.complete %}<span class="text-warning" title="Unterkonten in anderer Währung ohne Kurs nicht enthalten">*</span>{% endif %}{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

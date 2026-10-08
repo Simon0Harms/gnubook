@@ -1,0 +1,20 @@
+name: Feature request
+description: Suggest an idea or an improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do?
+      description: Describe the task or problem, not only the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+  - type: textarea
+    id: gnucash
+    attributes:
+      label: How does GnuCash Desktop handle it?
+      description: gnubook should stay compatible with GnuCash – a hint how GnuCash does it helps.

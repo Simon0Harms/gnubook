@@ -1,0 +1,50 @@
+/* gnubook – small additions to AdminLTE 4 / Bootstrap 5.3 */
+:root { --gb-income: #2e7d32; --gb-expense: #c62828; }
+[data-bs-theme="dark"] { --gb-income: #66bb6a; --gb-expense: #ef5350; }
+
+.amount, .amount-input { font-variant-numeric: tabular-nums; }
+.amount-lg { font-size: 1.6rem; white-space: nowrap; }
+.small-box .inner p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.text-success.amount { color: var(--gb-income) !important; }
+.text-danger.amount { color: var(--gb-expense) !important; }
+
+.clickable { cursor: pointer; }
+tr.future { opacity: .6; }
+.notes { white-space: pre-wrap; }
+.brand-image { width: 33px; height: 33px; }
+.app-footer { padding: .6rem 1rem; }
+
+/* account tree */
+.account-tree .tree-indent { display: inline-block; width: calc(var(--depth, 0) * 1.25rem); }
+.account-tree .tree-spacer { display: inline-block; width: 1.15rem; }
+.account-tree .tree-toggle { line-height: 1; text-decoration: none; }
+.account-tree .tree-toggle i { display: inline-block; transition: transform .15s; }
+.account-tree tr.collapsed .tree-toggle i { transform: rotate(-90deg); }
+
+/* register & split editor */
+.register td { padding-top: .35rem; padding-bottom: .35rem; }
+.register td, .table td { overflow-wrap: break-word; word-break: break-word; }
+.register .amount { padding-left: .75rem; }
+.split-table td { vertical-align: top; }
+.split-table .ts-wrapper { min-width: 16rem; }
+.split-table .amount-input { min-width: 7rem; }
+#imbalance-box.unbalanced #imbalance { color: var(--gb-expense); }
+#imbalance-box.balanced #imbalance { color: var(--gb-income); }
+
+/* mini bar chart on the dashboard */
+.mini-chart { display: flex; align-items: flex-end; gap: .35rem; height: 170px; }
+.mini-chart-col { flex: 1 1 0; display: flex; flex-direction: column; align-items: stretch; height: 100%; min-width: 0; }
+.mini-chart-bars { flex: 1; display: flex; align-items: flex-end; gap: 2px; }
+.mini-chart-bars .bar { flex: 1; border-radius: 3px 3px 0 0; min-height: 1px; }
+.bar-in, .legend-in { background: var(--gb-income); }
+.bar-out, .legend-out { background: var(--gb-expense); }
+.mini-chart-label { font-size: .7rem; text-align: center; color: var(--bs-secondary-color); padding-top: .2rem; }
+.legend { display: inline-block; width: .8rem; height: .8rem; border-radius: 2px; vertical-align: -1px; }
+
+@media (max-width: 575.98px) {
+  .amount-lg { font-size: 1.25rem; }
+  .register { font-size: .85rem; }
+  .register td, .register th { padding-left: .3rem; padding-right: .3rem; }
+  .register .amount { padding-left: .3rem; }
+  .app-content-header h3 { font-size: 1.25rem; }
+}

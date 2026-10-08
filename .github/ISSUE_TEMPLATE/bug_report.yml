@@ -1,0 +1,38 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Never paste real financial data** (account numbers, IBANs, balances, booking texts).
+        Reproduce the problem with the demo book (`gnubook demo-book demo.gnucash`) if you can.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+  - type: input
+    id: version
+    attributes:
+      label: gnubook version
+      description: Shown in the footer, or `git -C /opt/gnubook/src describe --always --tags`
+    validations:
+      required: true
+  - type: input
+    id: gnucash
+    attributes:
+      label: GnuCash version and database
+      placeholder: "GnuCash 5.5, PostgreSQL 16"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log output
+      description: "`journalctl -u gnubook -n 100` – remove personal data first"
+      render: text

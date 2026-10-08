@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres" --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Tests (SQLite and PostgreSQL)
+        env:
+          GNUBOOK_TEST_PG_URL: postgresql://postgres:postgres@127.0.0.1:5432
+        run: pytest -q -rs
+
+  gnucash-compat:
+    # books written by gnubook are read back with the official GnuCash engine
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GnuCash Python bindings
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq python3-gnucash python3-venv
+      - name: Install gnubook
+        run: python3 -m venv .venv && .venv/bin/pip install -q -e ".[dev]"
+      - name: Compatibility test
+        env:
+          GNUCASH_PYTHON: /usr/bin/python3
+        run: .venv/bin/pytest -q -rs tests/test_gnucash_compat.py
+
+  installer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell syntax
+        run: bash -n deploy/install.sh && bash -n deploy/update.sh

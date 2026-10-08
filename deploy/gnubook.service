@@ -1,0 +1,26 @@
+[Unit]
+Description=gnubook – web frontend for a GnuCash SQL book
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gnubook
+Group=gnubook
+Environment=GNUBOOK_CONFIG=/opt/gnubook/config.toml
+WorkingDirectory=/opt/gnubook
+ExecStart=/opt/gnubook/venv/bin/gunicorn --config /opt/gnubook/gunicorn.conf.py gnubook:create_app()
+Restart=on-failure
+RestartSec=5
+# hardening: only the data directory is writable
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ReadWritePaths=/opt/gnubook/data
+# a SQLite book outside data/ needs its directory here as well, e.g.
+# ReadWritePaths=/opt/gnubook/data /srv/books
+
+[Install]
+WantedBy=multi-user.target

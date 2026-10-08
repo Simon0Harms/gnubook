@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Bankimport{% endblock %}
+{% block header %}Bankimport{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">Buchungen, die der FinTS-Importer über die API geliefert hat</div>{% endblock %}
+{% block actions %}
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('views.imports', all=None if show_all else '1') }}">
+    {{ 'Nur zu prüfende' if show_all else 'Alle Importe anzeigen' }}</a>
+{% endblock %}
+{% block content %}
+{% if not rows %}
+  <div class="card"><div class="card-body text-body-secondary">
+    {{ 'Noch keine Importe.' if show_all else 'Nichts zu prüfen – alle importierten Buchungen haben ein Gegenkonto und keine Duplikat-Verdachtsfälle.' }}
+    Den FinTS-Importer auf <code>{{ url_for('views.dashboard', _external=True) }}</code> zeigen lassen – Details unter
+    <a href="{{ url_for('views.settings') }}">Einstellungen</a>.
+  </div></div>
+{% else %}
+<form method="post" action="{{ url_for('views.imports_review') }}" id="review-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="all" value="{{ '1' if show_all else '' }}">
+  <div class="card">
+    <div class="card-header d-flex flex-wrap gap-2 align-items-center">
+      <button class="btn btn-sm btn-success" type="submit"><i class="bi bi-check2-all"></i> Ausgewählte als geprüft markieren</button>
+      <button class="btn btn-sm btn-outline-secondary" type="button" data-select-all="#review-form input[name=id]">alle auswählen</button>
+      <span class="small text-body-secondary ms-auto">Gegenkonto „{{ fallback.full_name if fallback else 'Auffangkonto' }}“ = keine Zuordnung gefunden</span>
+    </div>
+    <div class="card-body p-0 table-responsive">
+      <table class="table table-sm table-hover mb-0 align-middle">
+        <thead><tr><th></th><th>Datum</th><th>Konto</th><th>Beschreibung</th><th>Gegenkonto (aktuell)</th><th class="text-end">Betrag</th><th>Ergebnis</th></tr></thead>
+        <tbody>
+        {% for row in rows %}{% set r = row.r %}
+          <tr class="{{ 'table-warning' if r['status'] == 'possible_duplicate' }} {{ 'text-body-secondary' if r['reviewed'] }}">
+            <td><input class="form-check-input" type="checkbox" name="id" value="{{ r['id'] }}" {{ 'disabled' if r['reviewed'] }}></td>
+            <td class="text-nowrap">{{ r['day']|de_date }}<div class="small text-body-tertiary">{{ r['created_at']|de_datetime }}</div></td>
+            <td class="small">{{ row.account.name if row.account else '?' }}</td>
+            <td>{% if row.exists %}<a class="link-body-emphasis link-underline-opacity-0" href="{{ url_for('views.transaction', guid=r['tx_guid'], back=request.full_path) }}">{{ r['description'] }}</a>
+                {% else %}<span class="text-decoration-line-through">{{ r['description'] }}</span> <span class="badge text-bg-light">gelöscht</span>{% endif %}</td>
+            <td class="small {{ 'text-warning-emphasis fw-semibold' if row.on_fallback }}">{{ row.counter if row.counter is not none else '' }}</td>
+            <td class="text-end text-nowrap amount {{ r['amount']|amount_class }}">{{ r['amount']|money }}</td>
+            <td class="small">
+              {{ STATUS_LABELS.get(r['status'], r['status']) }}
+              {% if r['source'] and r['status'] != 'matched' %}<div class="text-body-tertiary">{{ SOURCE_LABELS.get(r['source'], r['source']) }}</div>{% endif %}
+              {% if r['candidate_tx_guid'] %}<div><a href="{{ url_for('views.transaction', guid=r['candidate_tx_guid'], back=request.full_path) }}">ähnliche Buchung</a></div>{% endif %}
+              {% if r['reviewed'] %}<div><i class="bi bi-check2"></i> geprüft</div>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

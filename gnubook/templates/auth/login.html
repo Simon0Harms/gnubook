@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="de" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Anmelden · {{ app_title }}</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/adminlte/adminlte.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+</head>
+<body class="login-page bg-body-secondary">
+<div class="login-box">
+  <div class="card card-outline card-success">
+    <div class="card-header text-center">
+      <img src="{{ url_for('static', filename='img/favicon.svg') }}" alt="" width="48" height="48" class="mb-2">
+      <h1 class="h3 mb-0"><b>{{ app_title }}</b></h1>
+      <div class="small text-body-secondary">GnuCash-Buch im Web</div>
+    </div>
+    <div class="card-body login-card-body">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}<div class="alert alert-{{ cat }} py-2">{{ msg }}</div>{% endfor %}
+      {% endwith %}
+      <form method="post" autocomplete="on">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="input-group mb-3">
+          <div class="form-floating">
+            <input id="username" type="text" class="form-control" name="username" placeholder="Benutzer" required autofocus autocomplete="username">
+            <label for="username">Benutzer</label>
+          </div>
+          <div class="input-group-text"><span class="bi bi-person"></span></div>
+        </div>
+        <div class="input-group mb-3">
+          <div class="form-floating">
+            <input id="password" type="password" class="form-control" name="password" placeholder="Passwort" required autocomplete="current-password">
+            <label for="password">Passwort</label>
+          </div>
+          <div class="input-group-text"><span class="bi bi-lock-fill"></span></div>
+        </div>
+        <div class="d-grid"><button type="submit" class="btn btn-success">Anmelden</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gnubook"
+version = "0.1.0"
+description = "Self-hosted web frontend for a GnuCash book (PostgreSQL/SQLite): accounts, registers, free splits, bank balance checks and a Firefly-III-compatible import API"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Simon Harms" }]
+requires-python = ">=3.11"
+dependencies = [
+    "Flask>=3.0",
+    "piecash==1.2.1",
+    "SQLAlchemy>=1.4.49,<1.5",
+    "gunicorn>=22",
+]
+
+[project.optional-dependencies]
+postgres = ["psycopg2-binary>=2.9"]
+dev = ["pytest>=8", "psycopg2-binary>=2.9"]
+
+[project.scripts]
+gnubook = "gnubook.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["gnubook*"]
+
+[tool.setuptools.package-data]
+gnubook = ["templates/*.html", "templates/**/*.html", "static/**/*", "static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning", "ignore::sqlalchemy.exc.SAWarning"]

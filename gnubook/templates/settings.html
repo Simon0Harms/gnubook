@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Einstellungen{% endblock %}
+{% block header %}Einstellungen und Status{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title">GnuCash-Buch</h3></div>
+      <div class="card-body small">
+        <dl class="row mb-0">
+          <dt class="col-sm-4">Datenbank</dt><dd class="col-sm-8 font-monospace text-break">{{ safe_url }}</dd>
+          <dt class="col-sm-4">GnuCash-Version</dt><dd class="col-sm-8">{{ schema.gnucash }}
+            {% if schema.supported %}<span class="badge text-bg-success">Schema unterstützt</span>
+            {% else %}<span class="badge text-bg-danger">Schema unbekannt – Schreiben wird verweigert</span>{% endif %}</dd>
+          <dt class="col-sm-4">Zeitzone</dt><dd class="col-sm-8">{{ cfg.book.timezone }}</dd>
+          <dt class="col-sm-4">Konfiguration</dt><dd class="col-sm-8 font-monospace">{{ cfg.source or '(Umgebungsvariablen)' }}</dd>
+        </dl>
+      </div>
+    </div>
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title">Sperre (GnuCash Desktop)</h3></div>
+      <div class="card-body small">
+        {% if all_locks %}
+          <p>Einträge in der Tabelle <code>gnclock</code>:</p>
+          <ul>{% for h, p in all_locks %}<li class="font-monospace">{{ h }} (PID {{ p }})</li>{% endfor %}</ul>
+          <p>Solange GnuCash Desktop das Buch geöffnet hat, speichert gnubook nichts. Ist GnuCash abgestürzt,
+             kann ein veralteter Eintrag übrig bleiben.</p>
+          <form method="post" action="{{ url_for('views.unlock') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="confirm" value="yes" id="confirm">
+              <label class="form-check-label" for="confirm">GnuCash Desktop ist auf allen Rechnern geschlossen.</label></div>
+            <button class="btn btn-sm btn-outline-danger" type="submit">Sperreinträge entfernen</button>
+          </form>
+        {% else %}
+          <p class="mb-0 text-success"><i class="bi bi-unlock"></i> Keine Sperre – das Buch ist beschreibbar.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title">FinTS-Importer (Firefly-III-API)</h3></div>
+      <div class="card-body small">
+        {% if cfg.api.token_sha256 %}
+          <p><span class="badge text-bg-success">API aktiv</span> Im Importer als <code>firefly_url</code>
+             <code>{{ url_for('views.dashboard', _external=True).rstrip('/') }}</code> und als
+             <code>firefly_access_token</code> das mit <code>gnubook gen-token</code> erzeugte Token eintragen.</p>
+        {% else %}
+          <p><span class="badge text-bg-secondary">API aus</span> Token mit <code>gnubook gen-token</code> erzeugen und
+             <code>token_sha256</code> unter <code>[api]</code> eintragen.</p>
+        {% endif %}
+        <p class="mb-1">Auffangkonto (wenn kein Gegenkonto erkannt wird): <b>{{ fallback.full_name if fallback else 'nicht gefunden – [import] fallback_account setzen!' }}</b></p>
+        {% if cfg.importer.transit_account %}<p class="mb-1">Geldtransit: <b>{{ cfg.importer.transit_account }}</b> zwischen {{ cfg.importer.transit_between|join(', ') }}</p>{% endif %}
+        <table class="table table-sm mt-3 mb-0">
+          <thead><tr><th>Konto-ID</th><th>Konto</th><th>Nummer/IBAN (Kontocode)</th></tr></thead>
+          <tbody>
+          {% for a in importable %}
+            <tr><td class="font-monospace">{{ ids[a.guid] }}</td>
+                <td><a href="{{ url_for('views.register', guid=a.guid) }}">{{ a.full_name }}</a></td>
+                <td class="font-monospace">{{ a.code }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="card mb-4">
+  <div class="card-header"><h3 class="card-title">Protokoll (Änderungen durch gnubook)</h3></div>
+  <div class="card-body p-0 table-responsive">
+    <table class="table table-sm mb-0 small">
+      <thead><tr><th>Zeit</th><th>Wer</th><th>Aktion</th><th>Details</th></tr></thead>
+      <tbody>
+      {% for a in audit %}
+        <tr><td class="text-nowrap">{{ a['ts']|de_datetime }}</td><td>{{ a['actor'] }}</td><td>{{ a['action'] }}</td>
+            <td>{% if a['tx_guid'] %}<a href="{{ url_for('views.transaction', guid=a['tx_guid']) }}">{{ a['summary'] or 'Buchung' }}</a>{% else %}{{ a['summary'] }}{% endif %}</td></tr>
+      {% else %}<tr><td colspan="4" class="text-body-secondary">Noch keine Einträge.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

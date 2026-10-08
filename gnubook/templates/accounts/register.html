@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% from "macros.html" import amount, cp_badge, reconcile_badge, pagination %}
+{% block title %}{{ acc.name }}{% endblock %}
+{% block header %}{{ acc.name }}{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">{{ acc.full_name }} · {{ acc.type_label }}{% if acc.code %} · <span class="font-monospace">{{ acc.code }}</span>{% endif %}</div>{% endblock %}
+{% block actions %}
+  {% if not acc.placeholder %}
+  <a class="btn btn-success btn-sm {{ 'disabled' if book_lock() }}" href="{{ url_for('views.transaction_new', account=acc.guid, back=request.full_path) }}">
+    <i class="bi bi-plus-lg"></i> Neue Buchung</a>
+  {% endif %}
+{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-md-4">
+    <div class="info-box">
+      <span class="info-box-icon text-bg-primary"><i class="bi bi-wallet2"></i></span>
+      <div class="info-box-content"><span class="info-box-text">Saldo heute</span>
+        <span class="info-box-number">{{ amount(acc.display(present), acc.mnemonic, colored=False) }}</span>
+        {% if present != balance %}<span class="small text-body-secondary">inkl. zukünftiger: {{ acc.display(balance)|money(acc.mnemonic) }}</span>{% endif %}
+      </div>
+    </div>
+  </div>
+  {% if check %}
+  <div class="col-md-4">
+    <div class="info-box">
+      <span class="info-box-icon {{ 'text-bg-danger' if check.counts.open else 'text-bg-success' }}"><i class="bi bi-clipboard-check"></i></span>
+      <div class="info-box-content"><span class="info-box-text">Saldo-Prüfpunkte</span>
+        <span class="info-box-number">{{ check.counts.ok }} stimmen{% if check.counts.open %}, <span class="text-danger">{{ check.counts.open }} offen</span>{% endif %}{% if check.counts.accepted %}, {{ check.counts.accepted }} akzeptiert{% endif %}</span>
+        {% if check.last %}<span class="small">Letzter: {{ check.last.stand_date|de_date }} {{ cp_badge(check.last.status) }}</span>{% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% if api_id %}
+  <div class="col-md-4">
+    <div class="info-box">
+      <span class="info-box-icon text-bg-secondary"><i class="bi bi-bank"></i></span>
+      <div class="info-box-content"><span class="info-box-text">FinTS-Importer</span>
+        <span class="info-box-number">Konto-ID {{ api_id }}</span>
+        <span class="small text-body-secondary">als <code>firefly_account_id</code> eintragen</span>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <form class="row g-2 align-items-center" method="get">
+      <div class="col-sm-4"><input type="search" class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Text oder Betrag …"></div>
+      <div class="col-auto"><input type="date" class="form-control form-control-sm" name="from" value="{{ d_from or '' }}" title="von"></div>
+      <div class="col-auto"><input type="date" class="form-control form-control-sm" name="to" value="{{ d_to or '' }}" title="bis"></div>
+      {% if acc.children %}
+      <div class="col-auto form-check ms-2">
+        <input class="form-check-input" type="checkbox" name="sub" value="1" id="sub" {{ 'checked' if include_children }}>
+        <label class="form-check-label small" for="sub">mit Unterkonten</label>
+        <input type="hidden" name="sub" value="0">
+      </div>
+      {% endif %}
+      <div class="col-auto"><button class="btn btn-sm btn-outline-primary" type="submit"><i class="bi bi-funnel"></i> Filtern</button>
+        {% if q or d_from or d_to %}<a class="btn btn-sm btn-link" href="{{ url_for('views.register', guid=acc.guid) }}">zurücksetzen</a>{% endif %}</div>
+      <div class="col text-end small text-body-secondary">{{ total_rows }} Buchungen</div>
+    </form>
+  </div>
+  <div class="card-body p-0 table-responsive">
+    <table class="table table-sm table-hover mb-0 align-middle register">
+      <thead><tr>
+        <th>Datum</th><th class="d-none d-lg-table-cell">Nr.</th><th>Beschreibung</th><th class="d-none d-md-table-cell">Gegenkonto</th>
+        <th class="text-center d-none d-sm-table-cell" title="Abgleich">R</th><th class="text-end d-none d-sm-table-cell">{{ labels[0] }}</th><th class="text-end d-none d-sm-table-cell">{{ labels[1] }}</th><th class="text-end d-sm-none">Betrag</th><th class="text-end d-none d-sm-table-cell">Saldo</th>
+      </tr></thead>
+      <tbody>
+      {% for r in rows %}
+        {% set cp = cp_by_tx.get(r.tx_guid) %}
+        <tr class="clickable {{ 'future' if r.day > today }}" data-href="{{ url_for('views.transaction', guid=r.tx_guid, back=request.full_path) }}">
+          <td class="text-nowrap"><span class="d-none d-sm-inline">{{ r.day|de_date }}</span><span class="d-sm-none">{{ r.day.strftime('%d.%m.%y') }}</span></td>
+          <td class="d-none d-lg-table-cell small">{{ r.num }}</td>
+          <td>
+            <a class="link-body-emphasis link-underline-opacity-0" href="{{ url_for('views.transaction', guid=r.tx_guid, back=request.full_path) }}">{{ r.description or '(ohne Beschreibung)' }}</a>
+            {% if r.has_notes %}<i class="bi bi-sticky small text-body-tertiary ms-1" title="hat Notizen"></i>{% endif %}
+            {% if cp %}<span class="ms-1">{{ cp_badge(cp.status) }}</span>{% endif %}
+            {% if r.memo %}<div class="small text-body-secondary">{{ r.memo }}</div>{% endif %}
+            <div class="small text-body-secondary d-md-none">{{ r.counter }}</div>
+          </td>
+          <td class="d-none d-md-table-cell small" {% if r.counter == MULTI %}title="{{ r.others|join(', ') }}"{% endif %}>{{ r.counter }}</td>
+          <td class="text-center d-none d-sm-table-cell">{{ reconcile_badge(r.reconcile) }}</td>
+          <td class="text-end text-nowrap amount d-none d-sm-table-cell">{{ r.amount|money if r.amount > 0 }}{{ '0,00' if r.amount == 0 }}</td>
+          <td class="text-end text-nowrap amount d-none d-sm-table-cell">{{ (-r.amount)|money if r.amount < 0 }}</td>
+          <td class="text-end text-nowrap amount d-sm-none {{ r.amount|amount_class }}">{{ r.amount|money }}</td>
+          <td class="text-end text-nowrap amount d-none d-sm-table-cell {{ acc.display(r.balance)|neg_class }}">{{ acc.display(r.balance)|money }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9" class="text-body-secondary p-3">Keine Buchungen.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if pages > 1 %}<div class="card-footer">{{ pagination(page, pages, 'views.register', guid=acc.guid) }}</div>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% from "macros.html" import amount, cp_badge %}
+{% block title %}Saldo-Prüfpunkte{% endblock %}
+{% block header %}Saldo-Prüfpunkte{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">{{ summary.checked }} Kontostände der Bank geprüft: {{ summary.ok }} stimmen, {{ summary.open }} weichen ab, {{ summary.accepted }} akzeptiert</div>{% endblock %}
+{% block actions %}
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('views.checkpoints', all=None if not only_bad else '1') }}">
+    {{ 'Alle Prüfpunkte zeigen' if only_bad else 'Nur Abweichungen zeigen' }}</a>
+{% endblock %}
+{% block content %}
+<div class="callout callout-info mb-3 small">
+  Die Bank schreibt den Kontostand in den Buchungstext des Abschlusses (<code>STAND29.05.2026 1.239,51H</code>,
+  <code>**ENDSALDO** …</code> oder <code>Kontostand am …</code>). gnubook rechnet nach jeder Änderung nach:
+  <b>STAND</b> = alle Buchungen des Kontos bis einschließlich Stichtag ohne den Abschluss selbst,
+  <b>ENDSALDO</b> = STAND + Betrag des Abschlusses. Differenz = Buch − Bank.
+  Bekannte, nicht mehr korrigierbare Abweichungen können akzeptiert werden; ändert sich die Differenz, erscheint sie wieder.
+</div>
+{% for ch in checks %}
+  {% set c = ch.counts %}
+  <div class="card mb-4">
+    <div class="card-header d-flex align-items-center">
+      <h3 class="card-title mb-0"><a class="link-body-emphasis link-underline-opacity-0" href="{{ url_for('views.register', guid=ch.account_guid) }}">{{ ch.account_name }}</a></h3>
+      <div class="ms-auto small">
+        <span class="badge text-bg-success">{{ c.ok }} stimmen</span>
+        {% if c.open %}<span class="badge text-bg-danger">{{ c.open }} offen</span>{% endif %}
+        {% if c.accepted %}<span class="badge text-bg-secondary">{{ c.accepted }} akzeptiert</span>{% endif %}
+      </div>
+    </div>
+    <div class="card-body p-0 table-responsive">
+      <table class="table table-sm mb-0 align-middle">
+        <thead><tr>
+          <th>Stichtag</th><th class="text-end">Stand Bank</th><th class="text-end">Stand Buch</th><th class="text-end">Differenz</th>
+          <th class="text-end d-none d-lg-table-cell">Endsaldo Bank</th><th class="text-end d-none d-lg-table-cell">Differenz</th>
+          <th class="text-end d-none d-md-table-cell" title="Differenz, die seit dem vorherigen Prüfpunkt neu entstanden ist">neu seit davor</th>
+          <th class="text-center">Status</th><th></th>
+        </tr></thead>
+        <tbody>
+        {% for cp in ch.checkpoints|reverse %}
+          {% if not only_bad or cp.status != 'ok' %}
+          <tr class="{{ 'table-danger' if cp.status == 'open' }}">
+            <td class="text-nowrap"><a href="{{ url_for('views.transaction', guid=cp.tx_guid) }}" title="{{ cp.description }}">{{ cp.stand_date|de_date }}</a></td>
+            <td class="text-end text-nowrap amount">{{ cp.bank_stand|money }}</td>
+            <td class="text-end text-nowrap amount">{{ cp.book_stand|money }}</td>
+            <td class="text-end text-nowrap amount {{ 'text-danger fw-semibold' if cp.diff_stand }}">{{ cp.diff_stand|money(sign=True) if cp.diff_stand else '–' }}</td>
+            <td class="text-end text-nowrap amount d-none d-lg-table-cell">{{ cp.bank_end|money if cp.bank_end is not none else '' }}</td>
+            <td class="text-end text-nowrap amount d-none d-lg-table-cell {{ 'text-danger fw-semibold' if cp.diff_end }}">{% if cp.bank_end is not none %}{{ cp.diff_end|money(sign=True) if cp.diff_end else '–' }}{% endif %}</td>
+            <td class="text-end text-nowrap amount d-none d-md-table-cell">{{ cp.new_diff|money(sign=True) if cp.new_diff else '' }}</td>
+            <td class="text-center">{{ cp_badge(cp.status) }}
+              {% if cp.accepted and cp.accepted.note %}<div class="small text-body-secondary">{{ cp.accepted.note }}</div>{% endif %}</td>
+            <td class="text-end text-nowrap">
+              {% if cp.status == 'open' %}
+                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('views.register', guid=cp.account_guid, **{'from': (cp.stand_date.replace(day=1)).isoformat(), 'to': cp.tx_day.isoformat()}) }}" title="Buchungen des Monats"><i class="bi bi-list-ul"></i></a>
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#acc-{{ cp.tx_guid }}" aria-expanded="false">Akzeptieren …</button>
+              {% elif cp.status == 'accepted' or (cp.accepted and cp.status == 'ok') %}
+                <form method="post" action="{{ url_for('views.checkpoint_unaccept') }}" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="account" value="{{ cp.account_guid }}"><input type="hidden" name="tx" value="{{ cp.tx_guid }}">
+                  <input type="hidden" name="back" value="{{ request.full_path }}">
+                  <button class="btn btn-sm btn-link" type="submit">Akzeptanz entfernen</button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% if cp.status == 'open' %}
+          <tr class="collapse" id="acc-{{ cp.tx_guid }}"><td colspan="9" class="bg-body-tertiary">
+            <form method="post" action="{{ url_for('views.checkpoint_accept') }}" class="row g-2 align-items-center justify-content-end">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="account" value="{{ cp.account_guid }}"><input type="hidden" name="tx" value="{{ cp.tx_guid }}">
+              <input type="hidden" name="back" value="{{ request.full_path }}">
+              <div class="col-auto small text-body-secondary">Abweichung {{ cp.diff_stand|money(sign=True) }} zum {{ cp.stand_date|de_date }} als bekannt markieren:</div>
+              <div class="col-sm-4"><input type="text" name="note" class="form-control form-control-sm" placeholder="Notiz, z. B. Umbuchung zwischen Banken"></div>
+              <div class="col-auto"><button class="btn btn-sm btn-secondary" type="submit">Akzeptieren</button></div>
+            </form>
+          </td></tr>
+          {% endif %}
+          {% endif %}
+        {% endfor %}
+        {% if only_bad and not c.open and not c.accepted %}
+          <tr><td colspan="9" class="text-success p-3"><i class="bi bi-check-circle"></i> Alle {{ c.ok }} Prüfpunkte stimmen.</td></tr>
+        {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% else %}
+  <div class="card"><div class="card-body text-body-secondary">Im Buch wurden noch keine Saldo-Angaben der Bank gefunden.</div></div>
+{% endfor %}
+{% endblock %}
