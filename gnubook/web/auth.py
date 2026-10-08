@@ -67,7 +67,8 @@ def login_required(view=None, *, book: bool = True, admin: bool = False):
         def wrapper(*args, **kwargs):
             user = _load_user()
             if user is None:
-                return redirect(url_for("auth.login", next=request.full_path if request.method == "GET" else None))
+                return redirect(url_for("auth.login",
+                    next=request.script_root + request.full_path if request.method == "GET" else None))
             if request.method in ("POST", "PUT", "PATCH", "DELETE"):
                 check_csrf()
             if admin and not user["is_admin"]:
