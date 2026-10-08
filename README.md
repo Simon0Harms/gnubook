@@ -10,7 +10,8 @@ PostgreSQL (or SQLite). It looks and feels a bit like [Firefly III](https://www.
 data remains an ordinary GnuCash book. GnuCash Desktop can open the same database whenever gnubook is not
 writing to it.
 
-The user interface is in German.
+The user interface is available in German and English (switch per user). Amounts and dates keep the
+German format in both languages.
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
@@ -58,14 +59,20 @@ The user interface is in German.
 - **Several users and books.** Every user logs in with their own password. Every book is its own GnuCash
   database. Books can be shared, and a user with several books switches between them in the header.
   Administrators manage users and books in the web UI.
+- **New books with their own database.** With `[postgres] admin_url` gnubook creates a PostgreSQL role and
+  database for each new book, filled empty, with a simple German chart of accounts, or from an uploaded
+  GnuCash SQLite file. The credentials for GnuCash Desktop are shown once. Deleting such a book can also drop
+  its database and role (after confirming the name and writing a last `.gnucash` copy). See
+  [docs/INSTALL.md](docs/INSTALL.md).
 - **Bank profiles.** Everything country- or bank-specific lives in `gnubook/banks/` and is chosen per book:
   - balance-line formats;
   - the booking text of imports;
   - recognising own accounts by IBAN.
 
-  The German profile is the default. A generic profile and your own balance-line patterns in `config.toml`
-  cover other banks.
-- German and English user interface.
+  The German profile is the default. A generic profile and your own balance-line patterns
+  (`[[checkpoints.patterns]]`) cover other banks. Profile and import settings can be set per book under
+  *Bücher → Bankprofil und Import*; they override `[import]`.
+- German and English user interface, chosen in the user menu or on the login page.
 - Dark mode and a layout that works on phones.
 
 | Register | Transaction with splits |
@@ -129,22 +136,27 @@ as the systemd service `gnubook` (gunicorn, port 8080). Create the first admin w
 
 ## Configuration
 
-`/opt/gnubook/config.toml` (TOML). Users and books are not part of the file; they are managed in the web UI or on the command line. Every value
-can be overridden with an environment variable
+`/opt/gnubook/config.toml` (TOML). Users and books are not part of the file; they are managed in the web UI
+or on the command line. Every value can be overridden with an environment variable
 `GNUBOOK_<SECTION>_<KEY>`, for example `GNUBOOK_BOOK_URL`.
 
 | Key | Meaning |
 |---|---|
 | `[app] secret_key` | Random string, at least 32 characters (`init-config` creates one) |
 | `[app] data_dir` | gnubook's own data: users, books, tokens (`system.sqlite`) and per-book data |
+| `[app] language` | Default UI language for users without their own choice: `de` (default) or `en` |
 | `[app] session_cookie_secure`, `behind_proxy` | Set both to `true` behind an HTTPS reverse proxy |
 | `[api] expose_iban` | Report IBANs to the importer (default `false`, see [docs/FINTS.md](docs/FINTS.md)) |
 | `[import] fallback_account` | Account for bank lines without a known counter account (default `Ausgleichskonto-EUR`/`Imbalance-EUR`) |
 | `[import] accounts` | Only these accounts are offered to the importer (default: all bank, asset, cash and credit accounts) |
 | `[import] iban_map` | IBAN → account, for own accounts gnubook cannot find by account code or GnuCash online-banking data |
 | `[import] transit_account`, `transit_between` | Book transfers between the listed accounts through a transit account |
-| `[backup] keep` | Versions of the per-book `.gnucash` copy to keep (the file itself is set per book under *Bücher*) |
 | `[import] match_days`, `transfer_match_days` | Window for linking bank lines to existing bookings (3 / 7 days) |
+| `[backup] keep` | Versions of the per-book `.gnucash` copy to keep (the file itself is set per book under *Bücher*) |
+| `[postgres] admin_url` | Role with `CREATEROLE` and `CREATEDB` (no superuser) that lets gnubook create a database per new book |
+| `[[checkpoints.patterns]]` | Own balance-line patterns (`stand` regex, `keyword`), used with every bank profile |
+
+The `[import]` values are defaults. Each book can override them under *Bücher → Bankprofil und Import*.
 
 ## Command line
 
@@ -152,11 +164,11 @@ can be overridden with an environment variable
 |---|---|
 | `gnubook check` | Check the configuration, the database connection, the GnuCash version and the lock |
 | `gnubook user-add NAME [--admin] [--book B]`, `user-list`, `user-password NAME` | Manage users (also in the web UI) |
-| `gnubook book-add NAME URL [--user U]`, `book-list` | Connect GnuCash databases as books (also in the web UI) |
+| `gnubook book-add NAME URL [--user U]`, `book-list` | Connect existing GnuCash databases as books (also in the web UI) |
+| `gnubook book-create NAME [--content simple\|empty\|file] [--file F] [--user U]` | Create a new PostgreSQL database and book (needs `[postgres] admin_url`) |
 | `gnubook token-create USER --book B` | API token for the FinTS importer (also under *Einstellungen*) |
-| `gnubook backup --book B` | Write a `.gnucash` copy now |
 | `gnubook check-balances [--book B] [--account NAME] [--show-all] [--accept-open]` | Recompute all balance checkpoints. Exit code 1 means open differences |
-| `gnubook backup [--dir DIR] [--keep N]` | Save the book as a `.gnucash` file (SQLite) that GnuCash Desktop opens |
+| `gnubook backup [--book B] [--dir DIR] [--keep N]` | Save the book now as a `.gnucash` file (SQLite) that GnuCash Desktop opens |
 | `gnubook demo-book PATH` | Create the synthetic demo book |
 | `gnubook init-config PATH` | Create a configuration file with a random `secret_key` |
 | `gnubook serve` | Development server. In production use gunicorn, see `deploy/` |
@@ -186,6 +198,9 @@ pytest                                    # SQLite
 GNUBOOK_TEST_PG_URL=postgresql://user:pw@127.0.0.1:5432 pytest    # also PostgreSQL (user needs CREATEDB)
 GNUCASH_PYTHON=/usr/bin/python3 pytest tests/test_gnucash_compat.py  # read back with the real GnuCash engine (apt install python3-gnucash)
 ```
+
+Every UI text needs an English translation in `gnubook/translations_en.py`; `tests/test_i18n.py` fails
+otherwise.
 
 `scripts/screenshots.mjs` regenerates the screenshots from the demo book. Never use real data for
 screenshots.
