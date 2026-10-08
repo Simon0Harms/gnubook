@@ -5,7 +5,7 @@
 {% block subheader %}<div class="small text-body-secondary">{{ acc.full_name }} · {{ _(acc.type_label) }}{% if acc.code %} · <span class="font-monospace">{{ acc.code }}</span>{% endif %}</div>{% endblock %}
 {% block actions %}
   {% if not acc.placeholder %}
-  <a class="btn btn-success btn-sm {{ 'disabled' if book_lock() }}" href="{{ url_for('views.transaction_new', account=acc.guid, back=request.full_path) }}">
+  <a class="btn btn-success btn-sm {{ 'disabled' if book_lock() }}" href="{{ url_for('views.transaction_new', account=acc.guid, back=(request.script_root + request.full_path)) }}">
     <i class="bi bi-plus-lg"></i> {{ _("Neue Buchung") }}</a>
   {% endif %}
 {% endblock %}
@@ -71,11 +71,11 @@
       <tbody>
       {% for r in rows %}
         {% set cp = cp_by_tx.get(r.tx_guid) %}
-        <tr class="clickable {{ 'future' if r.day > today }}" data-href="{{ url_for('views.transaction', guid=r.tx_guid, back=request.full_path) }}">
+        <tr class="clickable {{ 'future' if r.day > today }}" data-href="{{ url_for('views.transaction', guid=r.tx_guid, back=(request.script_root + request.full_path)) }}">
           <td class="text-nowrap"><span class="d-none d-sm-inline">{{ r.day|de_date }}</span><span class="d-sm-none">{{ r.day.strftime('%d.%m.%y') }}</span></td>
           <td class="d-none d-lg-table-cell small">{{ r.num }}</td>
           <td>
-            <a class="link-body-emphasis link-underline-opacity-0" href="{{ url_for('views.transaction', guid=r.tx_guid, back=request.full_path) }}">{{ r.description or '(ohne Beschreibung)' }}</a>
+            <a class="link-body-emphasis link-underline-opacity-0" href="{{ url_for('views.transaction', guid=r.tx_guid, back=(request.script_root + request.full_path)) }}">{{ r.description or '(ohne Beschreibung)' }}</a>
             {% if r.has_notes %}<i class="bi bi-sticky small text-body-tertiary ms-1" title="{{ _("hat Notizen") }}"></i>{% endif %}
             {% if cp %}<span class="ms-1">{{ cp_badge(cp.status) }}</span>{% endif %}
             {% if r.memo %}<div class="small text-body-secondary">{{ r.memo }}</div>{% endif %}

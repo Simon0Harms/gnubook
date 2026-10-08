@@ -32,14 +32,14 @@
             <td><input class="form-check-input" type="checkbox" name="id" value="{{ r['id'] }}" {{ 'disabled' if r['reviewed'] }}></td>
             <td class="text-nowrap">{{ r['day']|de_date }}<div class="small text-body-tertiary">{{ r['created_at']|de_datetime }}</div></td>
             <td class="small">{{ row.account.name if row.account else '?' }}</td>
-            <td>{% if row.exists %}<a class="link-body-emphasis link-underline-opacity-0" href="{{ url_for('views.transaction', guid=r['tx_guid'], back=request.full_path) }}">{{ r['description'] }}</a>
+            <td>{% if row.exists %}<a class="link-body-emphasis link-underline-opacity-0" href="{{ url_for('views.transaction', guid=r['tx_guid'], back=(request.script_root + request.full_path)) }}">{{ r['description'] }}</a>
                 {% else %}<span class="text-decoration-line-through">{{ r['description'] }}</span> <span class="badge text-bg-light">{{ _("gelöscht") }}</span>{% endif %}</td>
             <td class="small {{ 'text-warning-emphasis fw-semibold' if row.on_fallback }}">{{ row.counter if row.counter is not none else '' }}</td>
             <td class="text-end text-nowrap amount {{ r['amount']|amount_class }}">{{ r['amount']|money }}</td>
             <td class="small">
               {{ _(STATUS_LABELS.get(r['status'], r['status'])) }}
               {% if r['source'] and r['status'] != 'matched' %}<div class="text-body-tertiary">{{ _(SOURCE_LABELS.get(r['source'], r['source'])) }}</div>{% endif %}
-              {% if r['candidate_tx_guid'] %}<div><a href="{{ url_for('views.transaction', guid=r['candidate_tx_guid'], back=request.full_path) }}">{{ _("ähnliche Buchung") }}</a></div>{% endif %}
+              {% if r['candidate_tx_guid'] %}<div><a href="{{ url_for('views.transaction', guid=r['candidate_tx_guid'], back=(request.script_root + request.full_path)) }}">{{ _("ähnliche Buchung") }}</a></div>{% endif %}
               {% if r['reviewed'] %}<div><i class="bi bi-check2"></i> {{ _("geprüft") }}</div>{% endif %}
             </td>
           </tr>

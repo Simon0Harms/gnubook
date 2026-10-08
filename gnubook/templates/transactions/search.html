@@ -21,9 +21,9 @@
       <thead><tr><th>{{ _("Datum") }}</th><th>{{ _("Beschreibung") }}</th><th>{{ _("Konten") }}</th><th class="text-end">{{ _("Betrag") }}</th></tr></thead>
       <tbody>
       {% for t in results %}
-        <tr class="clickable" data-href="{{ url_for('views.transaction', guid=t.tx_guid, back=request.full_path) }}">
+        <tr class="clickable" data-href="{{ url_for('views.transaction', guid=t.tx_guid, back=(request.script_root + request.full_path)) }}">
           <td class="text-nowrap">{{ t.day|de_date }}</td>
-          <td><a class="link-body-emphasis link-underline-opacity-0" href="{{ url_for('views.transaction', guid=t.tx_guid, back=request.full_path) }}">{{ t.description or '(ohne Beschreibung)' }}</a>{% if t.num %} <span class="small text-body-secondary">Nr. {{ t.num }}</span>{% endif %}</td>
+          <td><a class="link-body-emphasis link-underline-opacity-0" href="{{ url_for('views.transaction', guid=t.tx_guid, back=(request.script_root + request.full_path)) }}">{{ t.description or '(ohne Beschreibung)' }}</a>{% if t.num %} <span class="small text-body-secondary">Nr. {{ t.num }}</span>{% endif %}</td>
           <td class="small text-body-secondary">{{ t.accounts|join(' · ') }}</td>
           <td class="text-end text-nowrap amount">{{ t.amount|money(t.currency) }}</td>
         </tr>
