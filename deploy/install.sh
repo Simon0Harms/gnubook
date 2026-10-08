@@ -24,6 +24,7 @@ id gnubook >/dev/null 2>&1 || useradd --system --home-dir "$APP_DIR" --no-create
 install -d -m 755 "$APP_DIR"
 install -d -m 750 -o gnubook -g gnubook "$APP_DIR/data"
 install -d -m 750 "$APP_DIR/backup"
+install -d -m 750 -o gnubook -g gnubook "$APP_DIR/backup/book"
 
 echo ">> Quellcode"
 if [ -n "$REPO" ]; then
@@ -77,8 +78,11 @@ WRAP
 chmod 755 /usr/local/bin/gnubook
 install -m 755 "$APP_DIR/src/deploy/update.sh" /usr/local/bin/gnubook-update
 install -m 644 "$APP_DIR/src/deploy/gnubook.service" /etc/systemd/system/gnubook.service
+install -m 644 "$APP_DIR/src/deploy/gnubook-backup.service" /etc/systemd/system/gnubook-backup.service
+install -m 644 "$APP_DIR/src/deploy/gnubook-backup.timer" /etc/systemd/system/gnubook-backup.timer
 systemctl daemon-reload
 systemctl enable -q gnubook
+systemctl enable -q --now gnubook-backup.timer
 
 if gnubook check >/dev/null 2>&1; then
   systemctl restart gnubook

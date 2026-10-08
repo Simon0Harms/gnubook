@@ -51,6 +51,10 @@ The user interface is in German.
   - Changes made elsewhere in the meantime are detected before saving.
   - Unknown GnuCash database versions are only read, never written.
   - Every change is logged in an audit log.
+  - Optionally, after every change a copy of the whole book is written as a `.gnucash` file (SQLite format,
+    opens directly in GnuCash Desktop), with rotation of older versions.
+- **Backups as `.gnucash` file.** A nightly timer saves the whole book as a SQLite GnuCash file that GnuCash
+  Desktop opens directly (`gnubook backup`).
 - Dark mode and a layout that works on phones.
 
 | Register | Transaction with splits |
@@ -128,6 +132,7 @@ as the systemd service `gnubook` (gunicorn, port 8080). Run `gnubook-update` to 
 | `[import] accounts` | Only these accounts are offered to the importer (default: all bank, asset, cash and credit accounts) |
 | `[import] iban_map` | IBAN → account, for own accounts gnubook cannot find by account code or GnuCash online-banking data |
 | `[import] transit_account`, `transit_between` | Book transfers between the listed accounts through a transit account |
+| `[backup] gnucash_file`, `keep` | After every change, write a copy of the book as a GnuCash SQLite file (opens directly in GnuCash Desktop) and keep this many versions |
 | `[import] match_days`, `transfer_match_days` | Window for linking bank lines to existing bookings (3 / 7 days) |
 
 ## Command line
@@ -138,6 +143,7 @@ as the systemd service `gnubook` (gunicorn, port 8080). Run `gnubook-update` to 
 | `gnubook hash-password` | Create a password hash |
 | `gnubook gen-token` | Create an API token for the FinTS importer |
 | `gnubook check-balances [--account NAME] [--show-all] [--accept-open]` | Recompute all balance checkpoints. Exit code 1 means open differences |
+| `gnubook backup [--dir DIR] [--keep N]` | Save the book as a `.gnucash` file (SQLite) that GnuCash Desktop opens |
 | `gnubook demo-book PATH` | Create the synthetic demo book |
 | `gnubook init-config PATH` | Create a configuration file with a random `secret_key` |
 | `gnubook serve` | Development server. In production use gunicorn, see `deploy/` |

@@ -63,11 +63,19 @@ class ImportConfig:
 
 
 @dataclass
+class BackupConfig:
+    # GnuCash file (SQLite) written after every change; empty = off
+    gnucash_file: str = ""
+    keep: int = 10
+
+
+@dataclass
 class Config:
     book: BookConfig = field(default_factory=BookConfig)
     app: AppConfig = field(default_factory=AppConfig)
     api: ApiConfig = field(default_factory=ApiConfig)
     importer: ImportConfig = field(default_factory=ImportConfig)
+    backup: BackupConfig = field(default_factory=BackupConfig)
     source: str = ""
 
     @property
@@ -100,7 +108,7 @@ def load_config(path: str | os.PathLike | None = None, env: dict | None = None) 
         if cand and Path(cand).is_file():
             with open(cand, "rb") as fh:
                 data = tomllib.load(fh)
-            sections = {"book": cfg.book, "app": cfg.app, "api": cfg.api, "import": cfg.importer}
+            sections = {"book": cfg.book, "app": cfg.app, "api": cfg.api, "import": cfg.importer, "backup": cfg.backup}
             for name, values in data.items():
                 if name not in sections:
                     raise ConfigError(f"Unbekannter Konfigurationsabschnitt [{name}] in {cand}")
@@ -111,7 +119,7 @@ def load_config(path: str | os.PathLike | None = None, env: dict | None = None) 
     if explicit and not cfg.source:
         raise ConfigError(f"Konfigurationsdatei {explicit} nicht gefunden")
 
-    for section_name, obj in (("BOOK", cfg.book), ("APP", cfg.app), ("API", cfg.api), ("IMPORT", cfg.importer)):
+    for section_name, obj in (("BOOK", cfg.book), ("APP", cfg.app), ("API", cfg.api), ("IMPORT", cfg.importer), ("BACKUP", cfg.backup)):
         for key in vars(obj):
             env_key = f"GNUBOOK_{section_name}_{key.upper()}"
             if env_key in env:

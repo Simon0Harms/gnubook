@@ -6,7 +6,7 @@ import re
 from datetime import date
 from decimal import Decimal
 
-from flask import (Blueprint, abort, flash, g, jsonify, redirect, render_template, request, session, url_for)
+from flask import (Blueprint, current_app, abort, flash, g, jsonify, redirect, render_template, request, session, url_for)
 
 from .. import checkpoints as cps
 from ..book import ASSET_TYPES, LIABILITY_TYPES, BookError, WriteLockError, latest_prices
@@ -639,7 +639,8 @@ def settings():
     safe_url = url.render_as_string(hide_password=True) if hasattr(url, "render_as_string") else str(url)
     return render_template("settings.html", schema=schema, importable=importable, ids=ids, safe_url=safe_url,
                            cfg=st.cfg, fallback=st.importer.fallback_account(idx, idx.root.commodity_guid),
-                           audit=st.appdb.audit_log(60), all_locks=st.book.lock_holders())
+                           audit=st.appdb.audit_log(60), all_locks=st.book.lock_holders(),
+                           backup=current_app.extensions.get("gnubook_backup"))
 
 
 @bp.route("/settings/unlock", methods=["POST"])

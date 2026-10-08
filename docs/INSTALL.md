@@ -58,6 +58,18 @@ To restore a dump, first close GnuCash Desktop and stop gnubook:
 pg_restore --clean --if-exists -d gnucash /opt/pgbackup/gnucash-YYYYMMDD.dump
 ```
 
+### Backups as .gnucash file (done by gnubook)
+
+The installer also enables the timer `gnubook-backup.timer`. Every night at 03:30 it writes a complete copy of
+the book to `/opt/gnubook/backup/book/gnucash-YYYYMMDD-HHMMSS.gnucash` and keeps the newest 30. The files are
+SQLite books: GnuCash Desktop opens them directly with *Datei → Öffnen*, even without PostgreSQL.
+
+- Run a backup now: `gnubook backup`
+- Change the time: `systemctl edit gnubook-backup.timer` (`OnCalendar=`)
+- Change how many are kept: `--keep` in `/etc/systemd/system/gnubook-backup.service`
+
+The copy is taken in one read-only database transaction, so it is consistent even while someone is booking.
+
 ## 2. Move the book into PostgreSQL (GnuCash Desktop)
 
 1. Open your current book in GnuCash Desktop.
@@ -110,6 +122,16 @@ Behind a reverse proxy such as Nginx Proxy Manager or Caddy:
 - then `systemctl restart gnubook`.
 
 Do not expose gnubook to the internet without HTTPS. It has a login, but it is your complete bookkeeping.
+
+### `.gnucash` copy after every change
+
+With `[backup] gnucash_file = "/opt/gnubook/data/backup/buch.gnucash"` (default in new configs) gnubook writes
+a complete copy of the book a few seconds after every change (bookings, imports) and keeps `keep` older
+versions (`buch.<timestamp>.gnucash`). Several changes in quick succession, such as an import run, produce one
+copy. The file is in GnuCash's SQLite format: open it in GnuCash Desktop with *Datei → Öffnen*. To keep
+working with it, use *Speichern unter* to a new name instead of editing the backup itself.
+*Einstellungen* shows when the last copy was written. It is an additional copy, not a replacement for the
+PostgreSQL dumps.
 
 ## 4. Updates
 

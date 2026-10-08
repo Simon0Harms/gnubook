@@ -51,6 +51,12 @@ def create_app(config: Config | None = None, config_path: str | None = None, che
     book = Book(cfg.book.url, cfg.book.timezone, cfg.book.account_separator)
     appdb = AppDB(cfg.data_path / "gnubook.sqlite")
     app.extensions["gnubook"] = State(cfg, book, appdb, Importer(book, appdb, cfg.importer))
+    if cfg.backup.gnucash_file:
+        from .backup import BackupWriter
+
+        backup = BackupWriter(book, cfg.backup.gnucash_file, cfg.backup.keep)
+        book.after_write.append(backup.request)
+        app.extensions["gnubook_backup"] = backup
 
     from .web import register
 

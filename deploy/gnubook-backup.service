@@ -1,0 +1,14 @@
+[Unit]
+Description=gnubook – save the GnuCash book as .gnucash file
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=gnubook
+Group=gnubook
+Environment=GNUBOOK_CONFIG=/opt/gnubook/config.toml
+ExecStart=/opt/gnubook/venv/bin/gnubook backup --dir /opt/gnubook/backup/book --keep 30
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/gnubook/backup/book

@@ -203,6 +203,7 @@ class Book:
                 dbapi_conn.create_function("lower", 1, lambda s: s.lower() if isinstance(s, str) else s,
                                            deterministic=True)
         self._write_mutex = threading.Lock()
+        self.after_write = []  # callbacks run after every successful write
         self._schema_ok: bool | None = None
         self._schema_checked = 0.0
 
@@ -377,6 +378,8 @@ class Book:
                 yield
             finally:
                 self._release(pid)
+            for cb in self.after_write:
+                cb()
         finally:
             self._write_mutex.release()
 

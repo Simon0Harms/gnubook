@@ -18,6 +18,19 @@
       </div>
     </div>
     <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title">Sicherung als GnuCash-Datei</h3></div>
+      <div class="card-body small">
+        {% if backup %}
+          <p class="mb-1">Nach jeder Änderung: <code>{{ backup.path }}</code> ({{ backup.keep }} Versionen)</p>
+          {% if backup.last_error %}<p class="text-danger mb-0"><i class="bi bi-exclamation-triangle"></i> Letzte Sicherung fehlgeschlagen: {{ backup.last_error }}</p>
+          {% elif backup.last_ok %}<p class="text-success mb-0"><i class="bi bi-check-circle"></i> Zuletzt gesichert: {{ backup.last_ok }}</p>
+          {% else %}<p class="text-body-secondary mb-0">Seit dem Start noch keine Änderung.</p>{% endif %}
+        {% else %}
+          <p class="mb-0">Aus. In <code>config.toml</code> unter <code>[backup]</code> <code>gnucash_file</code> setzen.</p>
+        {% endif %}
+      </div>
+    </div>
+    <div class="card mb-4">
       <div class="card-header"><h3 class="card-title">Sperre (GnuCash Desktop)</h3></div>
       <div class="card-body small">
         {% if all_locks %}

@@ -42,6 +42,9 @@ install_and_start() {
 echo ">> $($GIT log --oneline -1 "$OLD") -> $($GIT log --oneline -1 "$NEW")"
 if install_and_start; then
   install -m 755 "$APP_DIR/src/deploy/update.sh" /usr/local/bin/gnubook-update
+  install -d -m 750 -o gnubook -g gnubook "$APP_DIR/backup/book"
+  install -m 644 "$APP_DIR/src/deploy/gnubook-backup.service" "$APP_DIR/src/deploy/gnubook-backup.timer" /etc/systemd/system/
+  systemctl daemon-reload && systemctl enable -q --now gnubook-backup.timer
   echo ">> Aktualisiert auf $($GIT describe --always --tags)"
 else
   echo "!! Neue Version startet nicht – zurück auf $OLD" >&2

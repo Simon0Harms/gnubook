@@ -45,6 +45,11 @@ accounts = []
 match_days = 3
 transfer_match_days = 7
 
+[backup]
+# copy of the book as GnuCash file after every change (empty = off); keep = number of versions
+gnucash_file = "/opt/gnubook/data/backup/buch.gnucash"
+keep = 10
+
 [import.iban_map]
 # "DE00123456780000000000" = "Aktiva:Barvermögen:Girokonto"
 """
@@ -181,6 +186,27 @@ def check_balances(ctx, accounts, show_all, accept_open, note):
     if accept_open:
         click.echo("Offene Abweichungen wurden akzeptiert.")
     sys.exit(1 if open_total else 0)
+
+
+@main.command("backup")
+@click.option("--dir", "directory", default=None, help="Zielverzeichnis (Standard: <data_dir>/../backup/book)")
+@click.option("--keep", default=30, show_default=True, help="so viele Sicherungen behalten")
+@click.option("--prefix", default="gnucash", show_default=True)
+@click.pass_context
+def backup(ctx, directory, keep, prefix):
+    """Buch als .gnucash-Datei (SQLite) sichern – mit GnuCash Desktop direkt öffnbar."""
+    from datetime import datetime
+
+    from .backup import export_gnucash_file, rotate
+    from .book import Book
+
+    cfg = _cfg(ctx)
+    book = Book(cfg.book.url, cfg.book.timezone, cfg.book.account_separator)
+    out_dir = Path(directory) if directory else Path(cfg.app.data_dir).resolve().parent / "backup" / "book"
+    target = out_dir / f"{prefix}-{datetime.now():%Y%m%d-%H%M%S}.gnucash"
+    export_gnucash_file(book, target)
+    rotate(out_dir, prefix, keep)
+    click.echo(f"Gesichert: {target}")
 
 
 @main.command("demo-book")
