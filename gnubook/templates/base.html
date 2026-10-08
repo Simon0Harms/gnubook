@@ -18,12 +18,12 @@
     <div class="container-fluid">
       <ul class="navbar-nav">
         <li class="nav-item">
-          <a class="nav-link" data-lte-toggle="sidebar" href="#" role="button" aria-label="{{ _('Menü') }}"><i class="bi bi-list"></i></a>
+          <a class="nav-link" data-lte-toggle="sidebar" href="#" role="button" aria-label="{{ _("Menü") }}"><i class="bi bi-list"></i></a>
         </li>
         <li class="nav-item d-none d-md-block">
           <form class="d-flex ms-2" action="{{ url_for('views.search') }}" method="get" role="search">
-            <input class="form-control form-control-sm" type="search" name="q" placeholder="{{ _('Buchungen suchen …') }}"
-                   aria-label="{{ _('Suchen') }}" value="{{ request.args.get('q', '') if request.endpoint == 'views.search' else '' }}">
+            <input class="form-control form-control-sm" type="search" name="q" placeholder="{{ _("Buchungen suchen …") }}"
+                   aria-label="{{ _("Suchen") }}" value="{{ request.args.get('q', '') if request.endpoint == 'views.search' else '' }}">
           </form>
         </li>
       </ul>
@@ -31,7 +31,7 @@
         {% if current_book %}
         <li class="nav-item dropdown me-2">
           {% if my_books|length > 1 %}
-          <a class="nav-link dropdown-toggle fw-semibold" href="#" data-bs-toggle="dropdown" aria-expanded="false" title="{{ _('Buch wechseln') }}">
+          <a class="nav-link dropdown-toggle fw-semibold" href="#" data-bs-toggle="dropdown" aria-expanded="false" title="{{ _("Buch wechseln") }}">
             <i class="bi bi-journal-bookmark"></i> {{ current_book.name }}</a>
           <ul class="dropdown-menu dropdown-menu-end">
             {% for b in my_books %}
@@ -46,34 +46,32 @@
         <li class="nav-item me-2">
           {% if not current_book %}
           {% elif locks is none %}
-            <span class="badge text-bg-secondary" title="{{ _('Datenbank nicht erreichbar') }}"><i class="bi bi-question-circle"></i> {{ _('Buch?') }}</span>
+            <span class="badge text-bg-secondary" title="{{ _("Datenbank nicht erreichbar") }}"><i class="bi bi-question-circle"></i> {{ _("Buch?") }}</span>
           {% elif locks %}
             <span class="badge text-bg-danger" title="{% for h, p in locks %}{{ h }} (PID {{ p }}) {% endfor %}">
-              <i class="bi bi-lock-fill"></i> {{ _('GnuCash Desktop geöffnet – nur lesen') }}</span>
+              <i class="bi bi-lock-fill"></i> {{ _("GnuCash Desktop geöffnet – nur lesen") }}</span>
           {% else %}
-            <span class="badge text-bg-success" title="{{ _('Kein GnuCash Desktop aktiv') }}"><i class="bi bi-unlock"></i> {{ _('beschreibbar') }}</span>
+            <span class="badge text-bg-success" title="{{ _("Kein GnuCash Desktop aktiv") }}"><i class="bi bi-unlock"></i> {{ _("beschreibbar") }}</span>
           {% endif %}
         </li>
         <li class="nav-item">
-          <button class="btn btn-link nav-link" type="button" id="theme-toggle" title="{{ _('Hell/Dunkel umschalten') }}">
+          <button class="btn btn-link nav-link" type="button" id="theme-toggle" title="{{ _("Hell/Dunkel umschalten") }}">
             <i class="bi bi-circle-half"></i></button>
         </li>
         <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown" aria-expanded="false" title="{{ _('Benutzer') }}">
+          <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown" aria-expanded="false" title="{{ _("Benutzer") }}">
             <i class="bi bi-person-circle"></i> <span class="d-none d-md-inline">{{ current_user['username'] if current_user else '' }}</span></a>
           <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item" href="{{ url_for('auth.change_password') }}"><i class="bi bi-key"></i> {{ _('Passwort ändern') }}</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('auth.change_password') }}"><i class="bi bi-person-gear"></i> {{ _("Konto und Sprache") }}</a></li>
             {% if current_user and current_user['is_admin'] %}
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item" href="{{ url_for('admin.users') }}"><i class="bi bi-people"></i> {{ _('Benutzer') }}</a></li>
-            <li><a class="dropdown-item" href="{{ url_for('admin.books') }}"><i class="bi bi-journals"></i> {{ _('Bücher') }}</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('admin.users') }}"><i class="bi bi-people"></i> {{ _("Benutzer") }}</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('admin.books') }}"><i class="bi bi-journals"></i> {{ _("Bücher") }}</a></li>
             {% endif %}
-            <li><hr class="dropdown-divider"></li>
-            {% include "_language.html" %}
             <li><hr class="dropdown-divider"></li>
             <li><form action="{{ url_for('auth.logout') }}" method="post">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="dropdown-item" type="submit"><i class="bi bi-box-arrow-right"></i> {{ _('Abmelden') }}</button></form></li>
+              <button class="dropdown-item" type="submit"><i class="bi bi-box-arrow-right"></i> {{ _("Abmelden") }}</button></form></li>
           </ul>
         </li>
       </ul>
@@ -92,19 +90,19 @@
         {% set ep = request.endpoint or '' %}
         <ul class="nav sidebar-menu flex-column" data-lte-toggle="treeview" role="navigation" data-accordion="false">
           <li class="nav-item"><a href="{{ url_for('views.dashboard') }}" class="nav-link {{ 'active' if ep == 'views.dashboard' }}">
-            <i class="nav-icon bi bi-speedometer2"></i><p>{{ _('Übersicht') }}</p></a></li>
+            <i class="nav-icon bi bi-speedometer2"></i><p>{{ _("Übersicht") }}</p></a></li>
           <li class="nav-item"><a href="{{ url_for('views.accounts') }}" class="nav-link {{ 'active' if ep in ('views.accounts', 'views.register') }}">
-            <i class="nav-icon bi bi-wallet2"></i><p>{{ _('Konten') }}</p></a></li>
+            <i class="nav-icon bi bi-wallet2"></i><p>{{ _("Konten") }}</p></a></li>
           <li class="nav-item"><a href="{{ url_for('views.transaction_new') }}" class="nav-link {{ 'active' if ep == 'views.transaction_new' }}">
-            <i class="nav-icon bi bi-plus-circle"></i><p>{{ _('Neue Buchung') }}</p></a></li>
+            <i class="nav-icon bi bi-plus-circle"></i><p>{{ _("Neue Buchung") }}</p></a></li>
           <li class="nav-item"><a href="{{ url_for('views.search') }}" class="nav-link {{ 'active' if ep == 'views.search' }}">
-            <i class="nav-icon bi bi-search"></i><p>{{ _('Suche') }}</p></a></li>
+            <i class="nav-icon bi bi-search"></i><p>{{ _("Suche") }}</p></a></li>
           <li class="nav-item"><a href="{{ url_for('views.checkpoints') }}" class="nav-link {{ 'active' if ep == 'views.checkpoints' }}">
-            <i class="nav-icon bi bi-clipboard-check"></i><p>{{ _('Saldo-Prüfpunkte') }}</p></a></li>
+            <i class="nav-icon bi bi-clipboard-check"></i><p>{{ _("Saldo-Prüfpunkte") }}</p></a></li>
           <li class="nav-item"><a href="{{ url_for('views.imports') }}" class="nav-link {{ 'active' if ep == 'views.imports' }}">
-            <i class="nav-icon bi bi-bank"></i><p>{{ _('Bankimport') }}</p></a></li>
+            <i class="nav-icon bi bi-bank"></i><p>{{ _("Bankimport") }}</p></a></li>
           <li class="nav-item"><a href="{{ url_for('views.settings') }}" class="nav-link {{ 'active' if ep == 'views.settings' }}">
-            <i class="nav-icon bi bi-gear"></i><p>{{ _('Einstellungen') }}</p></a></li>
+            <i class="nav-icon bi bi-gear"></i><p>{{ _("Einstellungen") }}</p></a></li>
         </ul>
       </nav>
     </div>
@@ -125,7 +123,7 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% for cat, msg in messages %}
             <div class="alert alert-{{ cat if cat != 'message' else 'info' }} alert-dismissible fade show" role="alert">
-              {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{{ _('Schließen') }}"></button>
+              {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{{ _("Schließen") }}"></button>
             </div>
           {% endfor %}
         {% endwith %}
@@ -134,7 +132,7 @@
     </div>
   </main>
   <footer class="app-footer small">
-    <span class="text-body-secondary">gnubook {{ app_version }} · {{ _('GnuCash-Buch im Web') }} · {{ _('inoffiziell, KI-erstellt') }}</span>
+    <span class="text-body-secondary">gnubook {{ app_version }} · {{ _('GnuCash-Buch im Web · inoffiziell, KI-erstellt') }}</span>
   </footer>
 </div>
 <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>

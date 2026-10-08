@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0 – bank profiles
+
+- Country/bank-specific code moved to `gnubook/banks/` (`de`: STAND/ENDSALDO/Kontostand, AqBanking-style
+  booking text, BLZ + Kontonummer; `generic`); the core only calls the profile hooks
+- Bank profile and import settings per book (*Bücher → Bankprofil und Import*), overriding `[import]`
+- Own balance-line patterns in `[[checkpoints.patterns]]` for every profile
+- German and English user interface; test that every UI string has a translation
+
 ## 0.3.0 – gnubook creates the databases
 
 - `[postgres] admin_url` (role with CREATEROLE + CREATEDB): new books get their own PostgreSQL role and

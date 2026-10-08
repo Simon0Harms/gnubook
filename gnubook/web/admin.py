@@ -1,13 +1,14 @@
 """Administration: users, books (GnuCash databases) and who may use which book."""
 from __future__ import annotations
 
+from ..i18n import gettext as _
+
 import os
 import tempfile
 
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, session, url_for
 
 from ..book import Book
-from ..i18n import _
 from ..system import UserError, mask_url
 from . import registry
 from .auth import login_required
@@ -25,9 +26,9 @@ def _test_book(url: str, timezone: str) -> str | None:
         finally:
             b.dispose()
     except Exception as exc:  # noqa: BLE001
-        return _("Verbindung oder Buch ungültig: {error}", error=exc)
+        return _("Verbindung oder Buch ungültig: {a0}", a0=exc)
     if not info["supported"]:
-        return _("GnuCash-Version {version} wird nicht unterstützt (nur lesen wäre möglich).", version=info["gnucash"])
+        return _("GnuCash-Version {a0} wird nicht unterstützt (nur lesen wäre möglich).", a0=info['gnucash'])
     return None
 
 
@@ -69,7 +70,7 @@ def users():
                     _create_book(request.form.get("book_name") or request.form.get("username", ""),
                                  request.form.get("content", "simple"), [uid, g.user["id"]], True)
                 except UserError as exc:
-                    flash(_("Benutzer angelegt, aber kein Buch: {error}", error=exc), "warning")
+                    flash(_("Benutzer angelegt, aber kein Buch: {a0}", a0=exc), "warning")
                     return redirect(url_for("admin.users"))
                 flash(_("Benutzer und Buch angelegt."), "success")
                 return redirect(url_for("admin.books"))
@@ -128,13 +129,24 @@ def books():
                     backup = reg.default_backup_file(form["name"])
                 bid = system.add_book(form["name"], form["url"], form["timezone"] or "Europe/Berlin", backup)
                 system.set_book_users(bid, request.form.getlist("users") + [str(g.user["id"])])
-                flash(_("Buch „{name}“ verbunden.", name=form["name"]), "success")
+                flash(_("Buch „{a0}“ verbunden.", a0=form['name']), "success")
                 return redirect(url_for("admin.books"))
             except UserError as exc:
                 flash(str(exc), "danger")
+    import json
+
+    from ..banks import profile_names
+
     rows = [(b, mask_url(b["url"]), system.book_users(b["id"])) for b in system.books()]
+    import_settings = {}
+    for b in system.books():
+        try:
+            import_settings[b["id"]] = json.loads(b["import_settings"] or "{}")
+        except ValueError:
+            import_settings[b["id"]] = {}
     return render_template("admin/books.html", rows=rows, users=system.users(), form=form,
-                           can_create=bool(reg.cfg.postgres.admin_url),
+                           can_create=bool(reg.cfg.postgres.admin_url), profiles=profile_names(),
+                           import_settings=import_settings, defaults=reg.cfg.importer,
                            credentials=session.pop("new_book_credentials", None))
 
 
@@ -170,11 +182,9 @@ def book_update(book_id):
             flash(str(exc), "danger")
             return redirect(url_for("admin.books"))
         if drop:
-            flash(_("Buch „{name}“ und seine Datenbank gelöscht. Letzte Sicherung: {saved}", name=row["name"], saved=saved),
-                  "success")
+            flash(_("Buch „{a0}“ und seine Datenbank gelöscht. Letzte Sicherung: {a1}", a0=row['name'], a1=saved), "success")
         else:
-            flash(_("Verbindung zu „{name}“ entfernt. Die GnuCash-Datenbank selbst ist unverändert.", name=row["name"]),
-                  "success")
+            flash(_("Verbindung zu „{a0}“ entfernt. Die GnuCash-Datenbank selbst ist unverändert.", a0=row['name']), "success")
         return redirect(url_for("admin.books"))
     url = request.form.get("url", "").strip() or row["url"]  # empty field keeps the stored URL (password)
     tz = request.form.get("timezone", "").strip() or row["timezone"]
@@ -185,5 +195,38 @@ def book_update(book_id):
             return redirect(url_for("admin.books"))
     system.update_book(book_id, request.form.get("name", row["name"]), url, tz, request.form.get("backup_file", ""))
     system.set_book_users(book_id, request.form.getlist("users"))
+    flash(_("Gespeichert."), "success")
+    return redirect(url_for("admin.books"))
+
+
+@bp.route("/books/<int:book_id>/import", methods=["POST"])
+@login_required(book=False, admin=True)
+def book_import(book_id):
+    system = registry().system
+    if system.book(book_id) is None:
+        abort(404)
+    f = request.form
+    lines = lambda name: [x.strip() for x in f.get(name, "").splitlines() if x.strip()]  # noqa: E731
+    settings = {"fallback_account": f.get("fallback_account", "").strip(),
+                "transit_account": f.get("transit_account", "").strip(),
+                "transit_between": lines("transit_between"), "accounts": lines("accounts"), "iban_map": {}}
+    for key in ("match_days", "transfer_match_days"):
+        if f.get(key, "").strip():
+            try:
+                settings[key] = max(0, min(31, int(f[key])))
+            except ValueError:
+                flash(_("Ungültige Zahl bei {field}.", field=key), "danger")
+                return redirect(url_for("admin.books"))
+    for line in lines("iban_map"):
+        iban, sep, acc = line.partition("=")
+        if not sep or not iban.strip() or not acc.strip():
+            flash(_("Zeile „{line}“: erwartet „IBAN = Konto“.", line=line), "danger")
+            return redirect(url_for("admin.books"))
+        settings["iban_map"][iban.replace(" ", "").upper()] = acc.strip()
+    try:
+        system.set_book_import(book_id, f.get("profile", "de"), settings)
+    except UserError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("admin.books"))
     flash(_("Gespeichert."), "success")
     return redirect(url_for("admin.books"))

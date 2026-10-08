@@ -1,6 +1,8 @@
 """Read-side queries: balances, registers, transactions, search."""
 from __future__ import annotations
 
+from .i18n import gettext as _
+
 import hashlib
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -10,7 +12,6 @@ from decimal import Decimal
 from sqlalchemy import text
 
 from .book import Account, AccountIndex, Book, convert
-from .i18n import _
 from .money import ZERO, gnc_decimal
 
 CHUNK = 400  # stay below SQLite's bound-parameter limit
@@ -142,7 +143,7 @@ def annotate_rows(conn, index: AccountIndex, rows: list[RegisterRow]):
     for row in rows:
         others = [(sg, ag) for sg, ag in splits_by_tx[row.tx_guid] if sg != row.split_guid]
         names = []
-        for _side, ag in others:
+        for _sg, ag in others:
             acc = index.get(ag)
             names.append(acc.full_name if acc else "?")
         row.others = names
@@ -230,7 +231,7 @@ def load_transaction(conn, book: Book, index: AccountIndex, guid: str) -> TxView
     if slots.get("trans-read-only"):
         reasons.append(_("in GnuCash als schreibgeschützt markiert"))
     if any(s.lot_guid for s in splits):
-        reasons.append(_("Splits sind Losen (Lots) zugeordnet"))
+        reasons.append("Splits sind Losen (Lots) zugeordnet")
     if currency is None or not currency.is_currency:
         reasons.append(_("unbekannte Transaktionswährung"))
     for s in splits:
@@ -238,7 +239,7 @@ def load_transaction(conn, book: Book, index: AccountIndex, guid: str) -> TxView
             reasons.append(_("Split auf einem unbekannten Konto"))
             break
         if s.account.commodity_guid != tx.currency_guid:
-            reasons.append(_("Split in Fremdwährung/Wertpapier ({account})", account=s.account.full_name))
+            reasons.append(_("Split in Fremdwährung/Wertpapier ({a0})", a0=s.account.full_name))
             break
     tx.readonly_reasons = reasons
     return tx

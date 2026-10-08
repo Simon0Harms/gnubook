@@ -114,3 +114,17 @@ the banks.
   later; nothing gets lost or duplicated.
 - **Which accounts the importer sees.** By default all bank, asset, cash and credit accounts. Limit them with
   `[import] accounts = ["…full account name…"]`.
+
+## Settings per book
+
+Each book can override the `[import]` settings under *Bücher → Bankprofil und Import*:
+
+- fallback account;
+- transit account and the accounts it connects;
+- the accounts offered to the importer;
+- own IBANs;
+- matching windows.
+
+Empty fields use the value from `config.toml`. The book's bank profile decides the booking text format and how
+own accounts are recognised by IBAN (see [CHECKPOINTS.md](CHECKPOINTS.md#bank-profiles-and-own-formats)).
+

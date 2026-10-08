@@ -35,7 +35,7 @@ class AppConfig:
     behind_proxy: bool = False
     session_days: int = 14
     title: str = "gnubook"
-    # default user-interface language: "de" or "en" (each user can switch in the user menu)
+    # default UI language for users without their own choice: "de" or "en"
     language: str = "de"
 
 
@@ -65,6 +65,17 @@ class ImportConfig:
 
 
 @dataclass
+class CheckpointsConfig:
+    # extra balance-line patterns for every bank profile, e.g.
+    # [[checkpoints.patterns]]
+    # stand = 'Balance on (?P<day>\d{2})/(?P<month>\d{2})/(?P<year>\d{4}):? (?P<sign>-?)(?P<amount>[\d,]+\.\d{2})'
+    # keyword = "balance"
+    # decimal = "."
+    # thousands = ","
+    patterns: list[dict] = field(default_factory=list)
+
+
+@dataclass
 class PostgresConfig:
     # role with CREATEROLE and CREATEDB (no superuser) – lets gnubook create one database per book
     admin_url: str = ""
@@ -87,6 +98,7 @@ class Config:
     importer: ImportConfig = field(default_factory=ImportConfig)
     backup: BackupConfig = field(default_factory=BackupConfig)
     postgres: PostgresConfig = field(default_factory=PostgresConfig)
+    checkpoints: CheckpointsConfig = field(default_factory=CheckpointsConfig)
     source: str = ""
 
     @property
@@ -120,7 +132,7 @@ def load_config(path: str | os.PathLike | None = None, env: dict | None = None) 
             with open(cand, "rb") as fh:
                 data = tomllib.load(fh)
             sections = {"book": cfg.book, "app": cfg.app, "api": cfg.api, "import": cfg.importer, "backup": cfg.backup,
-                        "postgres": cfg.postgres}
+                        "postgres": cfg.postgres, "checkpoints": cfg.checkpoints}
             for name, values in data.items():
                 if name not in sections:
                     raise ConfigError(f"Unbekannter Konfigurationsabschnitt [{name}] in {cand}")

@@ -6,6 +6,8 @@ audit log) in data_dir/books/<id>.sqlite.
 """
 from __future__ import annotations
 
+from .i18n import gettext as _
+
 import hashlib
 import re
 import secrets
@@ -21,7 +23,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from .appdb import AppDB, now_iso
 from .book import Book
 from .config import Config
-from .i18n import _
+from .banks import get_profile
 from .importer import Importer
 
 SCHEMA = """
@@ -77,6 +79,11 @@ class SystemDB:
             cols = {r[1] for r in c.execute("PRAGMA table_info(books)")}
             if "managed_db" not in cols:  # 0.2.0 databases
                 c.execute("ALTER TABLE books ADD COLUMN managed_db TEXT NOT NULL DEFAULT ''")
+            if "profile" not in cols:  # before 0.4.0
+                c.execute("ALTER TABLE books ADD COLUMN profile TEXT NOT NULL DEFAULT 'de'")
+                c.execute("ALTER TABLE books ADD COLUMN import_settings TEXT NOT NULL DEFAULT '{}'")
+            if "language" not in {r[1] for r in c.execute("PRAGMA table_info(users)")}:
+                c.execute("ALTER TABLE users ADD COLUMN language TEXT NOT NULL DEFAULT ''")
         try:
             self.path.chmod(0o600)  # contains database URLs with passwords
         except OSError:
@@ -122,7 +129,7 @@ class SystemDB:
     @staticmethod
     def _check_password(password: str):
         if len(password or "") < MIN_PASSWORD:
-            raise UserError(_("Das Passwort muss mindestens {n} Zeichen haben.", n=MIN_PASSWORD))
+            raise UserError(_("Das Passwort muss mindestens {a0} Zeichen haben.", a0=MIN_PASSWORD))
 
     def add_user(self, username: str, password: str | None = None, is_admin: bool = False,
                  password_hash: str | None = None) -> int:
@@ -138,12 +145,19 @@ class SystemDB:
                                      "VALUES (?, ?, ?, ?)", (username, password_hash, int(is_admin),
                                                             now_iso())).lastrowid)
         except sqlite3.IntegrityError:
-            raise UserError(_("Benutzer „{name}“ gibt es schon.", name=username))
+            raise UserError(_("Benutzer „{a0}“ gibt es schon.", a0=username))
 
     def set_password(self, user_id: int, password: str):
         self._check_password(password)
         with self.conn() as c:
             c.execute("UPDATE users SET password_hash = ? WHERE id = ?", (generate_password_hash(password), user_id))
+
+    def set_language(self, user_id: int, language: str):
+        from .i18n import LANGUAGES
+
+        with self.conn() as c:
+            c.execute("UPDATE users SET language = ? WHERE id = ?",
+                      (language if language in LANGUAGES else "", user_id))
 
     def update_user(self, user_id: int, is_admin: bool, active: bool):
         with self.conn() as c:
@@ -151,7 +165,7 @@ class SystemDB:
                 others = c.execute("SELECT COUNT(*) FROM users WHERE is_admin = 1 AND active = 1 AND id <> ?",
                                    (user_id,)).fetchone()[0]
                 if others == 0:
-                    raise UserError(_("Es muss mindestens ein aktiver Administrator bleiben."))
+                    raise UserError("Es muss mindestens ein aktiver Administrator bleiben.")
             c.execute("UPDATE users SET is_admin = ?, active = ? WHERE id = ?", (int(is_admin), int(active), user_id))
 
     def delete_user(self, user_id: int):
@@ -174,10 +188,22 @@ class SystemDB:
             raise UserError(_("Name und Datenbank-URL sind nötig."))
         with self.conn() as c:
             if c.execute("SELECT 1 FROM books WHERE name = ?", (name.strip(),)).fetchone():
-                raise UserError(_("Ein Buch „{name}“ gibt es schon.", name=name.strip()))
+                raise UserError(_("Ein Buch „{a0}“ gibt es schon.", a0=name.strip()))
             return int(c.execute("INSERT INTO books (name, url, timezone, backup_file, created_at, managed_db) "
                                  "VALUES (?, ?, ?, ?, ?, ?)", (name.strip(), url.strip(), timezone, backup_file,
                                                                now_iso(), managed_db)).lastrowid)
+
+    def set_book_import(self, book_id: int, profile: str, settings: dict):
+        """Bank profile and import settings of one book (override [import] in config.toml)."""
+        import json
+
+        from .banks import profile_names
+
+        if profile not in profile_names():
+            raise UserError(f"Unbekanntes Bankprofil: {profile}")
+        with self.conn() as c:
+            c.execute("UPDATE books SET profile = ?, import_settings = ? WHERE id = ?",
+                      (profile, json.dumps(settings, ensure_ascii=False, sort_keys=True), book_id))
 
     def update_book(self, book_id: int, name: str, url: str, timezone: str, backup_file: str):
         with self.conn() as c:
@@ -313,7 +339,7 @@ class Registry:
         row = self.system.book(book_id)
         if row is None:
             return None
-        key = (row["name"], row["url"], row["timezone"], row["backup_file"])
+        key = (row["name"], row["url"], row["timezone"], row["backup_file"], row["profile"], row["import_settings"])
         with self._lock:
             cached = self._contexts.get(book_id)
             if cached and cached[0] == key:
@@ -322,7 +348,9 @@ class Registry:
                 cached[1].book.dispose()
             book = Book(row["url"], row["timezone"], self.cfg.book.account_separator)
             appdb = AppDB(self.data / "books" / f"{book_id}.sqlite")
-            ctx = BookContext(book_id, row["name"], self.cfg, book, appdb, Importer(book, appdb, self.cfg.importer))
+            book.profile = get_profile(row["profile"] or "de", self.cfg.checkpoints.patterns)
+            ctx = BookContext(book_id, row["name"], self.cfg, book, appdb,
+                              Importer(book, appdb, self.import_config(row)))
             if row["backup_file"]:
                 from .backup import BackupWriter
 
@@ -330,6 +358,21 @@ class Registry:
                 book.after_write.append(ctx.backup.request)
             self._contexts[book_id] = (key, ctx)
             return ctx
+
+    IMPORT_KEYS = ("fallback_account", "transit_account", "transit_between", "accounts", "iban_map",
+                   "match_days", "transfer_match_days")
+
+    def import_config(self, row):
+        """[import] from config.toml, overridden by the book's own import settings."""
+        import dataclasses
+        import json
+
+        try:
+            own = json.loads(row["import_settings"] or "{}")
+        except ValueError:
+            own = {}
+        own = {k: v for k, v in own.items() if k in self.IMPORT_KEYS and v not in (None, "", [], {})}
+        return dataclasses.replace(self.cfg.importer, **own)
 
     def drop_context(self, book_id: int):
         with self._lock:
@@ -350,7 +393,7 @@ class Registry:
         if not name.strip():
             raise UserError(_("Bitte einen Namen angeben."))
         if any(b["name"] == name.strip() for b in self.system.books()):
-            raise UserError(_("Ein Buch „{name}“ gibt es schon.", name=name.strip()))
+            raise UserError(_("Ein Buch „{a0}“ gibt es schon.", a0=name.strip()))
         dbname = provision.db_name_for(name)
         try:
             url, password = provision.create_role_and_db(admin_url, dbname)
@@ -363,7 +406,7 @@ class Registry:
                 provision.create_empty_book(url, template="simple" if content == "simple" else "none")
         except Exception as exc:
             provision.drop_role_and_db(admin_url, dbname)  # nothing half-created stays behind
-            raise UserError(_("Buch konnte nicht angelegt werden: {error}", error=exc))
+            raise UserError(_("Buch konnte nicht angelegt werden: {a0}", a0=exc))
         bid = self.system.add_book(name, url, self.cfg.book.timezone,
                                    self.default_backup_file(name) if backup else "", managed_db=dbname)
         self.system.set_book_users(bid, users)
@@ -401,6 +444,6 @@ class Registry:
 
     def dispose(self):
         with self._lock:
-            for _book, ctx in self._contexts.values():
+            for _key, ctx in self._contexts.values():
                 ctx.book.dispose()
             self._contexts.clear()

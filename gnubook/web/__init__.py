@@ -4,10 +4,9 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from flask import Flask, current_app, g
+from flask import Flask, current_app, g, request, session
 
 from .. import __version__
-from ..i18n import LANGUAGES, current_language, gettext
 from ..money import fmt, symbol_for
 
 
@@ -25,12 +24,30 @@ def state():
 
 def register(app: Flask):
     from . import admin, api, auth, views
+    from ..i18n import LANGUAGES, gettext
+
+    app.jinja_env.globals["_"] = gettext
+    app.jinja_env.globals["LANGUAGES"] = LANGUAGES
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(views.bp)
     app.register_blueprint(admin.bp)
     app.register_blueprint(api.bp)
-    app.jinja_env.globals["_"] = gettext
+
+    @app.before_request
+    def choose_language():
+        from ..i18n import LANGUAGES
+
+        reg = registry()
+        lang = ""
+        uid = session.get("user_id")
+        if uid:
+            user = reg.system.user(uid)
+            lang = (user["language"] if user is not None else "") or ""
+        lang = lang or request.cookies.get("gnubook_lang", "")
+        if lang not in LANGUAGES:
+            lang = reg.cfg.app.language if reg.cfg.app.language in LANGUAGES else "de"
+        g.lang = lang
 
     @app.template_filter("money")
     def money_filter(value, mnemonic: str | None = None, places: int = 2, sign: bool = False):
@@ -67,7 +84,9 @@ def register(app: Flask):
                 return value
         if isinstance(value, datetime):
             value = value.date()
-        return value.strftime("%d.%m.%Y") if isinstance(value, date) else str(value)
+        if not isinstance(value, date):
+            return str(value)
+        return value.strftime("%Y-%m-%d" if g.get("lang") == "en" else "%d.%m.%Y")
 
     @app.template_filter("de_datetime")
     def de_datetime(value):
@@ -84,17 +103,16 @@ def register(app: Flask):
                 value = st.book.local_datetime(value)
             else:
                 value = value.astimezone(st.book.tz)
-            return value.strftime("%d.%m.%Y %H:%M")
+            return value.strftime("%Y-%m-%d %H:%M" if g.get("lang") == "en" else "%d.%m.%Y %H:%M")
         return str(value)
 
     @app.context_processor
     def inject():
         ctx = g.get("ctx")
         user = g.get("user")
-        return {"app_version": __version__, "app_title": registry().cfg.app.title,
+        return {"lang": g.get("lang", "de"), "app_version": __version__, "app_title": registry().cfg.app.title,
                 "today": ctx.book.today() if ctx else date.today(), "current_book": ctx, "current_user": user,
-                "my_books": registry().system.user_books(user["id"]) if user else [],
-                "lang": current_language(), "languages": LANGUAGES}
+                "my_books": registry().system.user_books(user["id"]) if user else []}
 
     @app.after_request
     def security_headers(resp):

@@ -57,3 +57,28 @@ needs a working mail setup):
 MAILTO=you@example.org
 30 7 * * * gnubook out=$(/opt/gnubook/venv/bin/gnubook --config /opt/gnubook/config.toml check-balances) || echo "$out"
 ```
+
+## Bank profiles and own formats
+
+Which lines count as balance lines depends on the book's **bank profile** (*Bücher → Bankprofil und Import*):
+
+| Profile | Balance lines | Import booking text | Own accounts by IBAN |
+|---|---|---|---|
+| `de` (default) | `STAND…`, `**ENDSALDO**`, `Kontostand am …` | `<purpose>; <name>`, memo `Konto <IBAN>` | also via the bank code and account number GnuCash stored for online banking |
+| `generic` | only the patterns configured below | `<name> – <purpose>`, memo `IBAN <IBAN>` | `iban_map` and account codes only |
+
+Add more formats for every profile in `config.toml`. A pattern is a regular expression with the named groups
+`day`, `month`, `year` and `amount`, and optionally `sign`. The `sign` group may be `-` or the debit marker.
+`end` is an optional second expression for the balance after the closing line. `keyword` is a lower-case word
+every such line contains.
+
+```toml
+[[checkpoints.patterns]]
+stand = 'Balance on (?P<day>\d{2})/(?P<month>\d{2})/(?P<year>\d{4}):? (?P<sign>-?)(?P<amount>[\d,]+\.\d{2})'
+keyword = "balance"
+decimal = "."
+thousands = ","
+```
+
+Profiles for other countries go into `gnubook/banks/` as a subclass of `BankProfile`. `de.py` is the example.
+

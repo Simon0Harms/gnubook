@@ -6,6 +6,8 @@ Authentication: "Authorization: Bearer <token>"; each token belongs to one user 
 """
 from __future__ import annotations
 
+from ..i18n import gettext as _
+
 import json
 import logging
 from datetime import datetime, time as dtime
@@ -41,6 +43,8 @@ def authenticate():
     if found is None:
         return _error(401, "Unauthenticated.")
     g.user, book_id = found
+    if g.user["language"]:
+        g.lang = g.user["language"]
     g.ctx = registry().context(book_id)
     if g.ctx is None:
         return _error(401, "Unauthenticated.")
@@ -118,7 +122,7 @@ def accounts():
         page = max(1, int(request.args.get("page", 1)))
         limit = min(500, max(1, int(request.args.get("limit", 50))))
     except ValueError:
-        return _error(422, "page/limit müssen Zahlen sein.", "page")
+        return _error(422, _("page/limit müssen Zahlen sein."), "page")
     index, accs, bal, ids, today = _importable_with_balances()
     if typ not in ("all", "asset", "assets"):
         accs = []
@@ -199,7 +203,7 @@ def store_transaction():
     try:
         body = json.loads(request.get_data(as_text=True) or "null", parse_float=Decimal)
     except ValueError:
-        return _error(422, "Ungültiges JSON.", "transactions")
+        return _error(422, _("Ungültiges JSON."), "transactions")
     try:
         result = st.importer.import_body(body, actor=f"api:{g.user['username']}")
     except ImportRejected as exc:

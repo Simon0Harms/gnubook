@@ -1,6 +1,8 @@
 """HTML views: dashboard, accounts, registers, transaction editor, checkpoints, imports, settings."""
 from __future__ import annotations
 
+from ..i18n import gettext as _
+
 import logging
 import re
 from datetime import date
@@ -10,7 +12,6 @@ from flask import (Blueprint, abort, flash, g, jsonify, redirect, render_templat
 
 from .. import checkpoints as cps
 from ..book import ASSET_TYPES, LIABILITY_TYPES, BookError, WriteLockError, latest_prices
-from ..i18n import _
 from ..importer import is_special_account
 from ..ledger import (MULTI, annotate_rows, balances, description_suggestions, latest_by_description,
                       load_transaction, monthly_income_expense, recent_transactions, register_rows,
@@ -109,16 +110,14 @@ def _report_checkpoint_changes(before: dict, after: dict):
     idx = index()
     for cp in newly_bad[:5]:
         acc = idx.get(cp.account_guid)
-        end = _(", Endsaldo-Differenz {diff}", diff=fmt(cp.diff_end)) if cp.diff_end else ""
-        flash(_("Saldo-Prüfpunkt weicht ab: {account}, Stand {day} – Buch {book} / Bank {bank} "
-                "(Differenz {diff}{end}).", account=acc.name if acc else "?", day=f"{cp.stand_date:%d.%m.%Y}",
-                book=fmt(cp.book_stand), bank=fmt(cp.bank_stand), diff=fmt(cp.diff_stand), end=end), "warning")
+        flash(_("Saldo-Prüfpunkt weicht ab: {a0}, Stand {a1:%d.%m.%Y} – Buch {a2} / Bank {a3} (Differenz {a4}", a0=acc.name if acc else '?', a1=cp.stand_date, a2=fmt(cp.book_stand), a3=fmt(cp.bank_stand), a4=fmt(cp.diff_stand))
+              + (_(", Endsaldo-Differenz {d}", d=fmt(cp.diff_end)) if cp.diff_end else "") + ").", "warning")
     if len(newly_bad) > 5:
-        flash(_("… und {n} weitere abweichende Prüfpunkte.", n=len(newly_bad) - 5), "warning")
+        flash(_("… und {a0} weitere abweichende Prüfpunkte.", a0=len(newly_bad) - 5), "warning")
     for cp in fixed[:5]:
         acc = idx.get(cp.account_guid)
-        flash(_("Saldo-Prüfpunkt stimmt jetzt: {account}, Stand {day}.", account=acc.name if acc else "?",
-                day=f"{cp.stand_date:%d.%m.%Y}"), "success")
+        flash(_("Saldo-Prüfpunkt stimmt jetzt: {a0}, Stand {a1:%d.%m.%Y}.", a0=acc.name if acc else '?', a1=cp.stand_date),
+              "success")
 
 
 def _write_error(exc: Exception):
@@ -129,7 +128,7 @@ def _write_error(exc: Exception):
         flash(str(exc), "danger")
     else:
         log.exception("write failed")
-        flash(_("Speichern fehlgeschlagen: {error}", error=exc), "danger")
+        flash(f"Speichern fehlgeschlagen: {exc}", "danger")
 
 
 def _import_rows(records):
@@ -156,7 +155,7 @@ def _import_rows(records):
 
 
 def attention_count() -> int:
-    rows, _fallback = _import_rows(state().appdb.imports(limit=500, only_open=True))
+    rows, _ = _import_rows(state().appdb.imports(limit=500, only_open=True))
     return sum(1 for row in rows if row["attention"])
 
 
@@ -200,7 +199,7 @@ def dashboard():
             continue  # only shown when something landed there
         bank_accounts.append(a)
     month = months[-1] if months else ("", ZERO, ZERO)
-    peak = max([max(i, e) for _key, i, e in months] + [Decimal(1)])
+    peak = max([max(i, e) for _, i, e in months] + [Decimal(1)])
     return render_template(
         "dashboard.html", assets=assets, liabilities=liabilities, base=base, totals=totals,
         bank_accounts=bank_accounts, recent=recent, months=months, peak=peak, month=month,
@@ -332,13 +331,13 @@ def _draft_from_rows(rows, errors) -> list[SplitInput]:
         if not r["account"] and not r["debit"] and not r["credit"] and not r["memo"]:
             continue
         if not r["account"]:
-            errors.append(_("Zeile {n}: Konto fehlt.", n=n))
+            errors.append(_("Zeile {a0}: Konto fehlt.", a0=n))
             continue
         try:
             debit = parse_amount(r["debit"]) or ZERO
             credit = parse_amount(r["credit"]) or ZERO
         except AmountError as exc:
-            errors.append(_("Zeile {n}: {error}", n=n, error=exc))
+            errors.append(_("Zeile {a0}: {a1}", a0=n, a1=exc))
             continue
         reconcile = "y" if r["reconcile_orig"] == "y" else r["reconcile"]
         splits.append(SplitInput(r["account"], debit - credit, memo=r["memo"], action=r["action"],
@@ -450,8 +449,8 @@ def transaction_edit(guid):
     context_acc = index().get(request.values.get("account") or "")
     back = _safe_back(request.values.get("back"))
     if not tx.editable:
-        flash(_("Diese Buchung kann nur in GnuCash Desktop bearbeitet werden: {reasons}",
-                reasons=", ".join(tx.readonly_reasons)), "warning")
+        flash(_("Diese Buchung kann nur in GnuCash Desktop bearbeitet werden: ") + ", ".join(tx.readonly_reasons),
+              "warning")
         return redirect(url_for("views.transaction", guid=guid))
     if request.method == "POST":
         form = {k: request.form.get(k, "") for k in ("date", "num", "description", "notes", "fingerprint")}
@@ -504,7 +503,7 @@ def transaction_delete(guid):
     st.appdb.audit(session.get("user", "?"), "delete", guid, tx.description)
     g.pop("index", None)
     _report_checkpoint_changes(before, _checkpoint_snapshot(touched))
-    flash(_("Buchung „{description}“ gelöscht.", description=tx.description), "success")
+    flash(_("Buchung „{a0}“ gelöscht.", a0=tx.description), "success")
     back = _safe_back(request.form.get("back"))
     return redirect(back or url_for("views.dashboard"))
 
@@ -584,8 +583,7 @@ def checkpoint_accept():
         st.appdb.accept(acc_guid, tx_guid, cp.diff_stand, cp.diff_end, request.form.get("note", "").strip())
         st.appdb.audit(session.get("user", "?"), "checkpoint-accept", tx_guid,
                        f"{cp.stand_date} Differenz {cp.diff_stand}/{cp.diff_end}")
-        flash(_("Abweichung zum {day} akzeptiert. Ändert sich die Differenz, wird sie wieder gemeldet.",
-                day=f"{cp.stand_date:%d.%m.%Y}"), "success")
+        flash(_("Abweichung zum {a0:%d.%m.%Y} akzeptiert. Ändert sich die Differenz, wird sie wieder gemeldet.", a0=cp.stand_date), "success")
     return redirect(request.form.get("back") if _safe_back(request.form.get("back"))
                     else url_for("views.checkpoints"))
 
@@ -620,8 +618,8 @@ def imports_review():
     st = state()
     ids = request.form.getlist("id")
     st.appdb.mark_reviewed(ids, request.form.get("undo") != "1")
-    flash(_("{n} Import(e) als geprüft markiert.", n=len(ids)) if request.form.get("undo") != "1"
-          else _("Markierung entfernt."), "success")
+    flash(_("{a0} Import(e) als geprüft markiert.", a0=len(ids)) if request.form.get("undo") != "1"
+          else "Markierung entfernt.", "success")
     return redirect(url_for("views.imports", all=request.form.get("all") or None))
 
 
@@ -675,8 +673,8 @@ def unlock():
         flash(_("Bitte bestätigen, dass GnuCash Desktop wirklich geschlossen ist."), "warning")
         return redirect(url_for("views.settings"))
     n = st.book.remove_foreign_locks()
-    st.appdb.audit(session.get("user", "?"), "unlock", None, f"{n} Sperreinträge entfernt")
-    flash(_("{n} Sperreintrag/-einträge entfernt.", n=n), "success")
+    st.appdb.audit(session.get("user", "?"), "unlock", None, _("{a0} Sperreinträge entfernt", a0=n))
+    flash(_("{a0} Sperreintrag/-einträge entfernt.", a0=n), "success")
     return redirect(url_for("views.settings"))
 
 
@@ -700,4 +698,4 @@ def bad_request(e):
 def server_error(e):
     if request.path.startswith("/api/"):
         return jsonify({"message": "Internal server error"}), 500
-    return render_template("error.html", code=500, message=_("Interner Fehler – Details im Log.")), 500
+    return render_template("error.html", code=500, message="Interner Fehler – Details im Log."), 500

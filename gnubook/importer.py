@@ -10,6 +10,8 @@ For every bank line gnubook
 """
 from __future__ import annotations
 
+from .i18n import gettext as _
+
 import hashlib
 import json
 import re
@@ -114,11 +116,11 @@ def _parse_amount(value) -> Decimal:
     try:
         amount = Decimal(str(value).strip())
     except (InvalidOperation, ValueError):
-        raise ImportRejected("amount", "Ungültiger Betrag.")
+        raise ImportRejected("amount", _("Ungültiger Betrag."))
     if not amount.is_finite() or amount < 0:
-        raise ImportRejected("amount", "Der Betrag muss eine positive Zahl sein.")
+        raise ImportRejected("amount", _("Der Betrag muss eine positive Zahl sein."))
     if amount >= MAX_AMOUNT:
-        raise ImportRejected("amount", "Der Betrag ist unplausibel groß.")
+        raise ImportRejected("amount", _("Der Betrag ist unplausibel groß."))
     return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
@@ -127,7 +129,7 @@ def _parse_date(value) -> date:
     try:
         return date.fromisoformat(s[:10])
     except ValueError:
-        raise ImportRejected("date", "Ungültiges Datum (erwartet JJJJ-MM-TT).")
+        raise ImportRejected("date", _("Ungültiges Datum (erwartet JJJJ-MM-TT)."))
 
 
 class Importer:
@@ -167,17 +169,7 @@ class Importer:
         for key, ref in (self.cfg.iban_map or {}).items():
             if normalize_iban(key) == iban:
                 return index.find(ref)
-        hbci = defaultdict(dict)
-        for acc_guid, name, value in conn.execute(text(
-                "SELECT f.obj_guid, c.name, c.string_val FROM slots f JOIN slots c ON c.obj_guid = f.guid_val "
-                "WHERE f.name = 'hbci' AND f.slot_type = 9 AND c.name IN ('hbci/account-id', 'hbci/bank-code')")):
-            hbci[acc_guid][name] = (value or "").strip()
-        found = set()
-        if iban.startswith("DE") and len(iban) == 22:
-            blz, kto = iban[4:12], iban[12:].lstrip("0")
-            for acc_guid, vals in hbci.items():
-                if vals.get("hbci/bank-code") == blz and vals.get("hbci/account-id", "").lstrip("0") == kto:
-                    found.add(acc_guid)
+        found = {g for g in self.profile.own_accounts_for_iban(conn, iban) if g in index}
         if len(found) == 1:
             return index.get(found.pop())
         if found:
@@ -189,15 +181,15 @@ class Importer:
     def parse(self, body: dict, index: AccountIndex) -> Entry:
         txs = body.get("transactions") if isinstance(body, dict) else None
         if not isinstance(txs, list) or not txs:
-            raise ImportRejected("transactions", "Keine Buchung im Request.")
+            raise ImportRejected("transactions", _("Keine Buchung im Request."))
         if len(txs) > 1:
-            raise ImportRejected("transactions", "gnubook nimmt pro Request genau eine Buchung an.")
+            raise ImportRejected("transactions", _("gnubook nimmt pro Request genau eine Buchung an."))
         t = txs[0]
         if not isinstance(t, dict):
-            raise ImportRejected("transactions.0", "Ungültige Buchung.")
+            raise ImportRejected("transactions.0", _("Ungültige Buchung."))
         typ = _clean(t.get("type")).lower()
         if typ not in ("withdrawal", "deposit", "transfer"):
-            raise ImportRejected("type", "Typ muss withdrawal, deposit oder transfer sein.")
+            raise ImportRejected("type", _("Typ muss withdrawal, deposit oder transfer sein."))
         day = _parse_date(t.get("date"))
         amount = _parse_amount(t.get("amount"))
         importable = {a.guid: a for a in self.importable_accounts(index)}
@@ -206,8 +198,7 @@ class Importer:
             guid = self.appdb.account_guid(t.get(key)) if t.get(key) not in (None, "") else None
             acc = importable.get(guid) if guid else None
             if acc is None:
-                raise ImportRejected(key, "Konto unbekannt oder nicht für den Import freigegeben "
-                                        "(API-ID siehe gnubook → Konto).")
+                raise ImportRejected(key, _("Konto unbekannt oder nicht für den Import freigegeben (API-ID siehe gnubook → Konto)."))
             return acc
 
         counter_own = None
@@ -224,7 +215,7 @@ class Importer:
             typ = "withdrawal"  # booked from the source account's point of view
         currency_code = _clean(t.get("currency_code")).upper()
         if currency_code and currency_code != own.mnemonic:
-            raise ImportRejected("currency_code", f"Währung {currency_code} passt nicht zum Konto ({own.mnemonic}).")
+            raise ImportRejected("currency_code", _("Währung {a0} passt nicht zum Konto ({a1}).", a0=currency_code, a1=own.mnemonic))
         return Entry(typ, day, amount, _clean(t.get("description")), own, counter_own, cp_name, cp_iban,
                      notes=_clean(t.get("notes")), sepa_ct_id=_clean(t.get("sepa_ct_id")),
                      currency_code=currency_code, raw=t)
@@ -238,13 +229,12 @@ class Importer:
         canon["amount"] = str(entry.amount)
         return hashlib.sha256(json.dumps(canon, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
-    @staticmethod
-    def build_description(entry: Entry) -> str:
-        desc = entry.description
-        name = entry.cp_name
-        if name and name.casefold() not in desc.casefold():
-            desc = f"{desc}; {name}" if desc else name
-        return desc or "(ohne Beschreibung)"
+    @property
+    def profile(self):
+        return checkpoints._profile(self.book)
+
+    def build_description(self, entry: Entry) -> str:
+        return self.profile.booking_text(entry.description, entry.cp_name) or "(ohne Beschreibung)"
 
     # ------------------------------------------------------------------ counter account
     def history_counter(self, conn, index: AccountIndex, own: Account, iban: str, name: str) -> Account | None:
@@ -398,8 +388,7 @@ class Importer:
             return acc, "bayes", False
         acc = self.fallback_account(index, own.commodity_guid)
         if acc is None:
-            raise ImportRejected("destination_name", "Kein Auffangkonto gefunden – bitte [import] fallback_account "
-                                                   "in der gnubook-Konfiguration setzen.")
+            raise ImportRejected("destination_name", _("Kein Auffangkonto gefunden – bitte [import] fallback_account in der gnubook-Konfiguration setzen."))
         return acc, "fallback", False
 
     # ------------------------------------------------------------------ matching existing bookings
@@ -430,14 +419,14 @@ class Importer:
         clause = "(" + ", ".join(":" + n for n in names) + ")"
         for tg, ag in conn.execute(text(f"SELECT tx_guid, account_guid FROM splits WHERE tx_guid IN {clause}"), names):
             tx_accounts[tg].add(ag)
-        parsed_new = checkpoints.parse(description) if entry.amount == 0 else None
+        parsed_new = checkpoints.parse(description, self.book) if entry.amount == 0 else None
         strong, weak = [], []
         for sg, tg, pd, desc, ed in rows:
             day = self.book.day_of(pd)
             delta = abs((day - entry.day).days)
             sim = similarity(description, desc or "")
             if entry.amount == 0:
-                same_checkpoint = parsed_new is not None and parsed_new == checkpoints.parse(desc)
+                same_checkpoint = parsed_new is not None and parsed_new == checkpoints.parse(desc, self.book)
                 if not same_checkpoint and delta > self.cfg.match_days:
                     continue
                 is_strong = same_checkpoint or sim >= 0.5 or (delta == 0 and sim >= 0.3)
@@ -468,11 +457,11 @@ class Importer:
             tx_id = self.appdb.tx_id(known["tx_guid"]) if known["tx_guid"] else None
             return ImportResult("duplicate", known["tx_guid"], entry=entry,
                                 message=f"Duplikat: bereits importiert am {known['created_at'][:10]}"
-                                        + (f" (Buchung #{tx_id})." if tx_id else ".")
-                                        + " Enthält der Auszug diese Zeile wirklich mehrfach, die weitere bitte in "
-                                          "gnubook von Hand erfassen.")
+                                        + (_(" (Buchung #{a0}).", a0=tx_id) if tx_id else ".")
+                                        + _(" Enthält der Auszug diese Zeile wirklich mehrfach, die weitere bitte in gnubook von Hand erfassen."))
         description = self.build_description(entry)
-        memo = f"Konto {entry.cp_iban}" if entry.cp_iban and entry.counter_own is None else ""
+        # same memo format as GnuCash's AqBanking import (also used to recognise the counterparty later)
+        memo = self.profile.bank_memo(entry.cp_iban) if entry.cp_iban and entry.counter_own is None else ""
         with self.book.connect() as conn:
             if entry.amount == 0:
                 counter, source, counter_is_own = None, "checkpoint", False
@@ -482,7 +471,7 @@ class Importer:
                                            counter_is_own)
             if entry.counter_own is not None and not strong:
                 # transfer between two own accounts: the other side may have been imported already
-                strong, _ = self.candidates(conn, entry, description, entry.counter_own, -entry.signed,
+                strong, _weak = self.candidates(conn, entry, description, entry.counter_own, -entry.signed,
                                             entry.own, True)
         record = dict(hash=h, occurrence=k, account_guid=entry.own.guid, counterparty_name=entry.cp_name,
                       counterparty_iban=entry.cp_iban, day=entry.day.isoformat(), amount=str(entry.signed),
@@ -493,7 +482,7 @@ class Importer:
             self.appdb.commit_occurrence(entry.own.guid, h, k)
             self.appdb.audit(actor, "import-match", tg, description)
             return ImportResult("matched", tg, record_id=rid, entry=entry, source="match",
-                                message="Bereits im Buch vorhanden – verknüpft.")
+                                message=_("Bereits im Buch vorhanden – verknüpft."))
 
         notes = entry.notes if entry.notes and entry.notes.casefold() != entry.cp_name.casefold() else ""
         splits = [SplitInput(entry.own.guid, entry.signed, memo=memo)]

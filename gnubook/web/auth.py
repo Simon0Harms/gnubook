@@ -1,6 +1,8 @@
 """Login (users from system.sqlite), book selection, session handling and CSRF protection."""
 from __future__ import annotations
 
+from ..i18n import gettext as _
+
 import hmac
 import secrets
 import time
@@ -8,7 +10,6 @@ from functools import wraps
 
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, session, url_for
 
-from ..i18n import COOKIE as LANG_COOKIE, _, normalize
 from ..system import UserError
 from . import registry
 
@@ -132,19 +133,6 @@ def logout():
     return redirect(url_for("auth.login"))
 
 
-@bp.route("/language/<code>", methods=["POST"])
-def set_language(code):
-    """Switch the user-interface language (cookie, works before login too)."""
-    check_csrf()
-    lang = normalize(code)
-    if lang is None:
-        abort(404)
-    resp = redirect(_safe_next(request.form.get("next")))
-    resp.set_cookie(LANG_COOKIE, lang, max_age=365 * 24 * 3600, samesite="Lax",
-                    secure=registry().cfg.app.session_cookie_secure, httponly=True)
-    return resp
-
-
 @bp.route("/book/<int:book_id>", methods=["POST"])
 @login_required(book=False)
 def switch_book(book_id):
@@ -152,6 +140,31 @@ def switch_book(book_id):
         abort(403)
     session["book_id"] = book_id
     return redirect(url_for("views.dashboard"))
+
+
+@bp.route("/lang/<code>")
+def set_language(code):
+    """Language switch on the login page (cookie) – logged-in users store it in their account."""
+    from ..i18n import LANGUAGES
+
+    if code not in LANGUAGES:
+        abort(404)
+    resp = redirect(_safe_next(request.args.get("next")) if request.args.get("next") else url_for("auth.login"))
+    resp.set_cookie("gnubook_lang", code, max_age=365 * 86400, samesite="Lax", httponly=True)
+    user = _load_user()
+    if user is not None:
+        registry().system.set_language(user["id"], code)
+    return resp
+
+
+@bp.route("/account/language", methods=["POST"])
+@login_required(book=False)
+def account_language():
+    registry().system.set_language(g.user["id"], request.form.get("language", ""))
+    resp = redirect(url_for("auth.change_password"))
+    resp.set_cookie("gnubook_lang", request.form.get("language", ""), max_age=365 * 86400, samesite="Lax",
+                    httponly=True)
+    return resp
 
 
 @bp.route("/account/password", methods=["GET", "POST"])

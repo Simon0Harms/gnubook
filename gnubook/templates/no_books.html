@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% block title %}{{ _('Kein Buch') }}{% endblock %}
-{% block header %}{{ _('Noch kein Buch') }}{% endblock %}
+{% block title %}{{ _("Kein Buch") }}{% endblock %}
+{% block header %}{{ _("Noch kein Buch") }}{% endblock %}
 {% block content %}
 <div class="card"><div class="card-body">
   {% if current_user and current_user['is_admin'] %}
-    <p>{{ _('Es ist noch kein GnuCash-Buch für dich freigegeben.') }}</p>
-    <a class="btn btn-success" href="{{ url_for('admin.books') }}"><i class="bi bi-plug"></i> {{ _('Buch verbinden') }}</a>
+    <p>{{ _("Es ist noch kein GnuCash-Buch für dich freigegeben.") }}</p>
+    <a class="btn btn-success" href="{{ url_for('admin.books') }}"><i class="bi bi-plug"></i> {{ _("Buch verbinden") }}</a>
   {% else %}
-    <p class="mb-0">{{ _('Dir ist noch kein GnuCash-Buch zugeordnet. Bitte einen Administrator, dich einem Buch zuzuordnen.') }}</p>
+    <p class="mb-0">{{ _("Dir ist noch kein GnuCash-Buch zugeordnet. Bitte einen Administrator, dich einem Buch zuzuordnen.") }}</p>
   {% endif %}
 </div></div>
 {% endblock %}

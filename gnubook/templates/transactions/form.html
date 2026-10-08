@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Buchung bearbeiten') if mode == 'edit' else _('Neue Buchung') }}{% endblock %}
 {% block header %}{{ _('Buchung bearbeiten') if mode == 'edit' else _('Neue Buchung') }}{% endblock %}
-{% block subheader %}{% if context_acc %}<div class="small text-body-secondary">{{ _('aus {account}', account=context_acc.full_name) }}</div>{% endif %}{% endblock %}
+{% block subheader %}{% if context_acc %}<div class="small text-body-secondary">{{ _('aus {name}', name=context_acc.full_name) }}</div>{% endif %}{% endblock %}
 {% block content %}
 {% if book_lock() %}
-<div class="alert alert-danger"><i class="bi bi-lock-fill"></i> {{ _('GnuCash Desktop hat das Buch geöffnet. Speichern ist erst möglich, wenn GnuCash geschlossen ist.') }}</div>
+<div class="alert alert-danger"><i class="bi bi-lock-fill"></i> {{ _("GnuCash Desktop hat das Buch geöffnet. Speichern ist erst möglich, wenn GnuCash geschlossen ist.") }}</div>
 {% endif %}
 <form method="post" id="tx-form" autocomplete="off" novalidate
       data-suggest-url="{{ url_for('views.suggest') }}" data-template-url="{{ url_for('views.template') }}"
@@ -17,17 +17,17 @@
     <div class="card-body">
       <div class="row g-3">
         <div class="col-sm-4 col-lg-2">
-          <label class="form-label" for="date">{{ _('Datum') }}</label>
+          <label class="form-label" for="date">{{ _("Datum") }}</label>
           <input class="form-control" type="date" id="date" name="date" value="{{ form.date }}" required>
         </div>
         <div class="col-sm-3 col-lg-2">
-          <label class="form-label" for="num">{{ _('Nr.') }}</label>
+          <label class="form-label" for="num">{{ _("Nr.") }}</label>
           <input class="form-control" type="text" id="num" name="num" value="{{ form.num }}" maxlength="2048">
         </div>
         <div class="col-sm-12 col-lg-8 position-relative">
-          <label class="form-label" for="description">{{ _('Beschreibung') }}</label>
+          <label class="form-label" for="description">{{ _("Beschreibung") }}</label>
           <input class="form-control" type="text" id="description" name="description" value="{{ form.description }}"
-                 maxlength="2048" list="description-list" placeholder="{{ _('z. B. REWE Markt – frühere Buchungen werden vorgeschlagen') }}">
+                 maxlength="2048" list="description-list" placeholder="{{ _("z. B. REWE Markt – frühere Buchungen werden vorgeschlagen") }}">
           <datalist id="description-list"></datalist>
         </div>
       </div>
@@ -36,16 +36,16 @@
 
   <div class="card mb-3">
     <div class="card-header d-flex align-items-center">
-      <h3 class="card-title mb-0">{{ _('Splits') }} <span class="small text-body-secondary">({{ currency.mnemonic if currency else '' }})</span></h3>
-      <div class="ms-auto small" id="imbalance-box">{{ _('Differenz:') }} <b id="imbalance" class="amount">0,00</b></div>
+      <h3 class="card-title mb-0">{{ _("Splits") }} <span class="small text-body-secondary">({{ currency.mnemonic if currency else '' }})</span></h3>
+      <div class="ms-auto small" id="imbalance-box">{{ _("Differenz:") }} <b id="imbalance" class="amount">0,00</b></div>
     </div>
     <div class="card-body p-0 table-responsive">
       <table class="table mb-0 align-middle split-table" id="split-table">
         <thead><tr>
-          <th style="min-width: 18rem">{{ _('Konto') }}</th><th style="min-width: 10rem">{{ _('Memo') }}</th>
-          <th class="text-end" style="width: 9rem">{{ labels[0] }}{% if labels[0] != _('Soll') %} <span class="small text-body-secondary">({{ _('Soll') }})</span>{% endif %}</th>
-          <th class="text-end" style="width: 9rem">{{ labels[1] }}{% if labels[1] != _('Haben') %} <span class="small text-body-secondary">({{ _('Haben') }})</span>{% endif %}</th>
-          <th class="text-center" style="width: 3rem" title="{{ _('bestätigt (c)') }}">c</th><th style="width: 3rem"></th>
+          <th style="min-width: 18rem">{{ _("Konto") }}</th><th style="min-width: 10rem">{{ _("Memo") }}</th>
+          <th class="text-end" style="width: 9rem">{{ labels[0] }}{% if labels[0] != _('Soll') %} <span class="small text-body-secondary">{{ _("(Soll)") }}</span>{% endif %}</th>
+          <th class="text-end" style="width: 9rem">{{ labels[1] }}{% if labels[1] != _('Haben') %} <span class="small text-body-secondary">{{ _("(Haben)") }}</span>{% endif %}</th>
+          <th class="text-center" style="width: 3rem" title="{{ _("bestätigt (c)") }}">{{ _("c") }}</th><th style="width: 3rem"></th>
         </tr></thead>
         <tbody>
         {% for r in rows %}
@@ -59,36 +59,36 @@
                 <option value=""></option>
                 {% for a in accounts %}<option value="{{ a.guid }}" {{ 'selected' if a.guid == r.account }}>{{ a.full_name }}</option>{% endfor %}
               </select>
-              {% if r.reconcile_orig == 'y' %}<input type="hidden" name="split-{{ i }}-account" value="{{ r.account }}"><div class="small text-body-secondary">{{ _('abgeglichen – nur in GnuCash änderbar') }}</div>{% endif %}
+              {% if r.reconcile_orig == 'y' %}<input type="hidden" name="split-{{ i }}-account" value="{{ r.account }}"><div class="small text-body-secondary">{{ _("abgeglichen – nur in GnuCash änderbar") }}</div>{% endif %}
             </td>
             <td><input class="form-control" type="text" name="split-{{ i }}-memo" value="{{ r.memo }}" maxlength="2048"></td>
             <td><input class="form-control text-end amount-input" type="text" inputmode="decimal" name="split-{{ i }}-debit" value="{{ r.debit }}" data-side="debit" {{ 'readonly' if r.reconcile_orig == 'y' }}></td>
             <td><input class="form-control text-end amount-input" type="text" inputmode="decimal" name="split-{{ i }}-credit" value="{{ r.credit }}" data-side="credit" {{ 'readonly' if r.reconcile_orig == 'y' }}></td>
-            <td class="text-center"><input class="form-check-input" type="checkbox" name="split-{{ i }}-reconcile" value="c" {{ 'checked' if r.reconcile in ('c', 'y') }} {{ 'disabled' if r.reconcile_orig == 'y' }} title="{{ _('bestätigt') }}"></td>
-            <td class="text-end">{% if r.reconcile_orig != 'y' %}<button type="button" class="btn btn-sm btn-outline-danger remove-row" title="{{ _('Zeile entfernen') }}"><i class="bi bi-x-lg"></i></button>{% endif %}</td>
+            <td class="text-center"><input class="form-check-input" type="checkbox" name="split-{{ i }}-reconcile" value="c" {{ 'checked' if r.reconcile in ('c', 'y') }} {{ 'disabled' if r.reconcile_orig == 'y' }} title="{{ _("bestätigt") }}"></td>
+            <td class="text-end">{% if r.reconcile_orig != 'y' %}<button type="button" class="btn btn-sm btn-outline-danger remove-row" title="{{ _("Zeile entfernen") }}"><i class="bi bi-x-lg"></i></button>{% endif %}</td>
           </tr>
         {% endfor %}
         </tbody>
       </table>
     </div>
     <div class="card-footer d-flex flex-wrap gap-2">
-      <button type="button" class="btn btn-sm btn-outline-secondary" id="add-row"><i class="bi bi-plus"></i> {{ _('Split hinzufügen') }}</button>
-      <button type="button" class="btn btn-sm btn-outline-secondary" id="balance-btn" title="{{ _('Differenz in die letzte offene Zeile übernehmen') }}"><i class="bi bi-distribute-vertical"></i> {{ _('Ausgleichen') }}</button>
-      <span class="small text-body-secondary align-self-center ms-2">{{ _('Beträge dürfen Rechenausdrücke enthalten, z. B. <code>12,90+3,50</code>. Ein Split ohne Betrag wird mit 0,00 gebucht.')|safe }}</span>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="add-row"><i class="bi bi-plus"></i> {{ _("Split hinzufügen") }}</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="balance-btn" title="{{ _("Differenz in die letzte offene Zeile übernehmen") }}"><i class="bi bi-distribute-vertical"></i> {{ _("Ausgleichen") }}</button>
+      <span class="small text-body-secondary align-self-center ms-2">{{ _("Beträge dürfen Rechenausdrücke enthalten, z. B.") }} <code>12,90+3,50</code>{{ _(". Ein Split ohne Betrag wird mit 0,00 gebucht.") }}</span>
     </div>
   </div>
 
   <div class="card mb-3">
     <div class="card-body">
-      <label class="form-label" for="notes">{{ _('Notizen') }}</label>
+      <label class="form-label" for="notes">{{ _("Notizen") }}</label>
       <textarea class="form-control" id="notes" name="notes" rows="3">{{ form.notes }}</textarea>
     </div>
   </div>
 
   <div class="d-flex flex-wrap gap-2 mb-4">
-    <button type="submit" class="btn btn-success" id="save-btn" {{ 'disabled' if book_lock() }}><i class="bi bi-check-lg"></i> {{ _('Speichern') }}</button>
-    {% if mode == 'new' %}<button type="submit" class="btn btn-outline-success" name="again" value="1" {{ 'disabled' if book_lock() }}><i class="bi bi-plus-lg"></i> {{ _('Speichern und nächste') }}</button>{% endif %}
-    <a class="btn btn-outline-secondary" href="{{ form.back or (url_for('views.transaction', guid=tx.guid) if tx else url_for('views.dashboard')) }}">{{ _('Abbrechen') }}</a>
+    <button type="submit" class="btn btn-success" id="save-btn" {{ 'disabled' if book_lock() }}><i class="bi bi-check-lg"></i> {{ _("Speichern") }}</button>
+    {% if mode == 'new' %}<button type="submit" class="btn btn-outline-success" name="again" value="1" {{ 'disabled' if book_lock() }}><i class="bi bi-plus-lg"></i> {{ _("Speichern und nächste") }}</button>{% endif %}
+    <a class="btn btn-outline-secondary" href="{{ form.back or (url_for('views.transaction', guid=tx.guid) if tx else url_for('views.dashboard')) }}">{{ _("Abbrechen") }}</a>
   </div>
 </form>
 
@@ -103,8 +103,8 @@
     <td><input class="form-control" type="text" data-name="memo" maxlength="2048"></td>
     <td><input class="form-control text-end amount-input" type="text" inputmode="decimal" data-name="debit" data-side="debit"></td>
     <td><input class="form-control text-end amount-input" type="text" inputmode="decimal" data-name="credit" data-side="credit"></td>
-    <td class="text-center"><input class="form-check-input" type="checkbox" data-name="reconcile" value="c" title="{{ _('bestätigt') }}"></td>
-    <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger remove-row" title="{{ _('Zeile entfernen') }}"><i class="bi bi-x-lg"></i></button></td>
+    <td class="text-center"><input class="form-check-input" type="checkbox" data-name="reconcile" value="c" title="{{ _("bestätigt") }}"></td>
+    <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger remove-row" title="{{ _("Zeile entfernen") }}"><i class="bi bi-x-lg"></i></button></td>
   </tr>
 </template>
 <select id="account-master" class="d-none" aria-hidden="true" tabindex="-1">

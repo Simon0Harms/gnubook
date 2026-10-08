@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "macros.html" import amount, cp_badge %}
-{% block title %}{{ _('Saldo-Prüfpunkte') }}{% endblock %}
-{% block header %}{{ _('Saldo-Prüfpunkte') }}{% endblock %}
+{% block title %}{{ _("Saldo-Prüfpunkte") }}{% endblock %}
+{% block header %}{{ _("Saldo-Prüfpunkte") }}{% endblock %}
 {% block subheader %}<div class="small text-body-secondary">{{ _('{checked} Kontostände der Bank geprüft: {ok} stimmen, {open} weichen ab, {accepted} akzeptiert', checked=summary.checked, ok=summary.ok, open=summary.open, accepted=summary.accepted) }}</div>{% endblock %}
 {% block actions %}
   <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('views.checkpoints', all=None if not only_bad else '1') }}">
@@ -9,7 +9,10 @@
 {% endblock %}
 {% block content %}
 <div class="callout callout-info mb-3 small">
-  {{ _('Die Bank schreibt den Kontostand in den Buchungstext des Abschlusses (<code>STAND29.05.2026 1.239,51H</code>, <code>**ENDSALDO** …</code> oder <code>Kontostand am …</code>). gnubook rechnet nach jeder Änderung nach: <b>STAND</b> = alle Buchungen des Kontos bis einschließlich Stichtag ohne den Abschluss selbst, <b>ENDSALDO</b> = STAND + Betrag des Abschlusses. Differenz = Buch − Bank. Bekannte, nicht mehr korrigierbare Abweichungen können akzeptiert werden; ändert sich die Differenz, erscheint sie wieder.')|safe }}
+  {{ _("Die Bank schreibt den Kontostand in den Buchungstext des Abschlusses (") }}<code>{{ _("STAND29.05.2026 1.239,51H") }}</code>,
+  <code>{{ _("**ENDSALDO** …") }}</code> {{ _("oder") }} <code>{{ _("Kontostand am …") }}</code>{{ _("). gnubook rechnet nach jeder Änderung nach:") }}
+  <b>{{ _("STAND") }}</b> {{ _("= alle Buchungen des Kontos bis einschließlich Stichtag ohne den Abschluss selbst,") }}
+  <b>{{ _("ENDSALDO") }}</b> {{ _("= STAND + Betrag des Abschlusses. Differenz = Buch − Bank. Bekannte, nicht mehr korrigierbare Abweichungen können akzeptiert werden; ändert sich die Differenz, erscheint sie wieder.") }}
 </div>
 {% for ch in checks %}
   {% set c = ch.counts %}
@@ -25,10 +28,10 @@
     <div class="card-body p-0 table-responsive">
       <table class="table table-sm mb-0 align-middle">
         <thead><tr>
-          <th>{{ _('Stichtag') }}</th><th class="text-end">{{ _('Stand Bank') }}</th><th class="text-end">{{ _('Stand Buch') }}</th><th class="text-end">{{ _('Differenz') }}</th>
-          <th class="text-end d-none d-lg-table-cell">{{ _('Endsaldo Bank') }}</th><th class="text-end d-none d-lg-table-cell">{{ _('Differenz') }}</th>
-          <th class="text-end d-none d-md-table-cell" title="{{ _('Differenz, die seit dem vorherigen Prüfpunkt neu entstanden ist') }}">{{ _('neu seit davor') }}</th>
-          <th class="text-center">{{ _('Status') }}</th><th></th>
+          <th>{{ _("Stichtag") }}</th><th class="text-end">{{ _("Stand Bank") }}</th><th class="text-end">{{ _("Stand Buch") }}</th><th class="text-end">{{ _("Differenz") }}</th>
+          <th class="text-end d-none d-lg-table-cell">{{ _("Endsaldo Bank") }}</th><th class="text-end d-none d-lg-table-cell">{{ _("Differenz") }}</th>
+          <th class="text-end d-none d-md-table-cell" title="{{ _("Differenz, die seit dem vorherigen Prüfpunkt neu entstanden ist") }}">{{ _("neu seit davor") }}</th>
+          <th class="text-center">{{ _("Status") }}</th><th></th>
         </tr></thead>
         <tbody>
         {% for cp in ch.checkpoints|reverse %}
@@ -45,14 +48,14 @@
               {% if cp.accepted and cp.accepted.note %}<div class="small text-body-secondary">{{ cp.accepted.note }}</div>{% endif %}</td>
             <td class="text-end text-nowrap">
               {% if cp.status == 'open' %}
-                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('views.register', guid=cp.account_guid, **{'from': (cp.stand_date.replace(day=1)).isoformat(), 'to': cp.tx_day.isoformat()}) }}" title="{{ _('Buchungen des Monats') }}"><i class="bi bi-list-ul"></i></a>
-                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#acc-{{ cp.tx_guid }}" aria-expanded="false">{{ _('Akzeptieren …') }}</button>
+                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('views.register', guid=cp.account_guid, **{'from': (cp.stand_date.replace(day=1)).isoformat(), 'to': cp.tx_day.isoformat()}) }}" title="{{ _("Buchungen des Monats") }}"><i class="bi bi-list-ul"></i></a>
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#acc-{{ cp.tx_guid }}" aria-expanded="false">{{ _("Akzeptieren …") }}</button>
               {% elif cp.status == 'accepted' or (cp.accepted and cp.status == 'ok') %}
                 <form method="post" action="{{ url_for('views.checkpoint_unaccept') }}" class="d-inline">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <input type="hidden" name="account" value="{{ cp.account_guid }}"><input type="hidden" name="tx" value="{{ cp.tx_guid }}">
                   <input type="hidden" name="back" value="{{ request.full_path }}">
-                  <button class="btn btn-sm btn-link" type="submit">{{ _('Akzeptanz entfernen') }}</button>
+                  <button class="btn btn-sm btn-link" type="submit">{{ _("Akzeptanz entfernen") }}</button>
                 </form>
               {% endif %}
             </td>
@@ -64,8 +67,8 @@
               <input type="hidden" name="account" value="{{ cp.account_guid }}"><input type="hidden" name="tx" value="{{ cp.tx_guid }}">
               <input type="hidden" name="back" value="{{ request.full_path }}">
               <div class="col-auto small text-body-secondary">{{ _('Abweichung {diff} zum {day} als bekannt markieren:', diff=cp.diff_stand|money(sign=True), day=cp.stand_date|de_date) }}</div>
-              <div class="col-sm-4"><input type="text" name="note" class="form-control form-control-sm" placeholder="{{ _('Notiz, z. B. Umbuchung zwischen Banken') }}"></div>
-              <div class="col-auto"><button class="btn btn-sm btn-secondary" type="submit">{{ _('Akzeptieren') }}</button></div>
+              <div class="col-sm-4"><input type="text" name="note" class="form-control form-control-sm" placeholder="{{ _("Notiz, z. B. Umbuchung zwischen Banken") }}"></div>
+              <div class="col-auto"><button class="btn btn-sm btn-secondary" type="submit">{{ _("Akzeptieren") }}</button></div>
             </form>
           </td></tr>
           {% endif %}
@@ -79,6 +82,6 @@
     </div>
   </div>
 {% else %}
-  <div class="card"><div class="card-body text-body-secondary">{{ _('Im Buch wurden noch keine Saldo-Angaben der Bank gefunden.') }}</div></div>
+  <div class="card"><div class="card-body text-body-secondary">{{ _("Im Buch wurden noch keine Saldo-Angaben der Bank gefunden.") }}</div></div>
 {% endfor %}
 {% endblock %}

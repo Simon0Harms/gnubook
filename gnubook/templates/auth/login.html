@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ _('Anmelden') }} · {{ app_title }}</title>
+  <title>Anmelden · {{ app_title }}</title>
   <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/adminlte/adminlte.min.css') }}">
@@ -16,45 +16,39 @@
     <div class="card-header text-center">
       <img src="{{ url_for('static', filename='img/favicon.svg') }}" alt="" width="48" height="48" class="mb-2">
       <h1 class="h3 mb-0"><b>{{ app_title }}</b></h1>
-      <div class="small text-body-secondary">{{ _('GnuCash-Buch im Web') }}</div>
+      <div class="small text-body-secondary">{{ _("GnuCash-Buch im Web") }}</div>
     </div>
     <div class="card-body login-card-body">
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% for cat, msg in messages %}<div class="alert alert-{{ cat }} py-2">{{ msg }}</div>{% endfor %}
       {% endwith %}
       {% if no_users %}
-        <div class="alert alert-info small mb-0">{{ _('Noch kein Benutzer angelegt. Auf dem Server ausführen:') }}<br>
-          <code>gnubook user-add NAME --admin</code></div>
+        <div class="alert alert-info small mb-0">{{ _("Noch kein Benutzer angelegt. Auf dem Server ausführen:") }}<br>
+          <code>{{ _("gnubook user-add NAME --admin") }}</code></div>
       {% else %}
       <form method="post" autocomplete="on">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="input-group mb-3">
           <div class="form-floating">
-            <input id="username" type="text" class="form-control" name="username" placeholder="{{ _('Benutzername') }}" required autofocus autocomplete="username">
-            <label for="username">{{ _('Benutzername') }}</label>
+            <input id="username" type="text" class="form-control" name="username" placeholder="{{ _("Benutzer") }}" required autofocus autocomplete="username">
+            <label for="username">{{ _("Benutzer") }}</label>
           </div>
           <div class="input-group-text"><span class="bi bi-person"></span></div>
         </div>
         <div class="input-group mb-3">
           <div class="form-floating">
-            <input id="password" type="password" class="form-control" name="password" placeholder="{{ _('Passwort') }}" required autocomplete="current-password">
-            <label for="password">{{ _('Passwort') }}</label>
+            <input id="password" type="password" class="form-control" name="password" placeholder="{{ _("Passwort") }}" required autocomplete="current-password">
+            <label for="password">{{ _("Passwort") }}</label>
           </div>
           <div class="input-group-text"><span class="bi bi-lock-fill"></span></div>
         </div>
-        <div class="d-grid"><button type="submit" class="btn btn-success">{{ _('Anmelden') }}</button></div>
+        <div class="d-grid"><button type="submit" class="btn btn-success">{{ _("Anmelden") }}</button></div>
       </form>
       {% endif %}
     </div>
-  </div>
-  <div class="text-center mt-3 small">
-    {% for code, name in languages.items() %}
-    <form method="post" action="{{ url_for('auth.set_language', code=code) }}" class="d-inline">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="next" value="{{ request.full_path }}">
-      <button type="submit" class="btn btn-link btn-sm p-0 mx-1 {{ 'fw-semibold link-body-emphasis' if code == lang else 'link-secondary' }}" lang="{{ code }}">{{ name }}</button>
-    </form>
-    {% endfor %}
+    <div class="card-footer text-center small">
+      {% for code, label in LANGUAGES.items() %}{% if not loop.first %} · {% endif %}{% if code == lang %}<b>{{ label }}</b>{% else %}<a href="{{ url_for('auth.set_language', code=code, next=request.args.get('next')) }}">{{ label }}</a>{% endif %}{% endfor %}
+    </div>
   </div>
 </div>
 </body>

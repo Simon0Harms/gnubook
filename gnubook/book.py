@@ -5,6 +5,8 @@ allowed while GnuCash Desktop does not hold the book (table ``gnclock``).
 """
 from __future__ import annotations
 
+from .i18n import gettext as _
+
 import os
 import socket
 import threading
@@ -19,7 +21,6 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.exc import SAWarning
 
-from .i18n import _
 from .money import ZERO, gnc_decimal
 
 warnings.filterwarnings("ignore", category=SAWarning)
@@ -57,8 +58,7 @@ class WriteLockError(BookError):
     def __init__(self, holders):
         self.holders = holders
         who = ", ".join(f"{h} (PID {p})" for h, p in holders) or _("unbekannt")
-        super().__init__(_("Das Buch ist gesperrt – GnuCash Desktop hat es geöffnet: {who}. "
-                           "Bitte GnuCash schließen und erneut versuchen.", who=who))
+        super().__init__(_("Das Buch ist gesperrt – GnuCash Desktop hat es geöffnet: {a0}. Bitte GnuCash schließen und erneut versuchen.", a0=who))
 
 
 @dataclass
@@ -97,7 +97,7 @@ class Account:
 
     @property
     def type_label(self) -> str:
-        return _(TYPE_LABELS[self.type]) if self.type in TYPE_LABELS else self.type
+        return TYPE_LABELS.get(self.type, self.type)
 
     @property
     def mnemonic(self) -> str:
@@ -132,7 +132,7 @@ class AccountIndex:
             a.children.sort(key=lambda c: c.name.casefold())
         self.root = all_by_guid.get(root_guid)
         if self.root is None:
-            raise BookError("Wurzelkonto des Buchs nicht gefunden")
+            raise BookError(_("Wurzelkonto des Buchs nicht gefunden"))
         stack = [(c, 0, "") for c in reversed(self.root.children)]
         while stack:
             acc, depth, prefix = stack.pop()
@@ -186,7 +186,7 @@ class Book:
 
     def __init__(self, url: str, tz: str = "Europe/Berlin", separator: str = ":"):
         if not url:
-            raise BookError("Keine Buch-URL konfiguriert ([book] url)")
+            raise BookError(_("Keine Buch-URL konfiguriert ([book] url)"))
         self.url = url
         self.tz = ZoneInfo(tz)
         self.separator = separator
@@ -205,6 +205,7 @@ class Book:
                                            deterministic=True)
         self._write_mutex = threading.Lock()
         self.after_write = []  # callbacks run after every successful write
+        self.profile = None    # gnubook.banks.BankProfile; None = German default
         self._schema_ok: bool | None = None
         self._schema_checked = 0.0
 
@@ -239,7 +240,7 @@ class Book:
         def _load(c):
             book = c.execute(text("SELECT root_account_guid FROM books")).fetchone()
             if book is None:
-                raise BookError("Tabelle books ist leer – ist das ein GnuCash-Buch?")
+                raise BookError(_("Tabelle books ist leer – ist das ein GnuCash-Buch?"))
             commodities = {r[0]: Commodity(r[0], r[1], r[2], r[3] or r[2], int(r[4] or 100))
                            for r in c.execute(text(
                                "SELECT guid, namespace, mnemonic, fullname, fraction FROM commodities"))}
@@ -268,7 +269,7 @@ class Book:
                 return datetime.strptime(s, fmt)
             except ValueError:
                 continue
-        raise BookError(f"Unbekanntes Datumsformat in der Datenbank: {s!r}")
+        raise BookError(_("Unbekanntes Datumsformat in der Datenbank: {a0!r}", a0=s))
 
     def day_of(self, value) -> date | None:
         """Local calendar day of a GnuCash timestamp (as GnuCash shows it)."""
@@ -339,8 +340,7 @@ class Book:
             self._schema_ok = bool(self.schema_info()["supported"])
             self._schema_checked = now
         if not self._schema_ok:
-            raise BookError(_("Unbekannte GnuCash-Datenbankversion – gnubook schreibt aus Sicherheitsgründen nicht. "
-                              "Bitte gnubook aktualisieren."))
+            raise BookError(_("Unbekannte GnuCash-Datenbankversion – gnubook schreibt aus Sicherheitsgründen nicht. Bitte gnubook aktualisieren."))
 
     @contextmanager
     def exclusive(self, wait_seconds: float = 8.0):

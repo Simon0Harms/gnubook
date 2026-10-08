@@ -11,7 +11,6 @@ change and reports differences (difference = book - bank).
 """
 from __future__ import annotations
 
-import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date
@@ -19,68 +18,26 @@ from decimal import Decimal
 
 from sqlalchemy import text
 
+from .banks import ParsedCheckpoint, get_profile
 from .book import AccountIndex, Book
 from .money import ZERO, gnc_decimal
 
-_AMOUNT = r"(\d{1,3}(?:\.\d{3})+,\d{2}|\d+,\d{2})"
-_NOT_LETTER_BEFORE = r"(?<![^\W\d_])"   # not preceded by a letter
-_NO_ALNUM_AFTER = r"(?![^\W_])"          # not followed by a letter or digit
-
-RX_STAND = re.compile(_NOT_LETTER_BEFORE + r"STAND\s*(\d{2})\.(\d{2})\.(\d{4})\s+" + _AMOUNT + r"\s*([HS])"
-                      + _NO_ALNUM_AFTER, re.IGNORECASE)
-RX_KONTOSTAND = re.compile(_NOT_LETTER_BEFORE + r"Kontostand\s+am\s+(\d{2})\.(\d{2})\.(\d{4})\s+(-?)" + _AMOUNT
-                           + r"\s*([+-])?(?![\d,])", re.IGNORECASE)
-RX_ENDSALDO = re.compile(_NOT_LETTER_BEFORE + r"\*{0,2}ENDSALDO\*{0,2}\s*" + _AMOUNT + r"\s*([HS])"
-                         + _NO_ALNUM_AFTER, re.IGNORECASE)
+_DEFAULT_PROFILE = None
 
 
-def _amount(s: str) -> Decimal:
-    return Decimal(s.replace(".", "").replace(",", "."))
+def _profile(book_or_profile=None):
+    global _DEFAULT_PROFILE
+    prof = getattr(book_or_profile, "profile", book_or_profile)
+    if prof is None:
+        if _DEFAULT_PROFILE is None:
+            _DEFAULT_PROFILE = get_profile("de")
+        prof = _DEFAULT_PROFILE
+    return prof
 
 
-def _date(d: str, m: str, y: str) -> date | None:
-    try:
-        return date(int(y), int(m), int(d))
-    except ValueError:
-        return None
-
-
-@dataclass(frozen=True)
-class ParsedCheckpoint:
-    stand_date: date
-    stand: Decimal
-    endsaldo: Decimal | None = None
-
-
-def parse(description: str | None) -> ParsedCheckpoint | None:
-    """Extract (STAND date, STAND amount, ENDSALDO amount) from a booking text; None if there is none."""
-    if not description:
-        return None
-    stand_date = stand = None
-    m = RX_STAND.search(description)
-    if m:
-        stand_date = _date(m.group(1), m.group(2), m.group(3))
-        if stand_date is not None:
-            stand = _amount(m.group(4))
-            if m.group(5).upper() == "S":
-                stand = -stand
-    if stand_date is None:
-        m = RX_KONTOSTAND.search(description)
-        if m:
-            stand_date = _date(m.group(1), m.group(2), m.group(3))
-            if stand_date is not None:
-                stand = _amount(m.group(5))
-                if m.group(4) == "-" or m.group(6) == "-":
-                    stand = -stand
-    if stand_date is None:
-        return None
-    endsaldo = None
-    m = RX_ENDSALDO.search(description)
-    if m:
-        endsaldo = _amount(m.group(1))
-        if m.group(2).upper() == "S":
-            endsaldo = -endsaldo
-    return ParsedCheckpoint(stand_date, stand, endsaldo)
+def parse(description: str | None, profile=None) -> ParsedCheckpoint | None:
+    """Balance line in a booking text according to the bank profile (default: German)."""
+    return _profile(profile).parse_checkpoint(description)
 
 
 @dataclass
@@ -147,15 +104,20 @@ class AccountCheck:
         return self.checkpoints[-1] if self.checkpoints else None
 
 
-CANDIDATE_SQL = ("SELECT guid, description, post_date FROM transactions "
-                 "WHERE lower(description) LIKE '%stand%'")
 
 
 def find_checkpoint_transactions(conn, book: Book, index: AccountIndex, account_guids=None):
     """{account_guid: [(tx_guid, tx_day, description, parsed)]} for balance-sheet accounts."""
     found = defaultdict(list)
-    candidates = [(g, d, book.day_of(pd)) for g, d, pd in conn.execute(text(CANDIDATE_SQL))]
-    parsed = {g: (d, day, parse(d)) for g, d, day in candidates}
+    prof = _profile(book)
+    keywords = sorted(set(prof.checkpoint_keywords()))
+    if not keywords:
+        return found
+    where = " OR ".join(f"lower(description) LIKE :k{i}" for i in range(len(keywords)))
+    params = {f"k{i}": f"%{k}%" for i, k in enumerate(keywords)}
+    candidates = [(g, d, book.day_of(pd)) for g, d, pd in conn.execute(text(
+        f"SELECT guid, description, post_date FROM transactions WHERE {where}"), params)]
+    parsed = {g: (d, day, prof.parse_checkpoint(d)) for g, d, day in candidates}
     parsed = {g: v for g, v in parsed.items() if v[2] is not None}
     if not parsed:
         return found

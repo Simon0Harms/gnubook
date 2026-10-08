@@ -1,7 +1,7 @@
 """gnubook – a self-hosted web frontend for a GnuCash SQL book."""
 from __future__ import annotations
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 import logging
 from datetime import timedelta

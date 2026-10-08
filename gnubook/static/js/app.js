@@ -2,20 +2,6 @@
 (function () {
   'use strict';
 
-  /* UI texts in English (German is the default; <html lang> is set by the server) */
-  var EN = {
-    'Konto wählen …': 'Choose account …',
-    'Eingabefehler': 'Input error',
-    'Bitte die markierten Beträge korrigieren.': 'Please correct the highlighted amounts.',
-    'Die Buchung ist nicht ausgeglichen (Differenz {diff}). „Ausgleichen“ übernimmt die Differenz in eine offene Zeile.':
-      'The transaction is not balanced (difference {diff}). “Balance” puts the difference into an empty row.'
-  };
-  function t(text, vars) {
-    var s = document.documentElement.lang === 'en' && EN[text] ? EN[text] : text;
-    Object.keys(vars || {}).forEach(function (k) { s = s.split('{' + k + '}').join(vars[k]); });
-    return s;
-  }
-
   function store(key, value) {
     try {
       if (value === undefined) { return localStorage.getItem(key); }
@@ -119,8 +105,15 @@
   }
 
   /* ---------------------------------------------------------------- amounts */
+  var EN = document.documentElement.lang === 'en';
+  function t(de, en) { return EN ? en : de; }
+
   function parseNumber(s) {
-    s = s.replace(/[\s' ]/g, '');
+    s = s.replace(/[\s'\u00a0]/g, '');
+    if (EN) {  // 1,234.56 -> German notation, then the same rules
+      if (s.indexOf(',') !== -1 && !/^\d{1,3}(,\d{3})+$/.test(s.split('.')[0])) { return NaN; }
+      s = s.replace(/,/g, '').replace(/\./g, ',');
+    }
     if (s.indexOf(',') !== -1) {
       var parts = s.split(',');
       if (parts.length !== 2) { return NaN; }
@@ -139,7 +132,8 @@
 
   function evalAmount(text) {  // returns number, null for empty, NaN for errors
     if (text === undefined || text === null || !String(text).trim()) { return null; }
-    var src = String(text).replace(/−/g, '-').replace(/[×]/g, '*').replace(/:/g, '/');
+    var src = String(text).replace(/−/g, '-').replace(/[×]/g, '*');
+    if (!EN) { src = src.replace(/:/g, '/'); }
     var tokens = [];
     var re = /\s*(\d[\d.,']*|[.,]\d+|[-+*/()])/y;
     var pos = 0;
@@ -186,8 +180,8 @@
   function fmt(value) {
     var neg = value < 0;
     var s = Math.abs(value).toFixed(2).split('.');
-    s[0] = s[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    return (neg ? '−' : '') + s[0] + ',' + s[1];
+    s[0] = s[0].replace(/\B(?=(\d{3})+(?!\d))/g, EN ? ',' : '.');
+    return (neg ? '−' : '') + s[0] + (EN ? '.' : ',') + s[1];
   }
 
   /* ---------------------------------------------------------------- transaction editor */
@@ -204,7 +198,7 @@
     var initSelect = function (sel) {
       if (typeof TomSelect === 'undefined' || sel.disabled || sel.tomselect) { return; }
       new TomSelect(sel, {
-        maxOptions: 400, allowEmptyOption: true, placeholder: t('Konto wählen …'),
+        maxOptions: 400, allowEmptyOption: true, placeholder: t('Konto wählen …', 'Choose account …'),
         searchField: ['text'], sortField: [{ field: '$score' }, { field: '$order' }],
         onChange: function () { touched = true; },
       });
@@ -252,7 +246,7 @@
         });
       });
       total = Math.round(total * 100) / 100;
-      imbalanceEl.textContent = bad ? t('Eingabefehler') : fmt(total);
+      imbalanceEl.textContent = bad ? t('Eingabefehler', 'Input error') : fmt(total);
       imbalanceBox.classList.toggle('unbalanced', bad || total !== 0);
       imbalanceBox.classList.toggle('balanced', !bad && total === 0);
       return bad ? NaN : total;
@@ -309,11 +303,11 @@
       var total = recalc();
       if (isNaN(total)) {
         ev.preventDefault();
-        window.alert(t('Bitte die markierten Beträge korrigieren.'));
+        window.alert(t('Bitte die markierten Beträge korrigieren.', 'Please correct the marked amounts.'));
       } else if (total !== 0) {
         ev.preventDefault();
-        window.alert(t('Die Buchung ist nicht ausgeglichen (Differenz {diff}). ' +
-                       '„Ausgleichen“ übernimmt die Differenz in eine offene Zeile.', { diff: fmt(total) }));
+        window.alert(t('Die Buchung ist nicht ausgeglichen (Differenz ', 'The transaction is not balanced (difference ') + fmt(total) + '). ' +
+                     t('„Ausgleichen“ übernimmt die Differenz in eine offene Zeile.', '“Balance” puts the difference into an open row.'));
       }
     });
 
