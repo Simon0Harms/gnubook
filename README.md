@@ -21,6 +21,14 @@ German format in both languages.
 
 - **Dashboard.** It shows net worth, bank accounts with the status of their balance checkpoints, income and
   expenses for the last 12 months, and recently entered bookings.
+- **Income and expenses report** (inspired by [GnuDash](https://github.com/QuirkyTurtle94/GnuDash)), read-only:
+  - Sankey flow from income categories to expense categories, with savings or shortfall;
+  - category breakdown as donut chart and table (share, average per month), with drill-down into
+    sub-categories and registers;
+  - monthly trend bars and table, also for a single category;
+  - budget vs. actual for GnuCash budgets, with variance, progress bars and spending without a budget;
+  - periods (this/last month, this/last year, last 12 months, custom), 1–3 category levels, book-closing
+    transactions left out unless switched on.
 - **Accounts and registers.** The account tree shows balances in GnuCash's sign convention. Each account has
   a register with running balance, text, amount and date filters, and paging. Placeholder accounts can be
   shown with their sub-accounts.
@@ -195,8 +203,8 @@ The `[import]` values are defaults. Each book can override them under *Bücher �
 
 - Bookings that involve other currencies, securities, lots or GnuCash's business features are shown, but
   they can only be changed in GnuCash Desktop.
-- There are no reports, budgets, scheduled transactions or reconciliation workflow. Use GnuCash Desktop for
-  those.
+- Apart from the income and expenses report there are no reports. Budgets are only shown, not edited. There are
+  no scheduled transactions or reconciliation workflow. Use GnuCash Desktop for those.
 - The import API covers what bnw/firefly-iii-fints-importer needs, not all of Firefly III's API.
 
 ## Development

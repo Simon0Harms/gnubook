@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 from gnubook import book, ledger
+from gnubook.web import reports as report_views
 from gnubook.i18n import gettext
 from gnubook.translations_en import EN
 from gnubook.web import views
@@ -29,6 +30,9 @@ def message_ids():
     ids.update(x for pair in views.COLUMN_LABELS.values() for x in pair)
     ids.update(views.STATUS_LABELS.values())
     ids.update(views.SOURCE_LABELS.values())
+    ids.update(report_views.PERIOD_LABELS.values())
+    ids.update(report_views.KIND_LABELS.values())
+    ids.update(report_views.MONTHS)
     ids.update({ledger.MULTI, "Soll", "Haben", "Beschreibung", "Nummer", "Notizen"})
     return ids
 

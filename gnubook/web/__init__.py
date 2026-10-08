@@ -23,7 +23,7 @@ def state():
 
 
 def register(app: Flask):
-    from . import admin, api, auth, views
+    from . import admin, api, auth, reports, views
     from ..i18n import LANGUAGES, gettext
 
     app.jinja_env.globals["_"] = gettext
@@ -31,6 +31,7 @@ def register(app: Flask):
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(views.bp)
+    app.register_blueprint(reports.bp)
     app.register_blueprint(admin.bp)
     app.register_blueprint(api.bp)
 

@@ -191,6 +191,10 @@ def create_demo_book(target: str, start: date = date(2025, 8, 1), months: int = 
     book.save()
     guids = {"giro": giro.guid, "giro2": giro2.guid, "lebensm": lebensm.guid, "tanken": tanken.guid,
              "gebuehr": gebuehr.guid}
+    budget_plan = [(miete, "950"), (strom, "60"), (internet, "40"), (lebensm, "300"), (haushalt, "60"),
+                   (vers, "41.20"), (tanken, "120"), (freizeit, "40"), (gehalt, "3150"), (zinsen, "3")]
+    budget_plan = [(a.guid, D(v)) for a, v in budget_plan]
+    budget_year = (start + timedelta(days=31 * (months - 1))).year
     pc_engine = book.session.bind
     book.close()
     pc_engine.dispose()  # piecash keeps its own engine; release the connection
@@ -208,6 +212,19 @@ def create_demo_book(target: str, start: date = date(2025, 8, 1), months: int = 
                                      ("Tankstelle", "tanken", 3), ("ENTGELTABSCHLUSS", "gebuehr", 9)):
             conn.execute(text("INSERT INTO slots (obj_guid, name, slot_type, int64_val) VALUES (:o, :n, 1, :v)"),
                          {"o": guids["giro"], "n": f"import-map-bayes/{token}/{guids[target]}", "v": count})
+        # a monthly GnuCash budget for the last year of the demo data
+        bguid = uuid.uuid4().hex
+        conn.execute(text("INSERT INTO budgets (guid, name, description, num_periods) VALUES (:g, :n, '', 12)"),
+                     {"g": bguid, "n": f"Haushaltsplan {budget_year}"})
+        bstart = date(budget_year, 1, 1)
+        conn.execute(text("INSERT INTO recurrences (obj_guid, recurrence_mult, recurrence_period_type, "
+                          "recurrence_period_start, recurrence_weekend_adjust) VALUES (:g, 1, 'month', :s, 'none')"),
+                     {"g": bguid, "s": f"{bstart:%Y%m%d}" if url.startswith("sqlite") else bstart})
+        for acc_guid, amount in budget_plan:
+            for period in range(12):
+                conn.execute(text("INSERT INTO budget_amounts (budget_guid, account_guid, period_num, amount_num, "
+                                  "amount_denom) VALUES (:b, :a, :p, :n, 100)"),
+                             {"b": bguid, "a": acc_guid, "p": period, "n": int(amount * 100)})
     engine.dispose()
     return url
 

@@ -415,4 +415,20 @@
     };
     ncBrowse.addEventListener('click', function () { ncLoad(ncInput.value || '/'); });
   }
+
+  /* ---------------------------------------------------------------- report filters */
+  document.querySelectorAll('form[data-autosubmit]').forEach(function (form) {
+    var period = form.querySelector('select[name="period"]');
+    var custom = form.querySelectorAll('.period-custom');
+    var sync = function () {
+      if (!period) { return; }
+      custom.forEach(function (el) { el.hidden = period.value !== 'custom'; });
+    };
+    sync();
+    form.addEventListener('change', function (ev) {
+      if (period && (ev.target.name === 'from' || ev.target.name === 'to')) { period.value = 'custom'; }
+      if (ev.target.name === 'period' && ev.target.value === 'custom') { sync(); return; }
+      form.submit();
+    });
+  });
 })();

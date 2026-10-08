@@ -41,6 +41,25 @@ tr.future { opacity: .6; }
 .mini-chart-label { font-size: .7rem; text-align: center; color: var(--bs-secondary-color); padding-top: .2rem; }
 .legend { display: inline-block; width: .8rem; height: .8rem; border-radius: 2px; vertical-align: -1px; }
 
+/* reports */
+.mini-chart-tall { height: 220px; }
+.sankey-wrap { overflow-x: auto; }
+.sankey { width: 100%; min-width: 640px; height: auto; display: block; font-size: 15px; }
+.sankey a { text-decoration: none; }
+.sankey text { fill: var(--bs-body-color); paint-order: stroke; stroke: var(--bs-body-bg); stroke-width: 3px; stroke-linejoin: round; }
+.sankey .sankey-val { fill: var(--bs-secondary-color); font-variant-numeric: tabular-nums; }
+.sankey-link { opacity: .35; transition: opacity .15s; }
+.sankey-link:hover { opacity: .6; }
+.sankey a rect, .donut a circle { cursor: pointer; }
+.donut-wrap { max-width: 280px; margin: 0 auto; }
+.donut { width: 100%; height: auto; display: block; }
+.donut circle { transition: stroke-width .15s; }
+.donut a:hover circle { stroke-width: 40; }
+.donut-label { fill: var(--bs-secondary-color); font-size: 11px; }
+.donut-total { fill: var(--bs-body-color); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.budget-progress { height: .35rem; max-width: 14rem; }
+.budget-table td { padding-top: .3rem; padding-bottom: .3rem; }
+
 @media (max-width: 575.98px) {
   .amount-lg { font-size: 1.25rem; }
   .register { font-size: .85rem; }
