@@ -63,6 +63,14 @@ class ImportConfig:
 
 
 @dataclass
+class PostgresConfig:
+    # role with CREATEROLE and CREATEDB (no superuser) – lets gnubook create one database per book
+    admin_url: str = ""
+    # host name/IP GnuCash Desktop uses to reach PostgreSQL (shown with the new credentials)
+    client_host: str = ""
+
+
+@dataclass
 class BackupConfig:
     # GnuCash file (SQLite) written after every change; empty = off
     gnucash_file: str = ""
@@ -76,6 +84,7 @@ class Config:
     api: ApiConfig = field(default_factory=ApiConfig)
     importer: ImportConfig = field(default_factory=ImportConfig)
     backup: BackupConfig = field(default_factory=BackupConfig)
+    postgres: PostgresConfig = field(default_factory=PostgresConfig)
     source: str = ""
 
     @property
@@ -108,7 +117,8 @@ def load_config(path: str | os.PathLike | None = None, env: dict | None = None) 
         if cand and Path(cand).is_file():
             with open(cand, "rb") as fh:
                 data = tomllib.load(fh)
-            sections = {"book": cfg.book, "app": cfg.app, "api": cfg.api, "import": cfg.importer, "backup": cfg.backup}
+            sections = {"book": cfg.book, "app": cfg.app, "api": cfg.api, "import": cfg.importer, "backup": cfg.backup,
+                        "postgres": cfg.postgres}
             for name, values in data.items():
                 if name not in sections:
                     raise ConfigError(f"Unbekannter Konfigurationsabschnitt [{name}] in {cand}")
@@ -119,7 +129,8 @@ def load_config(path: str | os.PathLike | None = None, env: dict | None = None) 
     if explicit and not cfg.source:
         raise ConfigError(f"Konfigurationsdatei {explicit} nicht gefunden")
 
-    for section_name, obj in (("BOOK", cfg.book), ("APP", cfg.app), ("API", cfg.api), ("IMPORT", cfg.importer), ("BACKUP", cfg.backup)):
+    for section_name, obj in (("BOOK", cfg.book), ("APP", cfg.app), ("API", cfg.api), ("IMPORT", cfg.importer), ("BACKUP", cfg.backup),
+                              ("POSTGRES", cfg.postgres)):
         for key in vars(obj):
             env_key = f"GNUBOOK_{section_name}_{key.upper()}"
             if env_key in env:

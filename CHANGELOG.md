@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 – gnubook creates the databases
+
+- `[postgres] admin_url` (role with CREATEROLE + CREATEDB): new books get their own PostgreSQL role and
+  database with a random password, filled empty, with a simple German chart of accounts, or from an uploaded
+  GnuCash SQLite file; credentials for GnuCash Desktop are shown once
+- "Neuer Benutzer" can create the user's own book in the same step; `gnubook book-create`
+- deleting a book gnubook created can drop database and role (name confirmation, last `.gnucash` copy first)
+
 ## 0.2.0 – several users and books
 
 - Users with their own passwords; books (one GnuCash database each), related n:m; book switcher in the header

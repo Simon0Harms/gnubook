@@ -3,6 +3,20 @@
 {% block header %}Bücher{% endblock %}
 {% block subheader %}<div class="small text-body-secondary">Jedes Buch ist eine eigene GnuCash-Datenbank. Wer welches Buch nutzen darf, steht hier und unter Benutzer.</div>{% endblock %}
 {% block content %}
+{% if credentials %}
+<div class="alert alert-warning">
+  <h5 class="alert-heading"><i class="bi bi-key"></i> Zugang für GnuCash Desktop – nur jetzt sichtbar</h5>
+  <p class="mb-2">Buch „{{ credentials.book }}“: in GnuCash <i>Datei → Öffnen</i>, Datenformat <b>postgres</b>:</p>
+  <table class="table table-sm mb-2 bg-transparent" style="max-width: 36rem">
+    <tr><th>Host</th><td class="font-monospace user-select-all">{{ credentials.host }}{% if credentials.port != 5432 %}:{{ credentials.port }}{% endif %}</td></tr>
+    <tr><th>Datenbank</th><td class="font-monospace user-select-all">{{ credentials.database }}</td></tr>
+    <tr><th>Benutzername</th><td class="font-monospace user-select-all">{{ credentials.user }}</td></tr>
+    <tr><th>Passwort</th><td class="font-monospace user-select-all">{{ credentials.password }}</td></tr>
+  </table>
+  <p class="small mb-0">Bitte an die Person weitergeben (z. B. Passwortmanager). Der PC braucht in <code>pg_hba.conf</code> eine Freigabe,
+    z. B. einmalig <code>host sameuser all 192.168.1.0/24 scram-sha-256</code>.</p>
+</div>
+{% endif %}
 {% for b, url, uids in rows %}
 <div class="card mb-3">
   <div class="card-header"><h3 class="card-title">{{ b['name'] }}</h3><div class="card-tools small font-monospace">{{ url }}</div></div>
@@ -19,13 +33,56 @@
       <div class="col-12">
         <button class="btn btn-primary btn-sm" name="action" value="save">Speichern</button>
         <button class="btn btn-outline-danger btn-sm" name="action" value="delete" data-confirm-button="Verbindung zu „{{ b['name'] }}“ entfernen? Die GnuCash-Datenbank bleibt erhalten.">Verbindung entfernen</button>
+        {% if b['managed_db'] and can_create %}
+        <button class="btn btn-danger btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#drop-{{ b['id'] }}">Buch samt Datenbank löschen …</button>
+        {% endif %}
       </div>
     </form>
+    {% if b['managed_db'] and can_create %}
+    <form method="post" action="{{ url_for('admin.book_update', book_id=b['id']) }}" class="collapse mt-3 border border-danger rounded p-3" id="drop-{{ b['id'] }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <p class="small mb-2">Löscht Datenbank und Rolle <code>{{ b['managed_db'] }}</code> in PostgreSQL. Vorher schreibt gnubook eine
+        letzte <code>.gnucash</code>-Sicherung nach <code>data/backup/deleted/</code>. Zum Bestätigen den Buchnamen eintippen:</p>
+      <div class="input-group input-group-sm" style="max-width: 28rem">
+        <input class="form-control" name="confirm_name" placeholder="{{ b['name'] }}" autocomplete="off">
+        <button class="btn btn-danger" name="action" value="drop">Endgültig löschen</button>
+      </div>
+    </form>
+    {% endif %}
   </div>
 </div>
 {% endfor %}
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">Neues Buch anlegen</h3></div>
+  <div class="card-body">
+    {% if can_create %}
+    <p class="small text-body-secondary">gnubook legt in PostgreSQL eine eigene Rolle und Datenbank an (<code>gnucash_&lt;name&gt;</code>, zufälliges Passwort)
+      und zeigt danach die Zugangsdaten für GnuCash Desktop an.</p>
+    <form method="post" action="{{ url_for('admin.book_create') }}" enctype="multipart/form-data" class="row g-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-3"><label class="form-label" for="cn">Name</label><input class="form-control" id="cn" name="name" required placeholder="z. B. Anna"></div>
+      <div class="col-md-5"><label class="form-label">Inhalt</label>
+        <div class="form-check"><input class="form-check-input" type="radio" name="content" value="simple" id="c1" checked><label class="form-check-label" for="c1">einfacher deutscher Kontenrahmen (Girokonto, Lebensmittel, Miete …)</label></div>
+        <div class="form-check"><input class="form-check-input" type="radio" name="content" value="empty" id="c2"><label class="form-check-label" for="c2">leer (nur Euro)</label></div>
+        <div class="form-check"><input class="form-check-input" type="radio" name="content" value="upload" id="c3"><label class="form-check-label" for="c3">vorhandene GnuCash-Datei übernehmen (SQLite-Format)</label></div>
+        <input class="form-control form-control-sm mt-1" type="file" name="file" accept=".gnucash,.sqlite,.db">
+        <div class="form-text">XML-Dateien zuerst in GnuCash mit <i>Speichern unter → sqlite3</i> umwandeln.</div>
+      </div>
+      <div class="col-md-4"><label class="form-label">Benutzer (du selbst wirst immer eingetragen)</label><div>
+        {% for u in users %}<div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="users" value="{{ u['id'] }}" id="cbu-{{ u['id'] }}"><label class="form-check-label" for="cbu-{{ u['id'] }}">{{ u['username'] }}</label></div>{% endfor %}
+        </div>
+        <div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="backup" value="1" id="cbk" checked><label class="form-check-label" for="cbk">.gnucash-Sicherung nach jeder Änderung</label></div>
+      </div>
+      <div class="col-12"><button class="btn btn-success" type="submit"><i class="bi bi-plus-lg"></i> Anlegen</button></div>
+    </form>
+    {% else %}
+    <p class="small mb-0">Aus. Damit gnubook Datenbanken anlegen kann, in <code>config.toml</code> unter <code>[postgres]</code>
+      <code>admin_url</code> eintragen – eine Rolle mit <code>CREATEROLE</code> und <code>CREATEDB</code>, kein Superuser (siehe docs/INSTALL.md).</p>
+    {% endif %}
+  </div>
+</div>
 <div class="card">
-  <div class="card-header"><h3 class="card-title">Buch verbinden</h3></div>
+  <div class="card-header"><h3 class="card-title">Vorhandenes Buch verbinden</h3></div>
   <div class="card-body">
     <p class="small text-body-secondary">Die Datenbank muss schon ein GnuCash-Buch enthalten: in PostgreSQL eine leere Datenbank anlegen,
       dann in GnuCash Desktop <i>Datei → Speichern unter … → postgres</i>. gnubook prüft die Verbindung vor dem Speichern.</p>

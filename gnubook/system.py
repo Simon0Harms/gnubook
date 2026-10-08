@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS books (
     id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, url TEXT NOT NULL,
     timezone TEXT NOT NULL DEFAULT 'Europe/Berlin', backup_file TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL, managed_db TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS user_books (
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -73,6 +73,9 @@ class SystemDB:
         self._lock = threading.RLock()
         with self.conn() as c:
             c.executescript(SCHEMA)
+            cols = {r[1] for r in c.execute("PRAGMA table_info(books)")}
+            if "managed_db" not in cols:  # 0.2.0 databases
+                c.execute("ALTER TABLE books ADD COLUMN managed_db TEXT NOT NULL DEFAULT ''")
         try:
             self.path.chmod(0o600)  # contains database URLs with passwords
         except OSError:
@@ -164,13 +167,16 @@ class SystemDB:
         with self.conn() as c:
             return c.execute("SELECT * FROM books WHERE id = ?", (book_id,)).fetchone()
 
-    def add_book(self, name: str, url: str, timezone: str = "Europe/Berlin", backup_file: str = "") -> int:
+    def add_book(self, name: str, url: str, timezone: str = "Europe/Berlin", backup_file: str = "",
+                 managed_db: str = "") -> int:
         if not name.strip() or not url.strip():
             raise UserError("Name und Datenbank-URL sind nötig.")
         with self.conn() as c:
-            return int(c.execute("INSERT INTO books (name, url, timezone, backup_file, created_at) "
-                                 "VALUES (?, ?, ?, ?, ?)", (name.strip(), url.strip(), timezone, backup_file,
-                                                            now_iso())).lastrowid)
+            if c.execute("SELECT 1 FROM books WHERE name = ?", (name.strip(),)).fetchone():
+                raise UserError(f"Ein Buch „{name.strip()}“ gibt es schon.")
+            return int(c.execute("INSERT INTO books (name, url, timezone, backup_file, created_at, managed_db) "
+                                 "VALUES (?, ?, ?, ?, ?, ?)", (name.strip(), url.strip(), timezone, backup_file,
+                                                               now_iso(), managed_db)).lastrowid)
 
     def update_book(self, book_id: int, name: str, url: str, timezone: str, backup_file: str):
         with self.conn() as c:
@@ -323,6 +329,71 @@ class Registry:
                 book.after_write.append(ctx.backup.request)
             self._contexts[book_id] = (key, ctx)
             return ctx
+
+    def drop_context(self, book_id: int):
+        with self._lock:
+            cached = self._contexts.pop(book_id, None)
+        if cached:
+            cached[1].book.dispose()
+
+    def create_book(self, name: str, content: str = "empty", upload_path: str | None = None,
+                    users=(), backup: bool = True) -> tuple[int, dict]:
+        """New PostgreSQL role + database + GnuCash book. Returns (book id, credentials for GnuCash Desktop)."""
+        from sqlalchemy.engine import make_url
+
+        from . import provision
+
+        admin_url = self.cfg.postgres.admin_url
+        if not admin_url:
+            raise UserError("Neue Datenbanken anlegen ist aus: [postgres] admin_url fehlt in config.toml.")
+        if not name.strip():
+            raise UserError("Bitte einen Namen angeben.")
+        if any(b["name"] == name.strip() for b in self.system.books()):
+            raise UserError(f"Ein Buch „{name.strip()}“ gibt es schon.")
+        dbname = provision.db_name_for(name)
+        try:
+            url, password = provision.create_role_and_db(admin_url, dbname)
+        except provision.ProvisionError as exc:
+            raise UserError(str(exc))
+        try:
+            if content == "upload":
+                provision.import_sqlite_book(upload_path, url)
+            else:
+                provision.create_empty_book(url, template="simple" if content == "simple" else "none")
+        except Exception as exc:
+            provision.drop_role_and_db(admin_url, dbname)  # nothing half-created stays behind
+            raise UserError(f"Buch konnte nicht angelegt werden: {exc}")
+        bid = self.system.add_book(name, url, self.cfg.book.timezone,
+                                   self.default_backup_file(name) if backup else "", managed_db=dbname)
+        self.system.set_book_users(bid, users)
+        u = make_url(url)
+        creds = {"host": self.cfg.postgres.client_host or u.host, "port": u.port or 5432, "database": dbname,
+                 "user": dbname, "password": password, "book": name}
+        return bid, creds
+
+    def remove_book(self, book_id: int, drop_database: bool = False) -> str | None:
+        """Disconnect a book; optionally drop its managed database after writing a .gnucash copy."""
+        from . import provision
+        from .backup import export_gnucash_file
+
+        row = self.system.book(book_id)
+        if row is None:
+            return None
+        saved = None
+        if drop_database:
+            if not row["managed_db"] or not self.cfg.postgres.admin_url:
+                raise UserError("Nur von gnubook angelegte Datenbanken können hier gelöscht werden.")
+            from datetime import datetime
+
+            ctx = self.context(book_id)
+            target = self.data / "backup" / "deleted" / f"{slug(row['name'])}-{datetime.now():%Y%m%d-%H%M%S}.gnucash"
+            export_gnucash_file(ctx.book, target)
+            saved = str(target)
+        self.drop_context(book_id)
+        self.system.delete_book(book_id)
+        if drop_database:
+            provision.drop_role_and_db(self.cfg.postgres.admin_url, row["managed_db"])
+        return saved
 
     def default_backup_file(self, name: str) -> str:
         return str(self.data / "backup" / f"{slug(name)}.gnucash")

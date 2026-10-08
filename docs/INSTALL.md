@@ -113,6 +113,49 @@ Open `http://<gnubook-ip>:8080` and log in.
 
 ## More users and books
 
+### Let gnubook create the databases (recommended)
+
+Give gnubook a PostgreSQL role that may create roles and databases but is **not** a superuser. In the `pg`
+container:
+
+```bash
+su - postgres -c "createuser --createrole --createdb --pwprompt gnubook_admin"
+```
+
+Add one rule to `pg_hba.conf` that lets every role reach only the database of the same name. New books then
+need no further change there:
+
+```
+host  sameuser  all  192.168.1.0/24  scram-sha-256
+```
+
+Add this to gnubook's `config.toml` and restart gnubook:
+
+```toml
+[postgres]
+admin_url = "postgresql://gnubook_admin:PASSWORD@192.168.1.30:5432/postgres"
+client_host = "192.168.1.30"
+```
+
+Now *Bücher → Neues Buch anlegen*, or *Benutzer → Neuer Benutzer* with *eigenes Buch anlegen*, does the
+following:
+
+- creates role and database `gnucash_<name>` with a random password;
+- fills the database with one of:
+  - an empty book (EUR);
+  - a simple German chart of accounts;
+  - the content of an uploaded GnuCash file in SQLite format. Convert XML files first in GnuCash with
+    *Speichern unter → sqlite3*.
+- connects the book and shows the credentials for GnuCash Desktop once.
+
+On the command line: `gnubook book-create Anna --user anna`.
+
+*Buch samt Datenbank löschen* drops the database and the role again, but only for books gnubook created.
+You have to type the book's name to confirm, and gnubook writes a last `.gnucash` copy to
+`data/backup/deleted/` first.
+
+### Manually
+
 gnubook can serve several users, each with their own GnuCash book. Users and books are related n:m: a
 book can be shared (for example a household book), and a user with several books switches between them in
 the header.

@@ -33,6 +33,7 @@ jobs:
       - name: Tests (SQLite and PostgreSQL)
         env:
           GNUBOOK_TEST_PG_URL: postgresql://postgres:postgres@127.0.0.1:5432
+          GNUBOOK_TEST_PG_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
         run: pytest -q -rs
 
   gnucash-compat:

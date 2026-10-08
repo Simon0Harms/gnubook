@@ -42,6 +42,11 @@ accounts = []
 match_days = 3
 transfer_match_days = 7
 
+[postgres]
+# optional: role with CREATEROLE + CREATEDB (no superuser) so gnubook can create a database per book
+# admin_url = "postgresql://gnubook_admin:PASSWORD@192.168.1.30:5432/postgres"
+# client_host = "192.168.1.30"   # how GnuCash Desktop reaches PostgreSQL
+
 [backup]
 # number of .gnucash versions kept per book (the file itself is set per book under "Bücher")
 keep = 10
@@ -247,6 +252,36 @@ def book_add(ctx, name, url, timezone, users, no_backup):
             raise click.ClickException(f"Benutzer nicht gefunden: {un}")
         reg.system.grant(u["id"], bid)
     click.echo(f"Buch {bid} „{name}“ verbunden ({n} Konten).")
+
+
+@main.command("book-create")
+@click.argument("name")
+@click.option("--content", type=click.Choice(["simple", "empty", "file"]), default="simple", show_default=True,
+              help="simple = einfacher Kontenrahmen, empty = leer, file = Inhalt aus --file")
+@click.option("--file", "path", type=click.Path(exists=True, dir_okay=False), help="GnuCash-Datei im SQLite-Format")
+@click.option("--user", "users", multiple=True, help="Benutzer, die das Buch nutzen dürfen")
+@click.option("--no-backup", is_flag=True)
+@click.pass_context
+def book_create(ctx, name, content, path, users, no_backup):
+    """Neue PostgreSQL-Datenbank + Rolle + GnuCash-Buch anlegen (braucht [postgres] admin_url)."""
+    from .system import UserError
+
+    reg = _registry(ctx)
+    ids = []
+    for un in users:
+        u = reg.system.user_by_name(un)
+        if u is None:
+            raise click.ClickException(f"Benutzer nicht gefunden: {un}")
+        ids.append(u["id"])
+    if content == "file" and not path:
+        raise click.ClickException("--file fehlt")
+    try:
+        bid, cr = reg.create_book(name, "upload" if content == "file" else content, path, ids, not no_backup)
+    except UserError as exc:
+        raise click.ClickException(str(exc))
+    click.echo(f"Buch {bid} „{name}“ angelegt. Zugang für GnuCash Desktop (Datenformat postgres):")
+    click.echo(f"  Host {cr['host']}:{cr['port']}  Datenbank {cr['database']}  Benutzer {cr['user']}  "
+               f"Passwort {cr['password']}")
 
 
 @main.command("book-list")

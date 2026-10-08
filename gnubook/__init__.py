@@ -1,7 +1,7 @@
 """gnubook – a self-hosted web frontend for a GnuCash SQL book."""
 from __future__ import annotations
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 import logging
 from datetime import timedelta
@@ -29,7 +29,7 @@ def create_app(config: Config | None = None, config_path: str | None = None, che
         SESSION_COOKIE_SECURE=cfg.app.session_cookie_secure,
         SESSION_COOKIE_NAME="gnubook_session",
         PERMANENT_SESSION_LIFETIME=timedelta(days=cfg.app.session_days),
-        MAX_CONTENT_LENGTH=2 * 1024 * 1024,
+        MAX_CONTENT_LENGTH=256 * 1024 * 1024,  # .gnucash uploads
         JSON_SORT_KEYS=False,
     )
     if cfg.app.behind_proxy:
