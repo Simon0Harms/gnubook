@@ -48,12 +48,14 @@ def app(cfg):
     application = create_app(cfg)
     application.testing = True
     yield application
-    application.extensions["gnubook"].book.dispose()
+    application.extensions["gnubook"].dispose()
 
 
 @pytest.fixture
 def state(app):
-    return app.extensions["gnubook"]
+    """Context of the first book (created from the single-user config by the bootstrap)."""
+    reg = app.extensions["gnubook"]
+    return reg.context(reg.system.books()[0]["id"])
 
 
 def csrf_from(html: str) -> str:

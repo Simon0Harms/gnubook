@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0 – several users and books
+
+- Users with their own passwords; books (one GnuCash database each), related n:m; book switcher in the header
+- Admin pages for users and books (connection is tested before saving); users change their own password
+- API tokens per user and book, created under Einstellungen or with `gnubook token-create`
+- gnubook's own data per book (`data/books/<id>.sqlite`), users/books/tokens in `data/system.sqlite`
+- `.gnucash` copy after every change, configured per book
+- CLI: `user-add`, `user-list`, `user-password`, `book-add`, `book-list`, `token-create`, `--book` for
+  `check-balances` and `backup`
+- A 0.1 single-user configuration is taken over automatically on first start
+
 ## 0.1.0 – first version
 
 - Dashboard, account tree, registers with running balance, search

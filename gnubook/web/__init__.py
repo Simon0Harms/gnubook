@@ -10,15 +10,24 @@ from .. import __version__
 from ..money import fmt, symbol_for
 
 
-def state():
+def registry():
     return current_app.extensions["gnubook"]
 
 
+def state():
+    """The book of the current request (BookContext). Set by login_required / the API token."""
+    ctx = g.get("ctx")
+    if ctx is None:
+        raise RuntimeError("no book selected")
+    return ctx
+
+
 def register(app: Flask):
-    from . import api, auth, views
+    from . import admin, api, auth, views
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(views.bp)
+    app.register_blueprint(admin.bp)
     app.register_blueprint(api.bp)
 
     @app.template_filter("money")
@@ -78,7 +87,11 @@ def register(app: Flask):
 
     @app.context_processor
     def inject():
-        return {"app_version": __version__, "app_title": state().cfg.app.title, "today": state().book.today()}
+        ctx = g.get("ctx")
+        user = g.get("user")
+        return {"app_version": __version__, "app_title": registry().cfg.app.title,
+                "today": ctx.book.today() if ctx else date.today(), "current_book": ctx, "current_user": user,
+                "my_books": registry().system.user_books(user["id"]) if user else []}
 
     @app.after_request
     def security_headers(resp):

@@ -1,28 +1,17 @@
 """gnubook – a self-hosted web frontend for a GnuCash SQL book."""
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 import logging
-from dataclasses import dataclass
 from datetime import timedelta
 
 from flask import Flask
 
-from .appdb import AppDB
-from .book import Book
 from .config import Config, ConfigError, load_config, validate_for_web
-from .importer import Importer
+from .system import Registry
 
 log = logging.getLogger("gnubook")
-
-
-@dataclass
-class State:
-    cfg: Config
-    book: Book
-    appdb: AppDB
-    importer: Importer
 
 
 def create_app(config: Config | None = None, config_path: str | None = None, check: bool = True) -> Flask:
@@ -48,15 +37,7 @@ def create_app(config: Config | None = None, config_path: str | None = None, che
 
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
-    book = Book(cfg.book.url, cfg.book.timezone, cfg.book.account_separator)
-    appdb = AppDB(cfg.data_path / "gnubook.sqlite")
-    app.extensions["gnubook"] = State(cfg, book, appdb, Importer(book, appdb, cfg.importer))
-    if cfg.backup.gnucash_file:
-        from .backup import BackupWriter
-
-        backup = BackupWriter(book, cfg.backup.gnucash_file, cfg.backup.keep)
-        book.after_write.append(backup.request)
-        app.extensions["gnubook_backup"] = backup
+    app.extensions["gnubook"] = Registry(cfg)
 
     from .web import register
 

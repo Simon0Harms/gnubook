@@ -12,26 +12,23 @@ import click
 from .config import ConfigError, load_config
 
 CONFIG_TEMPLATE = """# gnubook configuration
+# Users and books (GnuCash databases) are managed in the web UI (Benutzer / Bücher) or with
+#   gnubook user-add NAME --admin
+#   gnubook book-add NAME postgresql://USER:PASSWORD@HOST:5432/DB --user NAME
+# The [book] url / [app] username + password_hash / [api] token_sha256 settings of version 0.1 are taken
+# over once on first start (as book "Hauptbuch" and an admin user) and are not needed for new setups.
 [book]
-# SQLAlchemy URL of the GnuCash book, e.g.
-#   postgresql://gnucash:PASSWORD@10.0.0.20:5432/gnucash
-#   sqlite:////opt/gnubook/data/book.gnucash
 url = "{url}"
 timezone = "Europe/Berlin"
 
 [app]
 secret_key = "{secret}"
 data_dir = "{data_dir}"
-username = "{username}"
-# gnubook hash-password
-password_hash = "{password_hash}"
 # true when gnubook is reached via HTTPS (reverse proxy)
 session_cookie_secure = false
 behind_proxy = false
 
 [api]
-# sha256 of the token the FinTS importer uses (gnubook gen-token); empty = API off
-token_sha256 = ""
 expose_iban = false
 
 [import]
@@ -46,8 +43,7 @@ match_days = 3
 transfer_match_days = 7
 
 [backup]
-# copy of the book as GnuCash file after every change (empty = off); keep = number of versions
-gnucash_file = "/opt/gnubook/data/backup/buch.gnucash"
+# number of .gnucash versions kept per book (the file itself is set per book under "Bücher")
 keep = 10
 
 [import.iban_map]
@@ -99,59 +95,205 @@ def gen_token():
 @click.argument("path", type=click.Path(dir_okay=False))
 @click.option("--url", default="", help="Buch-URL")
 @click.option("--data-dir", default="/opt/gnubook/data")
-@click.option("--username", default="admin")
-def init_config(path, url, data_dir, username):
+def init_config(path, url, data_dir):
     """Konfigurationsdatei mit zufälligem secret_key anlegen."""
     p = Path(path)
     if p.exists():
         raise click.ClickException(f"{p} existiert bereits.")
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(CONFIG_TEMPLATE.format(url=url, secret=secrets.token_urlsafe(48), data_dir=data_dir,
-                                        username=username, password_hash=""), encoding="utf-8")
+                                        ), encoding="utf-8")
     p.chmod(0o600)
-    click.echo(f"{p} angelegt. Jetzt Buch-URL prüfen und `gnubook hash-password` ausführen.")
+    click.echo(f"{p} angelegt. Weiter: gnubook user-add NAME --admin und gnubook book-add NAME URL --user NAME")
+
+
+def _registry(ctx):
+    from .system import Registry
+
+    return Registry(_cfg(ctx))
+
+
+def _book_ctx(reg, ref):
+    """Book by id or name; without ref the only book."""
+    books = reg.system.books()
+    if ref is None:
+        if len(books) != 1:
+            raise click.ClickException("Mehrere Bücher – bitte --book NAME|ID angeben: "
+                                       + ", ".join(f"{b['id']}={b['name']}" for b in books) if books
+                                       else "Noch kein Buch verbunden (gnubook book-add).")
+        return reg.context(books[0]["id"])
+    for b in books:
+        if str(b["id"]) == str(ref) or b["name"].casefold() == str(ref).casefold():
+            return reg.context(b["id"])
+    raise click.ClickException(f"Buch nicht gefunden: {ref}")
+
+
+book_option = click.option("--book", "book_ref", default=None, help="Buch (Name oder ID); nötig bei mehreren Büchern")
 
 
 @main.command("check")
 @click.pass_context
 def check(ctx):
-    """Konfiguration und Datenbankverbindung prüfen."""
-    from .book import Book
+    """Konfiguration, Benutzer und Verbindung zu allen Büchern prüfen."""
     from .config import validate_for_web
+    from .system import mask_url
 
     cfg = _cfg(ctx)
     click.echo(f"Konfiguration: {cfg.source or '(nur Umgebungsvariablen)'}")
     problems = validate_for_web(cfg)
     for p in problems:
         click.echo(f"  FEHLER: {p}")
-    if not cfg.book.url:
-        sys.exit(1)
-    book = Book(cfg.book.url, cfg.book.timezone, cfg.book.account_separator)
-    info = book.schema_info()
-    click.echo(f"GnuCash-Buch: Version {info['gnucash']}, Schema {'unterstützt' if info['supported'] else 'UNBEKANNT'}")
-    idx = book.load_accounts()
-    click.echo(f"Konten: {len(idx.by_guid)}")
-    locks = book.lock_holders()
-    click.echo("Sperre: " + (", ".join(f"{h} (PID {p})" for h, p in locks) if locks else "keine"))
-    sys.exit(1 if problems or not info["supported"] else 0)
+    reg = _registry(ctx)
+    users = reg.system.users()
+    click.echo(f"Benutzer: {len(users)} ({sum(1 for u in users if u['is_admin'])} Admin)")
+    if not users:
+        problems.append("kein Benutzer")
+        click.echo("  FEHLER: noch kein Benutzer – gnubook user-add NAME --admin")
+    for b in reg.system.books():
+        try:
+            bc = reg.context(b["id"])
+            info = bc.book.schema_info()
+            locks = bc.book.lock_holders()
+            n = len(bc.book.load_accounts().by_guid)
+            ok = info["supported"]
+            click.echo(f"Buch {b['id']} „{b['name']}“: {mask_url(b['url'])} – GnuCash {info['gnucash']}, "
+                       f"Schema {'unterstützt' if ok else 'UNBEKANNT'}, {n} Konten, Sperre: "
+                       + (", ".join(f"{h} (PID {p})" for h, p in locks) if locks else "keine"))
+            if not ok:
+                problems.append(b["name"])
+        except Exception as exc:  # noqa: BLE001
+            problems.append(b["name"])
+            click.echo(f"Buch {b['id']} „{b['name']}“: FEHLER {exc}")
+    reg.dispose()
+    sys.exit(1 if problems else 0)
+
+
+@main.command("user-add")
+@click.argument("username")
+@click.option("--admin", is_flag=True, help="Administrator (verwaltet Benutzer und Bücher)")
+@click.option("--book", "books", multiple=True, help="Buch (Name oder ID), mehrfach möglich")
+@click.pass_context
+def user_add(ctx, username, admin, books):
+    """Benutzer anlegen (Passwort wird abgefragt)."""
+    from .system import UserError
+
+    reg = _registry(ctx)
+    pw = getpass.getpass("Passwort: ")
+    if getpass.getpass("Wiederholen: ") != pw:
+        raise click.ClickException("Die Eingaben stimmen nicht überein.")
+    try:
+        uid = reg.system.add_user(username, pw, admin)
+    except UserError as exc:
+        raise click.ClickException(str(exc))
+    for ref in books:
+        reg.system.grant(uid, _book_ctx(reg, ref).id)
+    click.echo(f"Benutzer {username} angelegt.")
+
+
+@main.command("user-list")
+@click.pass_context
+def user_list(ctx):
+    """Benutzer und ihre Bücher anzeigen."""
+    reg = _registry(ctx)
+    for u in reg.system.users():
+        books = ", ".join(b["name"] for b in reg.system.user_books(u["id"])) or "–"
+        flags = ("Admin " if u["is_admin"] else "") + ("" if u["active"] else "gesperrt")
+        click.echo(f"{u['id']:>3} {u['username']:<20} {flags:<15} {books}")
+
+
+@main.command("user-password")
+@click.argument("username")
+@click.pass_context
+def user_password(ctx, username):
+    """Passwort eines Benutzers neu setzen."""
+    from .system import UserError
+
+    reg = _registry(ctx)
+    u = reg.system.user_by_name(username)
+    if u is None:
+        raise click.ClickException(f"Benutzer nicht gefunden: {username}")
+    pw = getpass.getpass("Neues Passwort: ")
+    if getpass.getpass("Wiederholen: ") != pw:
+        raise click.ClickException("Die Eingaben stimmen nicht überein.")
+    try:
+        reg.system.set_password(u["id"], pw)
+    except UserError as exc:
+        raise click.ClickException(str(exc))
+    click.echo("Passwort gesetzt.")
+
+
+@main.command("book-add")
+@click.argument("name")
+@click.argument("url")
+@click.option("--timezone", default="Europe/Berlin", show_default=True)
+@click.option("--user", "users", multiple=True, help="Benutzer, die das Buch nutzen dürfen")
+@click.option("--no-backup", is_flag=True, help="keine .gnucash-Sicherung nach jeder Änderung")
+@click.pass_context
+def book_add(ctx, name, url, timezone, users, no_backup):
+    """Vorhandenes GnuCash-Buch (Datenbank-URL) verbinden."""
+    from .book import Book
+
+    reg = _registry(ctx)
+    b = Book(url, timezone)
+    info = b.schema_info()
+    n = len(b.load_accounts().by_guid)
+    b.dispose()
+    if not info["supported"]:
+        raise click.ClickException(f"GnuCash-Version {info['gnucash']} wird nicht unterstützt.")
+    bid = reg.system.add_book(name, url, timezone, "" if no_backup else reg.default_backup_file(name))
+    for un in users:
+        u = reg.system.user_by_name(un)
+        if u is None:
+            raise click.ClickException(f"Benutzer nicht gefunden: {un}")
+        reg.system.grant(u["id"], bid)
+    click.echo(f"Buch {bid} „{name}“ verbunden ({n} Konten).")
+
+
+@main.command("book-list")
+@click.pass_context
+def book_list(ctx):
+    """Verbundene Bücher anzeigen."""
+    from .system import mask_url
+
+    reg = _registry(ctx)
+    for b in reg.system.books():
+        users = ", ".join(u["username"] for u in reg.system.users() if u["id"] in reg.system.book_users(b["id"]))
+        click.echo(f"{b['id']:>3} {b['name']:<20} {mask_url(b['url'])}  Benutzer: {users or '–'}")
+
+
+@main.command("token-create")
+@click.argument("username")
+@book_option
+@click.option("--label", default="FinTS-Importer", show_default=True)
+@click.pass_context
+def token_create(ctx, username, book_ref, label):
+    """API-Token für den FinTS-Importer (ein Benutzer, ein Buch)."""
+    reg = _registry(ctx)
+    u = reg.system.user_by_name(username)
+    if u is None:
+        raise click.ClickException(f"Benutzer nicht gefunden: {username}")
+    bc = _book_ctx(reg, book_ref)
+    if not reg.system.may_use(u["id"], bc.id):
+        raise click.ClickException(f"{username} darf das Buch „{bc.name}“ nicht nutzen.")
+    click.echo("Token für den FinTS-Importer (firefly_access_token) – nur jetzt sichtbar:")
+    click.echo(f"  {reg.system.create_token(u['id'], bc.id, label)}")
 
 
 @main.command("check-balances")
+@book_option
 @click.option("--account", "accounts", multiple=True, help="nur dieses Konto (voller Name oder GUID), mehrfach möglich")
 @click.option("--show-all", is_flag=True, help="auch stimmige Prüfpunkte ausgeben")
 @click.option("--accept-open", is_flag=True, help="alle offenen Abweichungen als bekannt akzeptieren")
 @click.option("--note", default="per CLI akzeptiert", help="Notiz für --accept-open")
 @click.pass_context
-def check_balances(ctx, accounts, show_all, accept_open, note):
+def check_balances(ctx, book_ref, accounts, show_all, accept_open, note):
     """Bank-Saldo-Prüfpunkte nachrechnen (Exit-Code 1 bei offenen Abweichungen)."""
     from . import checkpoints as cps
-    from .appdb import AppDB
-    from .book import Book
     from .money import fmt
 
-    cfg = _cfg(ctx)
-    book = Book(cfg.book.url, cfg.book.timezone, cfg.book.account_separator)
-    appdb = AppDB(cfg.data_path / "gnubook.sqlite")
+    reg = _registry(ctx)
+    bc = _book_ctx(reg, book_ref)
+    book, appdb = bc.book, bc.appdb
     index = book.load_accounts()
     only = None
     if accounts:
@@ -189,22 +331,24 @@ def check_balances(ctx, accounts, show_all, accept_open, note):
 
 
 @main.command("backup")
-@click.option("--dir", "directory", default=None, help="Zielverzeichnis (Standard: <data_dir>/../backup/book)")
+@book_option
+@click.option("--dir", "directory", default=None, help="Zielverzeichnis (Standard: <data_dir>/backup/manual)")
 @click.option("--keep", default=30, show_default=True, help="so viele Sicherungen behalten")
-@click.option("--prefix", default="gnucash", show_default=True)
+@click.option("--prefix", default=None, help="Dateiname-Präfix (Standard: Buchname)")
 @click.pass_context
-def backup(ctx, directory, keep, prefix):
+def backup(ctx, book_ref, directory, keep, prefix):
     """Buch als .gnucash-Datei (SQLite) sichern – mit GnuCash Desktop direkt öffnbar."""
     from datetime import datetime
 
     from .backup import export_gnucash_file, rotate
-    from .book import Book
+    from .system import slug
 
-    cfg = _cfg(ctx)
-    book = Book(cfg.book.url, cfg.book.timezone, cfg.book.account_separator)
-    out_dir = Path(directory) if directory else Path(cfg.app.data_dir).resolve().parent / "backup" / "book"
+    reg = _registry(ctx)
+    bc = _book_ctx(reg, book_ref)
+    prefix = prefix or slug(bc.name)
+    out_dir = Path(directory) if directory else Path(reg.cfg.app.data_dir) / "backup" / "manual"
     target = out_dir / f"{prefix}-{datetime.now():%Y%m%d-%H%M%S}.gnucash"
-    export_gnucash_file(book, target)
+    export_gnucash_file(bc.book, target)
     rotate(out_dir, prefix, keep)
     click.echo(f"Gesichert: {target}")
 

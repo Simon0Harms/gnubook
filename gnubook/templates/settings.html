@@ -8,11 +8,12 @@
       <div class="card-header"><h3 class="card-title">GnuCash-Buch</h3></div>
       <div class="card-body small">
         <dl class="row mb-0">
+          <dt class="col-sm-4">Buch</dt><dd class="col-sm-8">{{ current_book.name }}</dd>
           <dt class="col-sm-4">Datenbank</dt><dd class="col-sm-8 font-monospace text-break">{{ safe_url }}</dd>
           <dt class="col-sm-4">GnuCash-Version</dt><dd class="col-sm-8">{{ schema.gnucash }}
             {% if schema.supported %}<span class="badge text-bg-success">Schema unterstützt</span>
             {% else %}<span class="badge text-bg-danger">Schema unbekannt – Schreiben wird verweigert</span>{% endif %}</dd>
-          <dt class="col-sm-4">Zeitzone</dt><dd class="col-sm-8">{{ cfg.book.timezone }}</dd>
+          <dt class="col-sm-4">Zeitzone</dt><dd class="col-sm-8">{{ current_book.book.tz.key }}</dd>
           <dt class="col-sm-4">Konfiguration</dt><dd class="col-sm-8 font-monospace">{{ cfg.source or '(Umgebungsvariablen)' }}</dd>
         </dl>
       </div>
@@ -54,14 +55,28 @@
     <div class="card mb-4">
       <div class="card-header"><h3 class="card-title">FinTS-Importer (Firefly-III-API)</h3></div>
       <div class="card-body small">
-        {% if cfg.api.token_sha256 %}
-          <p><span class="badge text-bg-success">API aktiv</span> Im Importer als <code>firefly_url</code>
-             <code>{{ url_for('views.dashboard', _external=True).rstrip('/') }}</code> und als
-             <code>firefly_access_token</code> das mit <code>gnubook gen-token</code> erzeugte Token eintragen.</p>
-        {% else %}
-          <p><span class="badge text-bg-secondary">API aus</span> Token mit <code>gnubook gen-token</code> erzeugen und
-             <code>token_sha256</code> unter <code>[api]</code> eintragen.</p>
+        <p>Im Importer als <code>firefly_url</code> <code>{{ url_for('views.dashboard', _external=True).rstrip('/') }}</code>
+           eintragen und als <code>firefly_access_token</code> ein Token dieses Buchs. Jedes Token gehört zu einem
+           Benutzer und genau diesem Buch.</p>
+        {% if new_token %}
+          <div class="alert alert-warning"><b>Neues Token – nur jetzt sichtbar:</b><br><code class="user-select-all text-break">{{ new_token }}</code></div>
         {% endif %}
+        <table class="table table-sm mb-2" id="api">
+          <thead><tr><th>Bezeichnung</th><th>Benutzer</th><th>zuletzt benutzt</th><th></th></tr></thead>
+          <tbody>
+          {% for t in tokens %}
+            <tr><td>{{ t['label'] }}</td><td>{{ t['username'] }}</td><td>{{ t['last_used_at']|de_datetime if t['last_used_at'] else '–' }}</td>
+              <td class="text-end"><form method="post" action="{{ url_for('views.token_delete', token_id=t['id']) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-link text-danger p-0" data-confirm-button="Token „{{ t['label'] }}“ löschen? Der Importer kann dann nicht mehr importieren.">löschen</button></form></td></tr>
+          {% else %}<tr><td colspan="4" class="text-body-secondary">Noch kein Token – Import-API für dieses Buch aus.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+        <form method="post" action="{{ url_for('views.token_create') }}" class="input-group input-group-sm mb-3" style="max-width: 26rem">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input class="form-control" name="label" placeholder="Bezeichnung, z. B. FinTS 1822">
+          <button class="btn btn-outline-success" type="submit">Token erzeugen</button>
+        </form>
         <p class="mb-1">Auffangkonto (wenn kein Gegenkonto erkannt wird): <b>{{ fallback.full_name if fallback else 'nicht gefunden – [import] fallback_account setzen!' }}</b></p>
         {% if cfg.importer.transit_account %}<p class="mb-1">Geldtransit: <b>{{ cfg.importer.transit_account }}</b> zwischen {{ cfg.importer.transit_between|join(', ') }}</p>{% endif %}
         <table class="table table-sm mt-3 mb-0">

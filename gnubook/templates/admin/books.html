@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Bücher{% endblock %}
+{% block header %}Bücher{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">Jedes Buch ist eine eigene GnuCash-Datenbank. Wer welches Buch nutzen darf, steht hier und unter Benutzer.</div>{% endblock %}
+{% block content %}
+{% for b, url, uids in rows %}
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">{{ b['name'] }}</h3><div class="card-tools small font-monospace">{{ url }}</div></div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('admin.book_update', book_id=b['id']) }}" class="row g-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-3"><label class="form-label">Name</label><input class="form-control" name="name" value="{{ b['name'] }}" required></div>
+      <div class="col-md-5"><label class="form-label">Datenbank-URL</label><input class="form-control font-monospace" name="url" placeholder="leer lassen = unverändert" autocomplete="off"></div>
+      <div class="col-md-2"><label class="form-label">Zeitzone</label><input class="form-control" name="timezone" value="{{ b['timezone'] }}"></div>
+      <div class="col-md-6"><label class="form-label">.gnucash-Sicherung nach jeder Änderung</label><input class="form-control font-monospace" name="backup_file" value="{{ b['backup_file'] }}" placeholder="leer = aus"></div>
+      <div class="col-md-6"><label class="form-label">Benutzer</label><div>
+        {% for u in users %}<div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="users" value="{{ u['id'] }}" id="bu-{{ b['id'] }}-{{ u['id'] }}" {{ 'checked' if u['id'] in uids }}><label class="form-check-label" for="bu-{{ b['id'] }}-{{ u['id'] }}">{{ u['username'] }}</label></div>{% endfor %}
+      </div></div>
+      <div class="col-12">
+        <button class="btn btn-primary btn-sm" name="action" value="save">Speichern</button>
+        <button class="btn btn-outline-danger btn-sm" name="action" value="delete" data-confirm-button="Verbindung zu „{{ b['name'] }}“ entfernen? Die GnuCash-Datenbank bleibt erhalten.">Verbindung entfernen</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+<div class="card">
+  <div class="card-header"><h3 class="card-title">Buch verbinden</h3></div>
+  <div class="card-body">
+    <p class="small text-body-secondary">Die Datenbank muss schon ein GnuCash-Buch enthalten: in PostgreSQL eine leere Datenbank anlegen,
+      dann in GnuCash Desktop <i>Datei → Speichern unter … → postgres</i>. gnubook prüft die Verbindung vor dem Speichern.</p>
+    <form method="post" class="row g-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-3"><label class="form-label" for="bn">Name</label><input class="form-control" id="bn" name="name" value="{{ form.name }}" required placeholder="z. B. Haushalt"></div>
+      <div class="col-md-6"><label class="form-label" for="bur">Datenbank-URL</label><input class="form-control font-monospace" id="bur" name="url" value="{{ form.url }}" required placeholder="postgresql://gnucash_anna:PASSWORT@192.168.1.30:5432/gnucash_anna" autocomplete="off"></div>
+      <div class="col-md-3"><label class="form-label" for="btz">Zeitzone</label><input class="form-control" id="btz" name="timezone" value="{{ form.timezone }}"></div>
+      <div class="col-md-6"><div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="backup" value="1" id="bbk" checked><label class="form-check-label" for="bbk">.gnucash-Sicherung nach jeder Änderung</label></div>
+        <input class="form-control form-control-sm font-monospace mt-1" name="backup_file" value="{{ form.backup_file }}" placeholder="Standard: data/backup/&lt;name&gt;.gnucash"></div>
+      <div class="col-md-6"><label class="form-label">Benutzer (du selbst wirst immer eingetragen)</label><div>
+        {% for u in users %}<div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="users" value="{{ u['id'] }}" id="nbu-{{ u['id'] }}"><label class="form-check-label" for="nbu-{{ u['id'] }}">{{ u['username'] }}</label></div>{% endfor %}
+      </div></div>
+      <div class="col-12"><button class="btn btn-success" type="submit"><i class="bi bi-plug"></i> Prüfen und verbinden</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}

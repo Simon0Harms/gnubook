@@ -130,10 +130,6 @@ def load_config(path: str | os.PathLike | None = None, env: dict | None = None) 
 def validate_for_web(cfg: Config) -> list[str]:
     """Problems that prevent running the web app safely."""
     problems = []
-    if not cfg.book.url:
-        problems.append("[book] url fehlt")
     if not cfg.app.secret_key or len(cfg.app.secret_key) < 32:
         problems.append("[app] secret_key fehlt oder ist kürzer als 32 Zeichen")
-    if not cfg.app.password_hash:
-        problems.append("[app] password_hash fehlt (gnubook hash-password)")
     return problems

@@ -91,10 +91,10 @@ else
   cat <<NEXT
 
 >> Fast fertig. Noch zu tun:
-   1. Buch-URL in $APP_DIR/config.toml eintragen ([book] url), z. B.
-        url = "postgresql://gnucash:PASSWORT@192.168.1.20:5432/gnucash"
-   2. Passwort setzen:   gnubook hash-password   -> Ergebnis als password_hash eintragen
-   3. Optional API-Token für den FinTS-Importer:   gnubook gen-token
-   4. Prüfen und starten:   gnubook check && systemctl restart gnubook
+   1. Admin anlegen:   gnubook user-add simon --admin
+   2. Buch verbinden:  gnubook book-add Hauptbuch "postgresql://gnucash:PASSWORT@192.168.1.20:5432/gnucash" --user simon
+      (weitere Benutzer und Bücher später im Web unter Benutzer / Bücher)
+   3. Prüfen und starten:   gnubook check && systemctl restart gnubook
+   4. API-Token für den FinTS-Importer: im Web unter Einstellungen
 NEXT
 fi

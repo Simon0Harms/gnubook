@@ -91,6 +91,19 @@ def write_gnucash_file(engine, target: Path):
     os.replace(tmp, target)
 
 
+def export_gnucash_file(book, target) -> Path:
+    target = Path(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    write_gnucash_file(book.engine, target)
+    return target
+
+
+def rotate(directory, prefix: str, keep: int):
+    files = sorted(Path(directory).glob(f"{prefix}-*.gnucash"))
+    for f in files[:-keep] if keep > 0 else []:
+        f.unlink(missing_ok=True)
+
+
 class BackupWriter:
     """Writes the .gnucash copy in the background after changes (coalesces bursts, e.g. imports)."""
 

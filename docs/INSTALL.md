@@ -103,15 +103,56 @@ The installer does the following:
 Then finish the configuration:
 
 ```bash
-nano /opt/gnubook/config.toml
-#   [book] url = "postgresql://gnucash:PASSWORD@192.168.1.30:5432/gnucash"
-#   [app]  username = "admin"
-gnubook hash-password            # paste the output as password_hash
+gnubook user-add simon --admin
+gnubook book-add Hauptbuch "postgresql://gnucash:PASSWORD@192.168.1.30:5432/gnucash" --user simon
 gnubook check                    # must report "Schema unterstützt" and no errors
 systemctl restart gnubook
 ```
 
 Open `http://<gnubook-ip>:8080` and log in.
+
+## More users and books
+
+gnubook can serve several users, each with their own GnuCash book. Users and books are related n:m: a
+book can be shared (for example a household book), and a user with several books switches between them in
+the header.
+
+Give every book its own PostgreSQL role and database, so GnuCash Desktop of one person cannot open another
+person's book. In the `pg` container:
+
+```bash
+su - postgres -c "createuser --pwprompt gnucash_anna"
+su - postgres -c "createdb --owner gnucash_anna --encoding UTF8 gnucash_anna"
+# pg_hba.conf: host gnucash_anna gnucash_anna <gnubook-ip>/32 scram-sha-256  (+ Anna's PC)
+```
+
+Fill the database:
+
+- **An existing book.** Open Anna's GnuCash file in GnuCash Desktop, then use *Datei → Speichern unter →
+  postgres* with database `gnucash_anna`.
+- **A new book.** Create a new book in GnuCash Desktop and save it the same way.
+
+Then, as administrator in gnubook:
+
+1. *Bücher → Buch verbinden*. Enter the name and URL
+   `postgresql://gnucash_anna:PW@192.168.1.30:5432/gnucash_anna`. gnubook checks the connection before it
+   saves.
+2. *Benutzer → Neuer Benutzer*. Create the user and tick the books they may use.
+
+On the command line:
+
+```bash
+gnubook user-add anna
+gnubook book-add Anna "postgresql://gnucash_anna:PW@192.168.1.30:5432/gnucash_anna" --user anna
+```
+
+Notes:
+
+- Each user can change their own password via the user menu → *Passwort ändern*.
+- gnubook's own data is kept separately for each book: import records, API ids, accepted differences, audit
+  log and the `.gnucash` copy.
+- The database URLs, including passwords, are stored in `/opt/gnubook/data/system.sqlite` with file mode
+  600.
 
 ### Optional: HTTPS via reverse proxy
 

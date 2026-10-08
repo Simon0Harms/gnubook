@@ -28,8 +28,24 @@
         </li>
       </ul>
       <ul class="navbar-nav ms-auto align-items-center">
+        {% if current_book %}
+        <li class="nav-item dropdown me-2">
+          {% if my_books|length > 1 %}
+          <a class="nav-link dropdown-toggle fw-semibold" href="#" data-bs-toggle="dropdown" aria-expanded="false" title="Buch wechseln">
+            <i class="bi bi-journal-bookmark"></i> {{ current_book.name }}</a>
+          <ul class="dropdown-menu dropdown-menu-end">
+            {% for b in my_books %}
+            <li><form method="post" action="{{ url_for('auth.switch_book', book_id=b['id']) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="dropdown-item {{ 'active' if b['id'] == current_book.id }}" type="submit">{{ b['name'] }}</button></form></li>
+            {% endfor %}
+          </ul>
+          {% else %}<span class="nav-link fw-semibold"><i class="bi bi-journal-bookmark"></i> {{ current_book.name }}</span>{% endif %}
+        </li>
+        {% endif %}
         <li class="nav-item me-2">
-          {% if locks is none %}
+          {% if not current_book %}
+          {% elif locks is none %}
             <span class="badge text-bg-secondary" title="Datenbank nicht erreichbar"><i class="bi bi-question-circle"></i> Buch?</span>
           {% elif locks %}
             <span class="badge text-bg-danger" title="{% for h, p in locks %}{{ h }} (PID {{ p }}) {% endfor %}">
@@ -42,11 +58,21 @@
           <button class="btn btn-link nav-link" type="button" id="theme-toggle" title="Hell/Dunkel umschalten">
             <i class="bi bi-circle-half"></i></button>
         </li>
-        <li class="nav-item">
-          <form action="{{ url_for('auth.logout') }}" method="post" class="d-inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn btn-link nav-link" type="submit" title="Abmelden"><i class="bi bi-box-arrow-right"></i></button>
-          </form>
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown" aria-expanded="false" title="Benutzer">
+            <i class="bi bi-person-circle"></i> <span class="d-none d-md-inline">{{ current_user['username'] if current_user else '' }}</span></a>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="{{ url_for('auth.change_password') }}"><i class="bi bi-key"></i> Passwort ändern</a></li>
+            {% if current_user and current_user['is_admin'] %}
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="{{ url_for('admin.users') }}"><i class="bi bi-people"></i> Benutzer</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('admin.books') }}"><i class="bi bi-journals"></i> Bücher</a></li>
+            {% endif %}
+            <li><hr class="dropdown-divider"></li>
+            <li><form action="{{ url_for('auth.logout') }}" method="post">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="dropdown-item" type="submit"><i class="bi bi-box-arrow-right"></i> Abmelden</button></form></li>
+          </ul>
         </li>
       </ul>
     </div>

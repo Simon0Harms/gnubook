@@ -2,24 +2,22 @@
 
 GET  /api/v1/accounts?type=asset&page=1&limit=250
 POST /api/v1/transactions      (one transaction per request)
-Authentication: "Authorization: Bearer <token>" (sha256 of the token in [api] token_sha256).
+Authentication: "Authorization: Bearer <token>"; each token belongs to one user and one book.
 """
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import logging
 from datetime import datetime, time as dtime
 from decimal import Decimal
 
-from flask import Blueprint, jsonify, request, url_for
+from flask import Blueprint, g, jsonify, request, url_for
 
 from ..book import BookError, WriteLockError
 from ..importer import ImportRejected
 from ..ledger import balances, load_transaction
 from ..money import fraction_digits, symbol_for, to_api_string
-from . import state
+from . import registry, state
 
 log = logging.getLogger("gnubook.api")
 bp = Blueprint("api", __name__, url_prefix="/api/v1")
@@ -36,15 +34,15 @@ def _error(status: int, message: str, field: str | None = None):
 
 @bp.before_request
 def authenticate():
-    st = state()
-    expected = (st.cfg.api.token_sha256 or "").strip().lower()
     header = request.headers.get("Authorization", "")
-    if not expected:
-        return _error(401, "API nicht aktiviert: [api] token_sha256 ist nicht gesetzt (gnubook gen-token).")
-    if not header.startswith("Bearer "):
+    if not header.startswith("Bearer ") or not header[7:].strip():
         return _error(401, "Unauthenticated.")
-    digest = hashlib.sha256(header[7:].strip().encode()).hexdigest()
-    if not hmac.compare_digest(digest, expected):
+    found = registry().system.token_lookup(header[7:].strip())
+    if found is None:
+        return _error(401, "Unauthenticated.")
+    g.user, book_id = found
+    g.ctx = registry().context(book_id)
+    if g.ctx is None:
         return _error(401, "Unauthenticated.")
     return None
 
@@ -97,8 +95,7 @@ def about():
 
 @bp.get("/about/user")
 def about_user():
-    st = state()
-    return jsonify({"data": {"type": "users", "id": "1", "attributes": {"email": st.cfg.app.username,
+    return jsonify({"data": {"type": "users", "id": str(g.user["id"]), "attributes": {"email": g.user["username"],
                                                                       "blocked": False, "role": "owner"}}})
 
 
@@ -204,7 +201,7 @@ def store_transaction():
     except ValueError:
         return _error(422, "Ungültiges JSON.", "transactions")
     try:
-        result = st.importer.import_body(body)
+        result = st.importer.import_body(body, actor=f"api:{g.user['username']}")
     except ImportRejected as exc:
         return _error(422, str(exc), f"transactions.0.{exc.field}")
     except WriteLockError as exc:

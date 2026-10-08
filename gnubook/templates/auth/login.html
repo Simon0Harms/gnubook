@@ -22,6 +22,10 @@
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% for cat, msg in messages %}<div class="alert alert-{{ cat }} py-2">{{ msg }}</div>{% endfor %}
       {% endwith %}
+      {% if no_users %}
+        <div class="alert alert-info small mb-0">Noch kein Benutzer angelegt. Auf dem Server ausführen:<br>
+          <code>gnubook user-add NAME --admin</code></div>
+      {% else %}
       <form method="post" autocomplete="on">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="input-group mb-3">
@@ -40,6 +44,7 @@
         </div>
         <div class="d-grid"><button type="submit" class="btn btn-success">Anmelden</button></div>
       </form>
+      {% endif %}
     </div>
   </div>
 </div>

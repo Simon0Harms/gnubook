@@ -11,14 +11,11 @@ the importer uses, so the importer can send its data to gnubook unchanged:
 
 ## Setup
 
-1. Create a token in the gnubook container:
+1. Create a token: in gnubook open the book, then *Einstellungen → FinTS-Importer → Token erzeugen*. Or on
+   the command line: `gnubook token-create simon --book Hauptbuch`.
 
-   ```bash
-   gnubook gen-token
-   ```
-
-   The command prints the token (for the importer) and a `token_sha256 = "…"` line. Put that line into
-   `/opt/gnubook/config.toml` under `[api]`, then run `systemctl restart gnubook`.
+   The token is shown only once. It belongs to one user and one book, so the importer always books into
+   that book. If the user loses access to the book, the token stops working.
 
 2. Look up the numeric **Konto-ID** of each bank account. gnubook shows it on the account page and under
    *Einstellungen*.
@@ -28,7 +25,7 @@ the importer uses, so the importer can send its data to gnubook unchanged:
    ```json
    {
      "firefly_url": "http://192.168.1.31:8080",
-     "firefly_access_token": "<token from gnubook gen-token>",
+     "firefly_access_token": "<token from Einstellungen>",
      "skip_transaction_review": "false",
      "choose_account_automation": {
        "bank_account_iban": "DE…",

@@ -55,6 +55,9 @@ The user interface is in German.
     opens directly in GnuCash Desktop), with rotation of older versions.
 - **Backups as `.gnucash` file.** A nightly timer saves the whole book as a SQLite GnuCash file that GnuCash
   Desktop opens directly (`gnubook backup`).
+- **Several users and books.** Every user logs in with their own password. Every book is its own GnuCash
+  database. Books can be shared, and a user with several books switches between them in the header.
+  Administrators manage users and books in the web UI.
 - Dark mode and a layout that works on phones.
 
 | Register | Transaction with splits |
@@ -93,9 +96,11 @@ git clone https://github.com/Simon0Harms/gnubook.git && cd gnubook
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e .
 gnubook demo-book /tmp/demo.gnucash
-gnubook init-config config.toml --url sqlite:////tmp/demo.gnucash --data-dir ./data --username demo
-gnubook hash-password          # put the result into config.toml as password_hash
-gnubook --config config.toml serve   # http://127.0.0.1:8080
+gnubook init-config config.toml --data-dir ./data
+export GNUBOOK_CONFIG=$PWD/config.toml
+gnubook user-add demo --admin
+gnubook book-add Demo sqlite:////tmp/demo.gnucash --user demo
+gnubook serve                  # http://127.0.0.1:8080
 ```
 
 ## Installation
@@ -111,28 +116,26 @@ curl -fsSL https://raw.githubusercontent.com/Simon0Harms/gnubook/main/deploy/ins
 ```
 
 Everything lives under `/opt/gnubook`: code, virtualenv, `config.toml`, `data/` and `backup/`. gnubook runs
-as the systemd service `gnubook` (gunicorn, port 8080). Run `gnubook-update` to update.
+as the systemd service `gnubook` (gunicorn, port 8080). Create the first admin with `gnubook user-add NAME
+--admin`, then connect books in the web UI. Run `gnubook-update` to update.
 
 ## Configuration
 
-`/opt/gnubook/config.toml` (TOML). Every value can be overridden with an environment variable
+`/opt/gnubook/config.toml` (TOML). Users and books are not part of the file; they are managed in the web UI or on the command line. Every value
+can be overridden with an environment variable
 `GNUBOOK_<SECTION>_<KEY>`, for example `GNUBOOK_BOOK_URL`.
 
 | Key | Meaning |
 |---|---|
-| `[book] url` | SQLAlchemy URL of the book, e.g. `postgresql://gnucash:PW@10.0.0.20:5432/gnucash` or `sqlite:////path/book.gnucash` |
-| `[book] timezone` | Time zone GnuCash Desktop runs in (default `Europe/Berlin`) |
 | `[app] secret_key` | Random string, at least 32 characters (`init-config` creates one) |
-| `[app] username`, `password_hash` | Login. Create the hash with `gnubook hash-password` |
-| `[app] data_dir` | gnubook's own SQLite database |
+| `[app] data_dir` | gnubook's own data: users, books, tokens (`system.sqlite`) and per-book data |
 | `[app] session_cookie_secure`, `behind_proxy` | Set both to `true` behind an HTTPS reverse proxy |
-| `[api] token_sha256` | Enables the import API. Create the token with `gnubook gen-token` |
 | `[api] expose_iban` | Report IBANs to the importer (default `false`, see [docs/FINTS.md](docs/FINTS.md)) |
 | `[import] fallback_account` | Account for bank lines without a known counter account (default `Ausgleichskonto-EUR`/`Imbalance-EUR`) |
 | `[import] accounts` | Only these accounts are offered to the importer (default: all bank, asset, cash and credit accounts) |
 | `[import] iban_map` | IBAN → account, for own accounts gnubook cannot find by account code or GnuCash online-banking data |
 | `[import] transit_account`, `transit_between` | Book transfers between the listed accounts through a transit account |
-| `[backup] gnucash_file`, `keep` | After every change, write a copy of the book as a GnuCash SQLite file (opens directly in GnuCash Desktop) and keep this many versions |
+| `[backup] keep` | Versions of the per-book `.gnucash` copy to keep (the file itself is set per book under *Bücher*) |
 | `[import] match_days`, `transfer_match_days` | Window for linking bank lines to existing bookings (3 / 7 days) |
 
 ## Command line
@@ -140,9 +143,11 @@ as the systemd service `gnubook` (gunicorn, port 8080). Run `gnubook-update` to 
 | Command | Purpose |
 |---|---|
 | `gnubook check` | Check the configuration, the database connection, the GnuCash version and the lock |
-| `gnubook hash-password` | Create a password hash |
-| `gnubook gen-token` | Create an API token for the FinTS importer |
-| `gnubook check-balances [--account NAME] [--show-all] [--accept-open]` | Recompute all balance checkpoints. Exit code 1 means open differences |
+| `gnubook user-add NAME [--admin] [--book B]`, `user-list`, `user-password NAME` | Manage users (also in the web UI) |
+| `gnubook book-add NAME URL [--user U]`, `book-list` | Connect GnuCash databases as books (also in the web UI) |
+| `gnubook token-create USER --book B` | API token for the FinTS importer (also under *Einstellungen*) |
+| `gnubook backup --book B` | Write a `.gnucash` copy now |
+| `gnubook check-balances [--book B] [--account NAME] [--show-all] [--accept-open]` | Recompute all balance checkpoints. Exit code 1 means open differences |
 | `gnubook backup [--dir DIR] [--keep N]` | Save the book as a `.gnucash` file (SQLite) that GnuCash Desktop opens |
 | `gnubook demo-book PATH` | Create the synthetic demo book |
 | `gnubook init-config PATH` | Create a configuration file with a random `secret_key` |
@@ -163,7 +168,6 @@ as the systemd service `gnubook` (gunicorn, port 8080). Run `gnubook-update` to 
   they can only be changed in GnuCash Desktop.
 - There are no reports, budgets, scheduled transactions or reconciliation workflow. Use GnuCash Desktop for
   those.
-- There is one login user.
 - The import API covers what bnw/firefly-iii-fints-importer needs, not all of Firefly III's API.
 
 ## Development

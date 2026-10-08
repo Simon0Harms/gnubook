@@ -33,6 +33,11 @@
       if (!window.confirm(form.getAttribute('data-confirm'))) { ev.preventDefault(); }
     });
   });
+  document.querySelectorAll('button[data-confirm-button]').forEach(function (btn) {
+    btn.addEventListener('click', function (ev) {
+      if (!window.confirm(btn.getAttribute('data-confirm-button'))) { ev.preventDefault(); }
+    });
+  });
   document.querySelectorAll('[data-select-all]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var boxes = document.querySelectorAll(btn.getAttribute('data-select-all'));

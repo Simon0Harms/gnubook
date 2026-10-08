@@ -6,7 +6,7 @@ import re
 from datetime import date
 from decimal import Decimal
 
-from flask import (Blueprint, current_app, abort, flash, g, jsonify, redirect, render_template, request, session, url_for)
+from flask import (Blueprint, abort, flash, g, jsonify, redirect, render_template, request, session, url_for)
 
 from .. import checkpoints as cps
 from ..book import ASSET_TYPES, LIABILITY_TYPES, BookError, WriteLockError, latest_prices
@@ -17,7 +17,7 @@ from ..ledger import (MULTI, annotate_rows, balances, description_suggestions, l
 from ..money import AmountError, ZERO, fmt, parse_amount
 from ..writer import (ConflictError, SplitInput, TxInput, ValidationError, create_transaction,
                       delete_transaction, update_transaction)
-from . import state
+from . import registry, state
 from .auth import login_required
 
 log = logging.getLogger("gnubook.web")
@@ -58,7 +58,7 @@ def lock_info():
 @bp.app_context_processor
 def inject_lock():
     def _lock():
-        return lock_info() if session.get("user") else []
+        return lock_info() if g.get("ctx") is not None else []
     return {"book_lock": _lock}
 
 
@@ -640,7 +640,28 @@ def settings():
     return render_template("settings.html", schema=schema, importable=importable, ids=ids, safe_url=safe_url,
                            cfg=st.cfg, fallback=st.importer.fallback_account(idx, idx.root.commodity_guid),
                            audit=st.appdb.audit_log(60), all_locks=st.book.lock_holders(),
-                           backup=current_app.extensions.get("gnubook_backup"))
+                           backup=st.backup, tokens=registry().system.tokens(st.id),
+                           new_token=session.pop("new_token", None))
+
+
+@bp.route("/settings/token", methods=["POST"])
+@login_required
+def token_create():
+    st = state()
+    label = (request.form.get("label") or "FinTS-Importer").strip()[:80]
+    session["new_token"] = registry().system.create_token(g.user["id"], st.id, label)
+    st.appdb.audit(session.get("user", "?"), "token-create", None, label)
+    return redirect(url_for("views.settings") + "#api")
+
+
+@bp.route("/settings/token/<int:token_id>/delete", methods=["POST"])
+@login_required
+def token_delete(token_id):
+    st = state()
+    registry().system.delete_token(token_id, st.id)
+    st.appdb.audit(session.get("user", "?"), "token-delete", None, str(token_id))
+    flash("Token gelöscht.", "success")
+    return redirect(url_for("views.settings") + "#api")
 
 
 @bp.route("/settings/unlock", methods=["POST"])

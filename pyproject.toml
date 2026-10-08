@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gnubook"
-version = "0.1.0"
+version = "0.2.0"
 description = "Self-hosted web frontend for a GnuCash book (PostgreSQL/SQLite): accounts, registers, free splits, bank balance checks and a Firefly-III-compatible import API"
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }

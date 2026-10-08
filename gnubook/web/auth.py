@@ -1,4 +1,4 @@
-"""Login (single user from the config), session handling and CSRF protection."""
+"""Login (users from system.sqlite), book selection, session handling and CSRF protection."""
 from __future__ import annotations
 
 import hmac
@@ -6,10 +6,10 @@ import secrets
 import time
 from functools import wraps
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
-from werkzeug.security import check_password_hash
+from flask import Blueprint, abort, flash, g, redirect, render_template, request, session, url_for
 
-from . import state
+from ..system import UserError
+from . import registry
 
 bp = Blueprint("auth", __name__)
 
@@ -32,15 +32,50 @@ def check_csrf():
         abort(400, description="Ungültiges oder fehlendes CSRF-Token – bitte Seite neu laden.")
 
 
-def login_required(view):
-    @wraps(view)
-    def wrapper(*args, **kwargs):
-        if not session.get("user"):
-            return redirect(url_for("auth.login", next=request.full_path if request.method == "GET" else None))
-        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
-            check_csrf()
-        return view(*args, **kwargs)
-    return wrapper
+def _load_user():
+    uid = session.get("user_id")
+    if not uid:
+        return None
+    user = registry().system.user(uid)
+    if user is None or not user["active"]:
+        session.clear()
+        return None
+    g.user = user
+    return user
+
+
+def _select_book(user):
+    """Book of this session: the chosen one if still allowed, else the user's first book."""
+    reg = registry()
+    books = reg.system.user_books(user["id"])
+    wanted = session.get("book_id")
+    chosen = next((b for b in books if b["id"] == wanted), books[0] if books else None)
+    if chosen is None:
+        g.ctx = None
+        return None
+    session["book_id"] = chosen["id"]
+    g.ctx = reg.context(chosen["id"])
+    return g.ctx
+
+
+def login_required(view=None, *, book: bool = True, admin: bool = False):
+    """Requires a logged-in user; by default also a book the user may use (else: page 'keine Bücher')."""
+    def decorate(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            user = _load_user()
+            if user is None:
+                return redirect(url_for("auth.login", next=request.full_path if request.method == "GET" else None))
+            if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+                check_csrf()
+            if admin and not user["is_admin"]:
+                abort(403)
+            ctx = _select_book(user)
+            if book and ctx is None:
+                return render_template("no_books.html"), 200
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorate(view) if view is not None else decorate
 
 
 def _client_ip() -> str:
@@ -60,31 +95,30 @@ def inject_csrf():
 
 @bp.route("/login", methods=["GET", "POST"])
 def login():
-    st = state()
+    system = registry().system
+    if not system.users():
+        return render_template("auth/login.html", no_users=True)
     if request.method == "POST":
         check_csrf()
         ip = _client_ip()
         now = time.time()
-        if st.appdb.login_failures(ip, FAILURE_WINDOW, now) >= MAX_FAILURES:
+        if system.login_failures(ip, FAILURE_WINDOW, now) >= MAX_FAILURES:
             flash("Zu viele Fehlversuche – bitte 15 Minuten warten.", "danger")
             return render_template("auth/login.html"), 429
-        username = request.form.get("username", "")
-        password = request.form.get("password", "")
-        user_ok = hmac.compare_digest(username.encode(), st.cfg.app.username.encode())
-        pw_ok = bool(st.cfg.app.password_hash) and check_password_hash(st.cfg.app.password_hash, password)
-        if user_ok and pw_ok:
-            st.appdb.clear_login_failures(ip)
+        user = system.authenticate(request.form.get("username", "").strip(), request.form.get("password", ""))
+        if user is not None:
+            system.clear_login_failures(ip)
             session.clear()
             session.permanent = True
-            session["user"] = st.cfg.app.username
+            session["user_id"] = user["id"]
+            session["user"] = user["username"]
             csrf_token()
-            st.appdb.audit(st.cfg.app.username, "login", None, ip)
             return redirect(_safe_next(request.args.get("next")))
-        st.appdb.add_login_failure(ip, now)
+        system.add_login_failure(ip, now)
         time.sleep(0.5)
         flash("Benutzername oder Passwort falsch.", "danger")
         return render_template("auth/login.html"), 401
-    if session.get("user"):
+    if _load_user() is not None:
         return redirect(url_for("views.dashboard"))
     return render_template("auth/login.html")
 
@@ -95,3 +129,31 @@ def logout():
     session.clear()
     flash("Abgemeldet.", "info")
     return redirect(url_for("auth.login"))
+
+
+@bp.route("/book/<int:book_id>", methods=["POST"])
+@login_required(book=False)
+def switch_book(book_id):
+    if not registry().system.may_use(g.user["id"], book_id):
+        abort(403)
+    session["book_id"] = book_id
+    return redirect(url_for("views.dashboard"))
+
+
+@bp.route("/account/password", methods=["GET", "POST"])
+@login_required(book=False)
+def change_password():
+    system = registry().system
+    if request.method == "POST":
+        if system.authenticate(g.user["username"], request.form.get("old", "")) is None:
+            flash("Das bisherige Passwort stimmt nicht.", "danger")
+        elif request.form.get("new", "") != request.form.get("new2", ""):
+            flash("Die neuen Passwörter stimmen nicht überein.", "danger")
+        else:
+            try:
+                system.set_password(g.user["id"], request.form.get("new", ""))
+                flash("Passwort geändert.", "success")
+                return redirect(url_for("views.dashboard"))
+            except UserError as exc:
+                flash(str(exc), "danger")
+    return render_template("auth/password.html")

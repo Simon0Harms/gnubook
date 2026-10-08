@@ -457,7 +457,7 @@ class Importer:
         with self._lock:
             return self._import_body(body, actor)
 
-    def _import_body(self, body: dict, actor: str) -> ImportResult:
+    def _import_body(self, body: dict, actor: str) -> ImportResult:  # noqa: C901
         index = self.book.load_accounts()
         entry = self.parse(body, index)
         h = self.entry_hash(entry)
