@@ -47,7 +47,7 @@
       {% endif %}
     </div>
     <div class="card-footer text-center small">
-      {% for code, label in LANGUAGES.items() %}{% if not loop.first %} · {% endif %}{% if code == lang %}<b>{{ label }}</b>{% else %}<a href="{{ url_for('auth.set_language', code=code, next=request.args.get('next')) }}">{{ label }}</a>{% endif %}{% endfor %}
+      {% for code, label in LANGUAGES.items() %}{% if not loop.first %} · {% endif %}{% if code == lang %}<b>{{ label }}</b>{% else %}<form method="post" action="{{ url_for('auth.set_language', code=code) }}" class="d-inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path if request.args.get('next') is none else request.args.get('next') }}"><button type="submit" class="btn btn-link btn-sm p-0 align-baseline">{{ label }}</button></form>{% endif %}{% endfor %}
     </div>
   </div>
 </div>

@@ -142,14 +142,15 @@ def switch_book(book_id):
     return redirect(url_for("views.dashboard"))
 
 
-@bp.route("/lang/<code>")
+@bp.route("/language/<code>", methods=["POST"])
 def set_language(code):
-    """Language switch on the login page (cookie) – logged-in users store it in their account."""
+    """Switch the user-interface language: cookie (works before login), plus the account of a logged-in user."""
     from ..i18n import LANGUAGES
 
+    check_csrf()
     if code not in LANGUAGES:
         abort(404)
-    resp = redirect(_safe_next(request.args.get("next")) if request.args.get("next") else url_for("auth.login"))
+    resp = redirect(_safe_next(request.form.get("next")))
     resp.set_cookie("gnubook_lang", code, max_age=365 * 86400, samesite="Lax", httponly=True)
     user = _load_user()
     if user is not None:
@@ -160,10 +161,15 @@ def set_language(code):
 @bp.route("/account/language", methods=["POST"])
 @login_required(book=False)
 def account_language():
-    registry().system.set_language(g.user["id"], request.form.get("language", ""))
+    from ..i18n import LANGUAGES
+
+    code = request.form.get("language", "")
+    registry().system.set_language(g.user["id"], code)
     resp = redirect(url_for("auth.change_password"))
-    resp.set_cookie("gnubook_lang", request.form.get("language", ""), max_age=365 * 86400, samesite="Lax",
-                    httponly=True)
+    if code in LANGUAGES:
+        resp.set_cookie("gnubook_lang", code, max_age=365 * 86400, samesite="Lax", httponly=True)
+    else:
+        resp.delete_cookie("gnubook_lang")
     return resp
 
 

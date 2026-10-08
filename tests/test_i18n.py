@@ -5,7 +5,7 @@ from pathlib import Path
 
 from gnubook import book, ledger
 from gnubook.i18n import gettext
-from gnubook.i18n_en import EN
+from gnubook.translations_en import EN
 from gnubook.web import views
 
 PKG = Path(__file__).resolve().parent.parent / "gnubook"
@@ -34,7 +34,7 @@ def message_ids():
 
 def test_every_text_has_an_english_translation():
     missing = sorted(message_ids() - EN.keys())
-    assert not missing, "missing in gnubook/i18n_en.py:\n" + "\n".join(missing)
+    assert not missing, "missing in gnubook/translations_en.py:\n" + "\n".join(missing)
 
 def test_placeholders_match():
     for de, en in EN.items():
@@ -87,3 +87,8 @@ def test_config_default_language(app, client):
     assert "Overview" in client.get("/").text
     _switch(client, "de")
     assert "Übersicht" in client.get("/").text
+
+
+def test_language_switch_is_not_a_get(client):
+    assert client.get("/language/en").status_code == 405
+    assert client.get("/lang/en").status_code == 404

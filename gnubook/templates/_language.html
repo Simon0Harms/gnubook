@@ -1,8 +1,0 @@
-{# language switch (POST + CSRF, stored in a cookie); used in the user menu and on the login page #}
-{% for code, name in languages.items() %}
-<li><form method="post" action="{{ url_for('auth.set_language', code=code) }}">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <input type="hidden" name="next" value="{{ request.full_path }}">
-  <button class="dropdown-item {{ 'active' if code == lang }}" type="submit" lang="{{ code }}" {{ 'aria-current=true' if code == lang }}>
-    <i class="bi bi-translate"></i> {{ name }}</button></form></li>
-{% endfor %}
