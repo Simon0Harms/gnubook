@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% from "macros.html" import amount %}
+{% set cur = base.mnemonic if base else 'EUR' %}
+{% block title %}{{ _("Nettovermögen") }}{% endblock %}
+{% block header %}{{ _("Nettovermögen") }}{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">{{ start|de_date }} – {{ end|de_date }} · {{ _("Vermögen minus Verbindlichkeiten, jeweils zum Monatsende") }}</div>{% endblock %}
+{% block content %}
+
+<form class="card card-body py-2 mb-3" method="get" action="{{ url_for('reports.net_worth') }}" data-autosubmit>
+  <div class="row g-2 align-items-end">
+    <div class="col-6 col-md-3">
+      <label class="form-label small mb-0" for="period">{{ _("Zeitraum") }}</label>
+      <select class="form-select form-select-sm" id="period" name="period">
+        {% for key, label in PERIOD_LABELS.items() %}<option value="{{ key }}" {{ 'selected' if key == period }}>{{ _(label) }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2 period-custom">
+      <label class="form-label small mb-0" for="from">{{ _("von") }}</label>
+      <input class="form-control form-control-sm" type="date" id="from" name="from" value="{{ start.isoformat() }}">
+    </div>
+    <div class="col-6 col-md-2 period-custom">
+      <label class="form-label small mb-0" for="to">{{ _("bis") }}</label>
+      <input class="form-control form-control-sm" type="date" id="to" name="to" value="{{ end.isoformat() }}">
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="form-check form-switch mb-1">
+        <input class="form-check-input" type="checkbox" role="switch" id="parts" name="parts" value="1" {{ 'checked' if parts }}>
+        <input type="hidden" name="parts" value="0">
+        <label class="form-check-label small" for="parts">{{ _("Vermögen und Verbindlichkeiten einblenden") }}</label>
+      </div>
+    </div>
+    <div class="col-auto"><noscript><button class="btn btn-sm btn-primary" type="submit">{{ _("Anzeigen") }}</button></noscript></div>
+  </div>
+</form>
+
+{% if unconverted %}
+<div class="alert alert-warning small">{{ _('{n} Konten in anderen Währungen oder Wertpapieren ohne Kurs wurden nicht berücksichtigt.', n=unconverted) }}</div>
+{% endif %}
+
+{% if not points %}
+<div class="alert alert-info">{{ _("Keine Daten im gewählten Zeitraum.") }}</div>
+{% else %}
+<div class="row">
+  <div class="col-lg-3 col-6"><div class="info-box"><span class="info-box-icon text-bg-primary"><i class="bi bi-graph-up"></i></span>
+    <div class="info-box-content"><span class="info-box-text">{{ _("Nettovermögen") }}</span><span class="info-box-number">{{ amount(last.net, cur) }}</span>
+      <span class="small text-body-secondary">{{ _('Stand {day}', day=last.day|de_date) }}</span></div></div></div>
+  <div class="col-lg-3 col-6"><div class="info-box"><span class="info-box-icon text-bg-secondary"><i class="bi bi-arrow-left-right"></i></span>
+    <div class="info-box-content"><span class="info-box-text">{{ _("Veränderung") }}</span><span class="info-box-number">{{ amount(change, cur, sign=True) }}</span>
+      <span class="small text-body-secondary">{% if pct is not none %}{{ ('%+.1f'|format(pct))|replace('.', ',') }} % · {% endif %}{{ _('seit {day}', day=first.day|de_date) }}</span></div></div></div>
+  <div class="col-lg-3 col-6"><div class="info-box"><span class="info-box-icon text-bg-success"><i class="bi bi-piggy-bank"></i></span>
+    <div class="info-box-content"><span class="info-box-text">{{ _("Vermögen") }}</span><span class="info-box-number amount">{{ last.assets|money(cur) }}</span></div></div></div>
+  <div class="col-lg-3 col-6"><div class="info-box"><span class="info-box-icon text-bg-warning"><i class="bi bi-credit-card"></i></span>
+    <div class="info-box-content"><span class="info-box-text">{{ _("Verbindlichkeiten") }}</span><span class="info-box-number amount">{{ last.liabilities|money(cur) }}</span></div></div></div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header"><h3 class="card-title">{{ _("Verlauf") }}</h3></div>
+  <div class="card-body">
+    <div class="nw-wrap">
+      <svg class="nw-chart" viewBox="-80 -12 {{ chart.width + 100 }} {{ chart.height + 40 }}" role="img" aria-label="{{ _("Liniendiagramm des Nettovermögens je Monat") }}">
+        {% for t in chart.ticks %}
+          <line class="nw-grid" x1="0" x2="{{ chart.width }}" y1="{{ '%.1f'|format(t.y) }}" y2="{{ '%.1f'|format(t.y) }}"></line>
+          <text class="nw-axis" x="-8" y="{{ '%.1f'|format(t.y) }}" text-anchor="end" dominant-baseline="middle">{{ t.text }}</text>
+        {% endfor %}
+        <line class="nw-zero" x1="0" x2="{{ chart.width }}" y1="{{ '%.1f'|format(chart.zero) }}" y2="{{ '%.1f'|format(chart.zero) }}"></line>
+        {% for l in chart.labels %}<text class="nw-axis" x="{{ '%.1f'|format(l.x) }}" y="{{ chart.height + 20 }}" text-anchor="middle">{{ l.p.label }}</text>{% endfor %}
+        <path class="nw-area" d="{{ chart.lines.net.area }}"></path>
+        {% for s in ('assets', 'liabilities', 'net') if s in chart.lines %}
+          <polyline class="nw-line nw-{{ s }}" points="{{ chart.lines[s].points }}"></polyline>
+        {% endfor %}
+        {% for d in chart.lines.net.dots %}
+          <g class="nw-hover">
+            <rect x="{{ '%.1f'|format(d.x - [chart.step / 2, 4]|max) }}" y="0" width="{{ '%.1f'|format([chart.step, 8]|max) }}" height="{{ chart.height }}"></rect>
+            <circle cx="{{ '%.1f'|format(d.x) }}" cy="{{ '%.1f'|format(d.y) }}" r="4"></circle>
+            <title>{{ d.p.label }} ({{ d.p.day|de_date }}) – {{ _("Nettovermögen") }}: {{ d.p.net|money(cur) }} · {{ _("Vermögen") }}: {{ d.p.assets|money(cur) }} · {{ _("Verbindlichkeiten") }}: {{ d.p.liabilities|money(cur) }}</title>
+          </g>
+        {% endfor %}
+      </svg>
+    </div>
+    <div class="small mt-2"><span class="legend legend-net"></span> {{ _("Nettovermögen") }}
+      {% if parts %}&nbsp; <span class="legend legend-assets"></span> {{ _("Vermögen") }} &nbsp; <span class="legend legend-liab"></span> {{ _("Verbindlichkeiten") }}{% endif %}</div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title">{{ _("Zusammensetzung") }}</h3></div>
+      <div class="card-body p-0 table-responsive">
+        <table class="table table-sm mb-0 small">
+          <thead><tr><th>{{ _("Kontengruppe") }}</th><th class="text-end">{{ first.day|de_date }}</th><th class="text-end">{{ last.day|de_date }}</th><th class="text-end">{{ _("Veränderung") }}</th></tr></thead>
+          <tbody>
+          {% for g in groups %}
+            <tr><td><a href="{{ url_for('views.register', guid=g.account.guid) }}">{{ g.account.name }}</a>{% if g.liability %} <span class="badge text-bg-warning">{{ _("Verbindlichkeit") }}</span>{% endif %}</td>
+              <td class="text-end amount text-nowrap">{{ g.start|money(cur) }}</td><td class="text-end amount text-nowrap">{{ g.end|money(cur) }}</td>
+              <td class="text-end text-nowrap">{{ amount(-g.change if g.liability else g.change, cur, sign=True) }}</td></tr>
+          {% else %}
+            <tr><td colspan="4" class="text-body-secondary">{{ _("Keine Vermögens- oder Verbindlichkeitskonten.") }}</td></tr>
+          {% endfor %}
+          </tbody>
+          <tfoot><tr class="fw-semibold"><td>{{ _("Nettovermögen") }}</td><td class="text-end amount text-nowrap">{{ first.net|money(cur) }}</td>
+            <td class="text-end amount text-nowrap">{{ last.net|money(cur) }}</td><td class="text-end text-nowrap">{{ amount(change, cur, sign=True) }}</td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title">{{ _("Monatswerte") }}</h3></div>
+      <div class="card-body p-0 table-responsive nw-table">
+        <table class="table table-sm mb-0 small">
+          <thead><tr><th>{{ _("Monat") }}</th><th class="text-end">{{ _("Vermögen") }}</th><th class="text-end d-none d-sm-table-cell">{{ _("Verbindlichkeiten") }}</th><th class="text-end">{{ _("Nettovermögen") }}</th><th class="text-end d-none d-md-table-cell">{{ _("Veränderung") }}</th></tr></thead>
+          <tbody>
+          {% for r in rows|reverse %}
+            <tr><td class="text-nowrap">{{ r.p.label }}</td><td class="text-end amount text-nowrap">{{ r.p.assets|money(cur) }}</td><td class="text-end amount text-nowrap d-none d-sm-table-cell">{{ r.p.liabilities|money(cur) }}</td>
+              <td class="text-end text-nowrap">{{ amount(r.p.net, cur) }}</td>
+              <td class="text-end text-nowrap d-none d-md-table-cell">{% if r.change is not none %}{{ amount(r.change, cur, sign=True) }}{% else %}–{% endif %}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

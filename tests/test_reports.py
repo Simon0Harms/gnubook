@@ -105,3 +105,76 @@ def test_report_without_budget_and_data(client, state):
         conn.execute(text("DELETE FROM budgets"))
     r = client.get("/reports/income-expenses?period=custom&from=2010-01-01&to=2010-02-01")
     assert r.status_code == 200 and "kein Budget" in r.text and "Keine Einnahmen oder Ausgaben" in r.text
+
+
+# ------------------------------------------------------------------------------------------ net worth
+
+def test_nw_periods_and_ticks():
+    t = date(2026, 3, 15)
+    assert rp.nw_period_range("3y", t, None) == (date(2023, 4, 1), t)
+    assert rp.nw_period_range("all", t, date(2019, 5, 7)) == (date(2019, 5, 1), t)
+    assert rp.nw_period_range("bogus", t, None) == (date(2025, 4, 1), t)
+    assert rp.nice_ticks(0, 9300) == [0, 2000, 4000, 6000, 8000, 10000]
+    assert rp.nice_ticks(-120, 480)[0] <= -120 and rp.nice_ticks(-120, 480)[-1] >= 480
+    assert len(rp.nice_ticks(5, 5)) >= 2
+
+
+def test_net_worth_matches_balances(state):
+    from gnubook.ledger import balances
+    from gnubook.book import ASSET_TYPES, LIABILITY_TYPES
+    idx = state.book.load_accounts()
+    today = state.book.today()
+    with state.book.connect() as conn:
+        nw = rp.net_worth(conn, state.book, idx, date(2025, 1, 1), today)
+        own = balances(conn, state.book, upto=today)
+    last = nw.points[-1]
+    assert last.day == today and nw.unconverted == 0
+    assert last.assets == sum((v for g, v in own.items() if idx.get(g).type in ASSET_TYPES), D(0))
+    assert last.liabilities == -sum((v for g, v in own.items() if idx.get(g).type in LIABILITY_TYPES), D(0))
+    assert [p.key for p in nw.points][:3] == ["2024-12", "2025-01", "2025-02"]
+    assert nw.points[0].day == date(2024, 12, 31) and nw.points[1].day == date(2025, 1, 31)
+    with state.book.connect() as conn:
+        assert rp.net_worth(conn, state.book, idx, date(2025, 1, 1), today, opening=False).points[0].key == "2025-01"
+    # level-1 groups sum up to the totals (placeholders "Aktiva"/"Fremdkapital" are replaced by their children)
+    names = [g.name for g in nw.groups]
+    assert {"Barvermögen", "Geldanlagen", "Kreditkarte"} <= set(names) and "Aktiva" not in names
+    assert sum((v for g, v in last.groups.items() if idx.get(g).type in ASSET_TYPES), D(0)) == last.assets
+
+
+def test_net_worth_values_securities_with_historical_prices(state):
+    import piecash
+    idx = state.book.load_accounts()
+    giro = idx.find("Aktiva:Barvermögen:Girokonto Musterbank")
+    with state.book.connect() as conn:
+        before = {p.key: p.net for p in rp.net_worth(conn, state.book, idx, date(2025, 2, 1), date(2025, 6, 30)).points}
+    path = state.book.url.split("sqlite:///", 1)[-1] if state.book.url.startswith("sqlite") else state.book.url
+    with piecash.open_book(path, readonly=False, open_if_lock=True, do_backup=False) as b:
+        eur = b.default_currency
+        etf = piecash.Commodity(namespace="FUND", mnemonic="ETF1", fullname="Test ETF", fraction=1000, book=b)
+        depot = piecash.Account("Test ETF", "STOCK", etf, parent=b.accounts(fullname="Aktiva:Geldanlagen"), book=b)
+        piecash.Price(etf, eur, date(2025, 3, 10), D("100"), type="last")
+        piecash.Price(etf, eur, date(2025, 5, 2), D("120"), type="last")
+        piecash.Transaction(eur, "ETF Kauf", post_date=date(2025, 3, 10), splits=[
+            piecash.Split(b.accounts(guid=giro.guid), value=D("-1000")),
+            piecash.Split(depot, value=D("1000"), quantity=D("10"))])
+        b.save()
+    idx = state.book.load_accounts()
+    with state.book.connect() as conn:
+        nw = rp.net_worth(conn, state.book, idx, date(2025, 2, 1), date(2025, 6, 30))
+    after = {p.key: p.net for p in nw.points}
+    assert nw.unconverted == 0
+    # bought at 100 (net worth unchanged), valued at the later price of 120 from May on
+    assert after["2025-02"] == before["2025-02"] and after["2025-04"] == before["2025-04"]
+    assert after["2025-05"] == before["2025-05"] + D("200")
+    assert after["2025-06"] == before["2025-06"] + D("200")
+
+
+def test_net_worth_page(client):
+    r = client.get("/reports/net-worth?period=all")
+    assert r.status_code == 200 and 'class="nw-chart"' in r.text and "Zusammensetzung" in r.text
+    assert "nw-assets" in r.text
+    assert "nw-assets" not in client.get("/reports/net-worth?parts=0&parts=0").text
+    for q in ["", "?period=ytd", "?period=3y", "?period=last_year", "?period=bogus",
+              "?period=custom&from=2010-01-01&to=2010-02-01", "?period=custom&from=xx&to="]:
+        assert client.get("/reports/net-worth" + q).status_code == 200, q
+    assert "/reports/net-worth" in client.get("/").text

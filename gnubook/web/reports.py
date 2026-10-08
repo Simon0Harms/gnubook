@@ -149,3 +149,47 @@ def income_expenses():
         breakdown=breakdown, focus_total=focus_total, segments=segments, months=months, peak=peak,
         sel_peak=sel_peak, budget_view=budget_view, unconverted=fl.unconverted, drill=drill,
         base=idx.root.commodity, PERIOD_LABELS=PERIOD_LABELS, KIND_LABELS=KIND_LABELS, MONTHS=MONTHS)
+
+
+NW_PERIOD_LABELS = {"12m": "Letzte 12 Monate", "ytd": "Dieses Jahr", "last_year": "Letztes Jahr",
+                    "3y": "Letzte 3 Jahre", "5y": "Letzte 5 Jahre", "all": "Gesamter Zeitraum", "custom": "Zeitraum"}
+
+
+@bp.route("/net-worth")
+@login_required
+def net_worth():
+    st = state()
+    idx = index()
+    today = st.book.today()
+    period = request.args.get("period", "12m")
+    if period not in rp.NW_PERIODS:
+        period = "12m"
+    parts = request.args.get("parts", "1") == "1"
+    with st.book.connect() as conn:
+        first = rp.first_booking(conn, st.book)
+        start, end = rp.nw_period_range(period, today, first, _parse_date(request.args.get("from")),
+                                        _parse_date(request.args.get("to")))
+        nw = rp.net_worth(conn, st.book, idx, start, end, opening=period != "all")
+    points = nw.points
+    for p in points:
+        p.label = _(MONTHS[int(p.key[5:]) - 1]) + " " + p.key[2:4]
+    chart = rp.line_chart(points, ("net", "assets", "liabilities") if parts else ("net",))
+    rows = []
+    prev = None
+    for p in points:
+        rows.append({"p": p, "change": None if prev is None else p.net - prev.net})
+        prev = p
+    first_p, last_p = (points[0], points[-1]) if points else (None, None)
+    change = last_p.net - first_p.net if points else ZERO
+    pct = float(change / abs(first_p.net) * 100) if points and first_p.net else None
+    groups = []
+    for g in nw.groups:
+        a = first_p.groups.get(g.guid, ZERO) if first_p else ZERO
+        b = last_p.groups.get(g.guid, ZERO) if last_p else ZERO
+        if a or b:
+            groups.append({"account": g, "start": a, "end": b, "change": b - a,
+                           "liability": g.type in rp.LIABILITY_TYPES})
+    return render_template(
+        "reports/net_worth.html", period=period, start=start, end=end, parts=parts, points=points, rows=rows,
+        chart=chart, first=first_p, last=last_p, change=change, pct=pct, groups=groups,
+        unconverted=nw.unconverted, base=idx.root.commodity, PERIOD_LABELS=NW_PERIOD_LABELS)

@@ -26,7 +26,7 @@
     <div class="small-box text-bg-primary">
       <div class="inner"><h3 class="amount-lg">{{ (assets + liabilities)|money(cur) }}</h3><p>{{ _("Nettovermögen (heute)") }}</p></div>
       <i class="small-box-icon bi bi-graph-up"></i>
-      <span class="small-box-footer">{{ _('Stand {day}', day=today|de_date) }}</span>
+      <a href="{{ url_for('reports.net_worth') }}" class="small-box-footer link-light link-underline-opacity-0">{{ _('Stand {day}', day=today|de_date) }} · {{ _("Verlauf") }} <i class="bi bi-arrow-right-circle"></i></a>
     </div>
   </div>
   <div class="col-lg-3 col-6">

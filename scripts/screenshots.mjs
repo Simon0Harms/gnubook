@@ -57,6 +57,8 @@ await page.goto(base + '/checkpoints?all=1');
 await page.screenshot({ path: `${out}/checkpoints.png` });
 await page.goto(base + '/imports?all=1');
 await page.screenshot({ path: `${out}/imports.png` });
+await page.goto(base + '/reports/net-worth');
+await page.screenshot({ path: `${out}/net-worth.png` });
 await ctx.close();
 
 const mobile = await session({ width: 390, height: 844 });

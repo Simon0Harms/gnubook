@@ -1,4 +1,5 @@
-"""Income/expense report: category totals, monthly trend, Sankey flow, budget vs. actual (read-only).
+"""Reports (read-only): income/expenses with category totals, monthly trend, Sankey flow, budget vs. actual;
+net worth over time.
 
 All amounts are converted into the book currency (root account commodity) with the latest prices. Income is
 reported positive (GnuCash stores it as credit, i.e. negative), expenses positive. Book-closing transactions
@@ -6,6 +7,7 @@ reported positive (GnuCash stores it as credit, i.e. negative), expenses positiv
 """
 from __future__ import annotations
 
+import bisect
 import math
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -14,8 +16,9 @@ from decimal import Decimal
 
 from sqlalchemy import text
 
-from .book import Account, AccountIndex, Book, convert, latest_prices
-from .money import ZERO, gnc_decimal
+from .book import (ASSET_TYPES, BALANCE_SHEET_TYPES, LIABILITY_TYPES, Account, AccountIndex, Book, convert,
+                   latest_prices)
+from .money import ZERO, fmt, gnc_decimal
 
 KINDS = ("INCOME", "EXPENSE")
 CLOSING_SLOTS = ("book_closing", "book-closing")
@@ -430,3 +433,212 @@ def budget_rows(index: AccountIndex, kind: str, depth: int, budgets: dict, actua
         rows.append(BudgetRow(acc, b, a, kind))
     rows.sort(key=lambda r: (r.budget is None, -(r.budget or ZERO), -r.actual))
     return rows
+
+
+# ------------------------------------------------------------------------------------------ net worth
+
+NW_PERIODS = ("12m", "ytd", "last_year", "3y", "5y", "all", "custom")
+
+
+def nw_period_range(period: str, today: date, first: date | None, start: date | None = None,
+                    end: date | None = None):
+    """(first day, last day) of a net-worth period; "all" starts with the first booking."""
+    if period == "3y":
+        return add_months(month_start(today), -35), today
+    if period == "5y":
+        return add_months(month_start(today), -59), today
+    if period == "all":
+        return month_start(first or today), today
+    if period in ("ytd", "last_year", "custom"):
+        return period_range(period, today, start, end)
+    return period_range("12m", today)
+
+
+class PriceHistory:
+    """All prices of the book; ``at(day)`` gives a price dict like :func:`latest_prices` as of that day."""
+
+    def __init__(self, conn, book: Book):
+        rows = defaultdict(list)
+        for cg, cug, d, num, den in conn.execute(text(
+                "SELECT commodity_guid, currency_guid, date, value_num, value_denom FROM prices")):
+            day = book.day_of(d)
+            if day is None or not den:
+                continue
+            rows[(cg, cug)].append((day, gnc_decimal(int(num), int(den))))
+        self._rows = {}
+        for key, lst in rows.items():
+            lst.sort(key=lambda r: r[0])  # same day: the later row wins
+            self._rows[key] = ([r[0] for r in lst], [r[1] for r in lst])
+
+    def at(self, day: date) -> dict:
+        out = {}
+        for key, (days, values) in self._rows.items():
+            i = bisect.bisect_right(days, day)
+            # before the first known price use the earliest one rather than dropping the account
+            out[key] = values[i - 1] if i else values[0]
+        return out
+
+
+@dataclass
+class NetWorthPoint:
+    key: str          # YYYY-MM
+    day: date         # valuation day (month end, or the end of the period)
+    assets: Decimal
+    liabilities: Decimal  # positive = debt
+    groups: dict = field(default_factory=dict)  # level-1 group guid -> value (liabilities positive)
+
+    @property
+    def net(self) -> Decimal:
+        return self.assets - self.liabilities
+
+
+@dataclass
+class NetWorth:
+    points: list
+    groups: list          # level-1 balance-sheet accounts (asset groups first)
+    unconverted: int = 0  # accounts whose value could not be converted at some point
+
+
+def balance_groups(index: AccountIndex) -> list[Account]:
+    """Level-1 balance-sheet groups. Top-level placeholders ("Aktiva", "Fremdkapital") are replaced by their
+    sub-accounts, so the groups are the meaningful ones ("Barvermögen", "Kreditkarte")."""
+    out = []
+    for types in (ASSET_TYPES, LIABILITY_TYPES):
+        level = []
+        for top in index.top_level():
+            if top.type not in types:
+                continue
+            kids = [c for c in top.children if c.type in types]
+            level.extend(kids if top.placeholder and kids else [top])
+        out.extend(sorted(level, key=lambda a: a.name.casefold()))
+    return out
+
+
+def first_booking(conn, book: Book) -> date | None:
+    return book.day_of(conn.execute(text("SELECT MIN(post_date) FROM transactions")).scalar())
+
+
+def net_worth(conn, book: Book, index: AccountIndex, start: date, end: date, opening: bool = True) -> NetWorth:
+    """Assets, liabilities and net worth at the end of every month between `start` and `end` (the last point
+    is `end` itself), preceded by the opening value on the day before the first month if `opening` is set.
+
+    Balances are quantities in the account commodity, valued with the price valid on the valuation day
+    (securities mark-to-market, foreign currencies at the historical rate). Hidden and placeholder accounts
+    are included, like in GnuCash's balance sheet.
+    """
+    base = index.root.commodity
+    sheet = {g: a for g, a in index.by_guid.items() if a.type in BALANCE_SHEET_TYPES}
+    groups = balance_groups(index)
+    group_of = {}
+    for grp in groups:
+        for a in [grp, *index.descendants(grp)]:
+            group_of[a.guid] = grp.guid
+
+    # opening point at the end of the day before `start`, so the change covers the whole period
+    first_day = month_start(start) - timedelta(days=1)
+    days = [(f"{first_day.year:04d}-{first_day.month:02d}", first_day)] if opening else []
+    for key in month_keys(start, end):
+        y, m = int(key[:4]), int(key[5:])
+        days.append((key, min(add_months(date(y, m, 1), 1) - timedelta(days=1), end)))
+
+    # opening balances before the first month, then movements per account and valuation day
+    running: dict[str, Decimal] = defaultdict(lambda: ZERO)
+    first_start = book.day_start_utc(month_start(start))
+    for ag, den, num in conn.execute(text(
+            "SELECT s.account_guid, s.quantity_denom, SUM(s.quantity_num) FROM splits s "
+            "JOIN transactions t ON t.guid = s.tx_guid WHERE t.post_date < :s "
+            "GROUP BY s.account_guid, s.quantity_denom"), {"s": first_start}):
+        if ag in sheet:
+            running[ag] += gnc_decimal(int(num or 0), int(den or 1))
+    moves: dict[int, dict[str, Decimal]] = defaultdict(lambda: defaultdict(lambda: ZERO))
+    ends = [d for _, d in days]
+    for ag, qn, qd, pd in conn.execute(text(
+            "SELECT s.account_guid, s.quantity_num, s.quantity_denom, t.post_date FROM splits s "
+            "JOIN transactions t ON t.guid = s.tx_guid WHERE t.post_date >= :s AND t.post_date < :e"),
+            {"s": first_start, "e": book.day_end_utc(end)}):
+        if ag not in sheet:
+            continue
+        i = bisect.bisect_left(ends, book.day_of(pd))
+        if i < len(ends):
+            moves[i][ag] += gnc_decimal(int(qn), int(qd or 1))
+
+    history = PriceHistory(conn, book)
+    points, bad = [], set()
+    for i, (key, day) in enumerate(days):
+        for ag, v in moves.get(i, {}).items():
+            running[ag] += v
+        prices = history.at(day)
+        assets = liabilities = ZERO
+        grp_vals: dict[str, Decimal] = defaultdict(lambda: ZERO)
+        for ag, qty in running.items():
+            if not qty:
+                continue
+            acc = sheet[ag]
+            v = convert(qty, acc.commodity, base, prices)
+            if v is None:
+                bad.add(ag)
+                continue
+            if acc.type in LIABILITY_TYPES:
+                liabilities -= v
+                if ag in group_of:
+                    grp_vals[group_of[ag]] -= v
+            else:
+                assets += v
+                if ag in group_of:
+                    grp_vals[group_of[ag]] += v
+        points.append(NetWorthPoint(key, day, assets, liabilities, dict(grp_vals)))
+    return NetWorth(points, groups, len(bad))
+
+
+def nice_ticks(lo: float, hi: float, count: int = 5) -> list[float]:
+    """Axis ticks at multiples of 1, 2 or 5 × 10^n covering [lo, hi]."""
+    if hi < lo:
+        lo, hi = hi, lo
+    span = hi - lo or abs(hi) or 1.0
+    rough = span / max(count - 1, 1)
+    mag = 10 ** math.floor(math.log10(rough))
+    residual = rough / mag
+    step = mag * (1 if residual <= 1.5 else 2 if residual <= 3.5 else 5 if residual <= 7.5 else 10)
+    first = math.floor(lo / step) * step
+    ticks, v = [], first
+    while v < hi + step * 0.999:
+        ticks.append(round(v, 10))
+        v += step
+    if len(ticks) < 2:
+        ticks.append(round(first + step, 10))
+    return ticks
+
+
+def line_chart(points: list[NetWorthPoint], series: tuple = ("net",), width: float = 900, height: float = 300):
+    """Coordinates for an SVG line chart of the net worth series (server-side, no JS library)."""
+    if not points:
+        return None
+    vals = {s: [float(getattr(p, s)) for p in points] for s in series}
+    every = [v for lst in vals.values() for v in lst] + [0.0]
+    ticks = nice_ticks(min(every), max(every))
+    y0, y1 = ticks[0], ticks[-1]
+    n = len(points)
+    step = width / (n - 1) if n > 1 else 0
+
+    def x(i):
+        return i * step if n > 1 else width / 2
+
+    def y(v):
+        return height - (v - y0) / (y1 - y0) * height if y1 != y0 else height / 2
+
+    lines = {}
+    for s, lst in vals.items():
+        coords = [(x(i), y(v)) for i, v in enumerate(lst)]
+        lines[s] = {"points": " ".join(f"{a:.1f},{b:.1f}" for a, b in coords),
+                    "dots": [{"x": a, "y": b, "p": p} for (a, b), p in zip(coords, points)]}
+    zero = y(0.0)
+    if "net" in lines:
+        pts = lines["net"]["points"]
+        lines["net"]["area"] = f"M{x(0):.1f},{zero:.1f} L{pts.replace(' ', ' L')} L{x(n - 1):.1f},{zero:.1f} Z"
+    # x labels: at most ~12, prefer January
+    every_n = max(1, math.ceil(n / 12))
+    labels = [{"x": x(i), "p": p} for i, p in enumerate(points)
+              if n <= 12 or (i % every_n == 0 if n <= 36 else p.key.endswith(("-01", "-07")) if n <= 72
+                             else p.key.endswith("-01"))]
+    return {"width": width, "height": height, "lines": lines, "zero": zero,
+            "ticks": [{"v": t, "y": y(t), "text": fmt(Decimal(str(t)), 0)} for t in ticks], "labels": labels, "step": step}

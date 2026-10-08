@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Net worth report (*Nettovermögen*): monthly assets, liabilities and net worth as a line chart (server-side
+  SVG), historical prices for securities and foreign currencies, change over the period, composition by
+  account group, monthly table; linked from the dashboard
+
 ## 0.4.0 – bank profiles
 
 - Country/bank-specific code moved to `gnubook/banks/` (`de`: STAND/ENDSALDO/Kontostand, AqBanking-style

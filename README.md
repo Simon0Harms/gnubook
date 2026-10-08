@@ -29,6 +29,13 @@ German format in both languages.
   - budget vs. actual for GnuCash budgets, with variance, progress bars and spending without a budget;
   - periods (this/last month, this/last year, last 12 months, custom), 1–3 category levels, book-closing
     transactions left out unless switched on.
+- **Net worth** (inspired by [GnuDash](https://github.com/QuirkyTurtle94/GnuDash)), read-only:
+  - assets minus liabilities at the end of every month as a line chart, with assets and liabilities as
+    optional extra lines;
+  - securities are valued with the price valid on that day, foreign currencies with the rate of that day;
+  - change over the period (amount and percent), composition by account group at the start and end, and a
+    table of monthly values;
+  - periods: last 12 months, this/last year, last 3 or 5 years, all time, custom.
 - **Accounts and registers.** The account tree shows balances in GnuCash's sign convention. Each account has
   a register with running balance, text, amount and date filters, and paging. Placeholder accounts can be
   shown with their sub-accounts.
@@ -94,6 +101,8 @@ German format in both languages.
 | ![Register](docs/screenshots/register.png) | ![Splits](docs/screenshots/split-form.png) |
 | **Balance checkpoints** | **Bank import review** |
 | ![Checkpoints](docs/screenshots/checkpoints.png) | ![Imports](docs/screenshots/imports.png) |
+| **Net worth** | |
+| ![Net worth](docs/screenshots/net-worth.png) | |
 
 ## How it works
 

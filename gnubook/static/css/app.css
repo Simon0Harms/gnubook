@@ -58,6 +58,21 @@ tr.future { opacity: .6; }
 .donut-label { fill: var(--bs-secondary-color); font-size: 11px; }
 .donut-total { fill: var(--bs-body-color); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .budget-progress { height: .35rem; max-width: 14rem; }
+.nw-wrap { overflow-x: auto; }
+.nw-chart { width: 100%; min-width: 560px; height: auto; display: block; font-size: 13px; overflow: visible; }
+.nw-grid { stroke: var(--bs-border-color); stroke-width: 1; }
+.nw-zero { stroke: var(--bs-secondary-color); stroke-width: 1; stroke-dasharray: 4 3; }
+.nw-axis { fill: var(--bs-secondary-color); font-variant-numeric: tabular-nums; }
+.nw-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.nw-net, .legend-net { stroke: #2f6fb0; background: #2f6fb0; }
+.nw-net { stroke-width: 3; }
+.nw-assets, .legend-assets { stroke: var(--gb-income); background: var(--gb-income); }
+.nw-liabilities, .legend-liab { stroke: #e07b39; background: #e07b39; }
+.nw-area { fill: #2f6fb0; opacity: .12; }
+.nw-hover rect { fill: transparent; }
+.nw-hover circle { fill: #2f6fb0; stroke: var(--bs-body-bg); stroke-width: 2; opacity: 0; transition: opacity .1s; }
+.nw-hover:hover circle { opacity: 1; }
+.nw-table { max-height: 28rem; overflow-y: auto; }
 .budget-table td { padding-top: .3rem; padding-bottom: .3rem; }
 
 @media (max-width: 575.98px) {
