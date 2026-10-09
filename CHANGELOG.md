@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Portfolio Performance: *Wertpapiere und Kurse* can be filtered by portfolio (Depot); shows the securities
+  with transactions in that portfolio. The filter is kept when toggling *auch aufgelöste …*
 - Portfolio Performance: new page *Ein-/Auslieferung* to enter inbound and outbound deliveries by hand, for
   documents PP's PDF importers do not read (e.g. Baader Bank / Scalable Capital *Depotauslieferung*). Existing
   security or a new one by ISIN (inbound), value optional (shares × price of that day), fees, taxes, note;

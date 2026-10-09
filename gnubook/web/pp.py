@@ -549,20 +549,26 @@ def securities():
     except PPCoreError as exc:
         return _pp_error(exc)
     results = {r["uuid"]: r for r in (job or {}).get("securities") or []}
-    held = set()
+    portfolio = request.args.get("portfolio") or None
+    held, in_portfolio = set(), set()
     if export:
         for t in export.get("transactions", []):
             if t.get("security"):
                 held.add(t["security"])
+                if t.get("kind") == "portfolio" and t.get("owner") == portfolio:
+                    in_portfolio.add(t["security"])
     rows = []
     for s in (export or {}).get("securities", []):
+        if portfolio and s["uuid"] not in in_portfolio:
+            continue
         rows.append({"s": s, "feed": feeds.get(s.get("feed") or "", s.get("feed") or ""),
                      "result": results.get(s["uuid"]), "used": s["uuid"] in held})
     show_all = request.args.get("all") == "1"
     if not show_all:
         rows = [r for r in rows if not r["s"].get("retired") and not r["s"].get("exchangeRate")]
     rows.sort(key=lambda r: (not r["used"], r["s"]["name"].casefold()))
-    return render_template("pp/securities.html", summary=summary, rows=rows, job=job, show_all=show_all)
+    return render_template("pp/securities.html", summary=summary, rows=rows, job=job, show_all=show_all,
+                           portfolio=portfolio)
 
 
 @bp.route("/securities/<uuid>", methods=["GET", "POST"])

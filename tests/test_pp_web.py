@@ -8,7 +8,7 @@ import pytest
 from gnubook.pp.client import PPCoreError
 
 from .conftest import PASSWORD, csrf_from
-from .pp_fixtures import ETF, P1, fake, find, make_export, pp_app  # noqa: F401 – fixtures
+from .pp_fixtures import ETF, P1, P2, SHARE, fake, find, make_export, pp_app  # noqa: F401 – fixtures
 
 
 @pytest.fixture
@@ -306,3 +306,13 @@ def test_delivery_hidden_from_demo_user(pp_app):
     from gnubook.web import pp as pp_views
 
     assert "pp.delivery" not in pp_views.DEMO_ENDPOINTS
+
+
+def test_securities_filter_by_portfolio(web):
+    all_ = web.get("/pp/securities").text
+    p1 = web.get(f"/pp/securities?portfolio={P1}").text
+    p2 = web.get(f"/pp/securities?portfolio={P2}").text
+    assert f"/pp/securities/{SHARE}" in all_
+    assert f"/pp/securities/{ETF}" in p1 and f"/pp/securities/{SHARE}" not in p1
+    assert f"/pp/securities/{ETF}" in p2 and f"/pp/securities/{SHARE}" in p2
+    assert f'value="{P1}" selected' in p1

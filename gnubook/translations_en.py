@@ -727,6 +727,7 @@ EN = {
     'aktuell': 'up to date',
     'Aktueller Kurs': 'Latest price',
     'Alle Buchungen der PP-Datei und ihr Stand im GnuCash-Buch': 'All transactions of the PP file and their state in the GnuCash book',
+    'Alle Depots': 'All portfolios',
     'Alle Depots und Konten': 'All securities and cash accounts',
     'Anfangsbestand': 'Opening position',
     'Art': 'Type',
