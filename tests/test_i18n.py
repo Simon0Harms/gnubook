@@ -27,6 +27,7 @@ def message_ids():
         ids.update(m.group(1) for m in _TEMPLATE_RE.finditer(path.read_text(encoding="utf-8")))
     # texts translated indirectly via _(variable)
     ids.update(book.TYPE_LABELS.values())
+    ids.update(book.GROUP_LABELS.values())
     ids.update(x for pair in views.COLUMN_LABELS.values() for x in pair)
     ids.update(views.STATUS_LABELS.values())
     ids.update(views.SOURCE_LABELS.values())

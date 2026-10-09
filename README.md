@@ -42,7 +42,7 @@ German format in both languages.
   - allocation donut, market value and cost basis at every month end as a line chart;
   - price history (chart and price database) per security. Dividends are not included.
 
-- **Accounts and registers.** The account tree shows balances in GnuCash's sign convention. Each account has
+- **Accounts and registers.** The chart of accounts (inspired by [GnuDash](https://github.com/QuirkyTurtle94/GnuDash)) shows the hierarchical tree with balances in GnuCash's sign convention, expand/collapse (remembered per browser), coloured account-type badges, a filter by account class and totals per class. Each account has
   a register with running balance, text, amount and date filters, and paging. Placeholder accounts can be
   shown with their sub-accounts.
 - **Transactions with free splits:**

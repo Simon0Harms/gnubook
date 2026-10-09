@@ -77,6 +77,8 @@ EN = {
     "Ausgeblendete verbergen": "Hide hidden accounts",
     "Ausgeblendete zeigen": "Show hidden accounts",
     "Konto filtern …": "Filter accounts …",
+    "Kontoart filtern": "Filter by account class",
+    "Wertpapiere": "Securities",
     "alle auf": "expand all",
     "alle zu": "collapse all",
     "Kontonummer / IBAN": "Account number / IBAN",

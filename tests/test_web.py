@@ -156,3 +156,11 @@ def test_imports_needing_attention(client, state, api):
     assert client.post(f"/transactions/{guid}/edit", data=data).status_code == 302
     assert "Abo; Neu GmbH" not in client.get("/imports").text
     assert "Abo; Neu GmbH" in client.get("/imports?all=1").text
+
+
+def test_chart_of_accounts_type_indicators(client):
+    html = client.get("/accounts").text
+    assert 'data-group="asset"' in html and 'data-group="expense"' in html
+    assert 'class="type-badge t-asset"' in html
+    assert 'data-type-group="income"' in html  # type filter chip
+    assert "group-card t-asset" in html  # class summary

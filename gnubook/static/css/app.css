@@ -84,3 +84,25 @@ tr.future { opacity: .6; }
   .register .amount { padding-left: .3rem; }
   .app-content-header h3 { font-size: 1.25rem; }
 }
+
+/* account type indicators (chart of accounts) */
+:root {
+  --gb-t-asset: #059669; --gb-t-invest: #2563eb; --gb-t-receivable: #0891b2; --gb-t-liability: #dc2626;
+  --gb-t-income: #0d9488; --gb-t-expense: #d97706; --gb-t-equity: #7c3aed; --gb-t-trading: #6b7280;
+}
+[data-bs-theme="dark"] {
+  --gb-t-asset: #34d399; --gb-t-invest: #60a5fa; --gb-t-receivable: #22d3ee; --gb-t-liability: #f87171;
+  --gb-t-income: #2dd4bf; --gb-t-expense: #fbbf24; --gb-t-equity: #a78bfa; --gb-t-trading: #9ca3af;
+}
+.type-badge { --c: var(--gb-t-trading); display: inline-flex; align-items: center; gap: .35em;
+  padding: .1em .55em; border-radius: 1em; font-size: .75rem; white-space: nowrap; color: var(--c);
+  background: color-mix(in srgb, var(--c) 13%, transparent); }
+.type-dot { --c: var(--gb-t-trading); display: inline-block; width: .55em; height: .55em; border-radius: 50%;
+  background: var(--c); flex-shrink: 0; }
+.t-asset { --c: var(--gb-t-asset); } .t-invest { --c: var(--gb-t-invest); } .t-receivable { --c: var(--gb-t-receivable); }
+.t-liability { --c: var(--gb-t-liability); } .t-income { --c: var(--gb-t-income); } .t-expense { --c: var(--gb-t-expense); }
+.t-equity { --c: var(--gb-t-equity); } .t-trading { --c: var(--gb-t-trading); }
+.type-chip { border: 1px solid transparent; cursor: pointer; }
+.type-chip.active { border-color: var(--c); }
+.group-card { border-left: 3px solid var(--c); }
+.account-tree tr.match-ancestor > td { opacity: .65; }

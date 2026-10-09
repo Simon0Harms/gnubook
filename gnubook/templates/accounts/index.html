@@ -7,12 +7,29 @@
     <i class="bi {{ 'bi-eye-slash' if show_hidden else 'bi-eye' }}"></i> {{ _('Ausgeblendete verbergen') if show_hidden else _('Ausgeblendete zeigen') }}</a>
 {% endblock %}
 {% block content %}
+{% if groups %}
+<div class="row g-2 mb-3">
+  {% for grp in groups %}
+  <div class="col-6 col-md-4 col-xl">
+    <div class="card h-100 group-card t-{{ grp.key }}"><div class="card-body py-2 px-3">
+      <div class="small text-body-secondary d-flex align-items-center gap-1"><span class="type-dot t-{{ grp.key }}"></span>{{ _(grp.label) }}</div>
+      <div class="fs-5 fw-semibold text-nowrap">{{ amount(grp.value, grp.mnemonic, colored=False) }}{% if not grp.complete %}<span class="text-warning" title="{{ _("Unterkonten in anderer Währung ohne Kurs nicht enthalten") }}">*</span>{% endif %}</div>
+    </div></div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
 <div class="card">
   <div class="card-header d-flex flex-wrap gap-2 align-items-center">
     <input type="search" class="form-control form-control-sm w-auto" id="tree-filter" placeholder="{{ _("Konto filtern …") }}">
     <div class="btn-group btn-group-sm">
       <button type="button" class="btn btn-outline-secondary" data-tree="expand"><i class="bi bi-arrows-expand"></i> {{ _("alle auf") }}</button>
       <button type="button" class="btn btn-outline-secondary" data-tree="collapse"><i class="bi bi-arrows-collapse"></i> {{ _("alle zu") }}</button>
+    </div>
+    <div class="d-flex flex-wrap gap-1 ms-md-auto" id="type-chips" role="group" aria-label="{{ _("Kontoart filtern") }}">
+      {% for key, label in type_groups %}
+      <button type="button" class="type-badge type-chip t-{{ key }}" data-type-group="{{ key }}" aria-pressed="false"><span class="type-dot t-{{ key }}"></span>{{ _(label) }}</button>
+      {% endfor %}
     </div>
   </div>
   <div class="card-body p-0">
@@ -21,19 +38,19 @@
       <tbody>
       {% for acc in rows %}
         {% set t = totals.get(acc.guid) %}
-        <tr data-guid="{{ acc.guid }}" data-parent="{{ acc.parent_guid }}" data-depth="{{ acc.depth }}"
+        <tr data-guid="{{ acc.guid }}" data-parent="{{ acc.parent_guid }}" data-depth="{{ acc.depth }}" data-group="{{ acc.type_group }}"
             data-name="{{ acc.full_name|lower }}" class="{{ 'text-body-secondary' if acc.hidden }}">
           <td>
             <span class="tree-indent" style="--depth: {{ acc.depth }}"></span>
             {% if acc.children %}<button type="button" class="btn btn-link btn-sm p-0 tree-toggle" aria-label="{{ _("auf-/zuklappen") }}"><i class="bi bi-chevron-down"></i></button>
             {% else %}<span class="tree-spacer"></span>{% endif %}
-            <a href="{{ url_for('views.register', guid=acc.guid) }}" class="link-underline-opacity-0 {{ 'fw-semibold link-body-emphasis' if acc.depth == 0 else 'link-body-emphasis' }}">{{ acc.name }}</a>
+            <span class="type-dot t-{{ acc.type_group }} d-lg-none me-1" title="{{ _(acc.type_label) }}"></span><a href="{{ url_for('views.register', guid=acc.guid) }}" class="link-underline-opacity-0 {{ 'fw-semibold link-body-emphasis' if acc.depth == 0 else 'link-body-emphasis' }}">{{ acc.name }}</a>
             {% if acc.placeholder %}<i class="bi bi-folder2 text-body-tertiary ms-1" title="{{ _("Platzhalter") }}"></i>{% endif %}
             {% if acc.hidden %}<i class="bi bi-eye-slash ms-1" title="{{ _("ausgeblendet") }}"></i>{% endif %}
             {% if acc.description %}<span class="small text-body-secondary ms-2 d-none d-xl-inline">{{ acc.description }}</span>{% endif %}
           </td>
           <td class="d-none d-md-table-cell small font-monospace">{{ acc.code }}</td>
-          <td class="d-none d-lg-table-cell small">{{ _(acc.type_label) }}{% if acc.mnemonic and acc.mnemonic != 'EUR' %} · {{ acc.mnemonic }}{% endif %}</td>
+          <td class="d-none d-lg-table-cell"><span class="type-badge t-{{ acc.type_group }}"><span class="type-dot t-{{ acc.type_group }}"></span>{{ _(acc.type_label) }}</span>{% if acc.mnemonic and acc.mnemonic != 'EUR' %} <span class="small text-body-secondary">{{ acc.mnemonic }}</span>{% endif %}</td>
           <td class="text-end text-nowrap {{ 'fw-semibold' if acc.children }}">
             {% if t %}{{ amount(acc.display(t.value), acc.mnemonic, colored=False) }}{% if not t.complete %}<span class="text-warning" title="{{ _("Unterkonten in anderer Währung ohne Kurs nicht enthalten") }}">*</span>{% endif %}{% endif %}
           </td>

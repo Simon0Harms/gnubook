@@ -39,6 +39,16 @@ TYPE_LABELS = {
     "PAYABLE": "Verbindlichkeiten", "INCOME": "Ertrag", "EXPENSE": "Aufwand", "EQUITY": "Eigenkapital",
     "TRADING": "Devisenhandel", "ROOT": "Wurzel",
 }
+# coarse account classes for the type indicators in the chart of accounts
+TYPE_GROUPS = {
+    "ASSET": "asset", "BANK": "asset", "CASH": "asset", "STOCK": "invest", "MUTUAL": "invest",
+    "RECEIVABLE": "receivable", "LIABILITY": "liability", "CREDIT": "liability", "PAYABLE": "liability",
+    "INCOME": "income", "EXPENSE": "expense", "EQUITY": "equity", "TRADING": "trading",
+}
+GROUP_LABELS = {
+    "asset": "Vermögen", "invest": "Wertpapiere", "receivable": "Forderungen", "liability": "Fremdkapital",
+    "income": "Ertrag", "expense": "Aufwand", "equity": "Eigenkapital", "trading": "Devisenhandel",
+}
 # legally fixed euro conversion rates (used when the price database has no entry)
 FIXED_EURO_RATES = {"DEM": Decimal("1.95583"), "ATS": Decimal("13.7603"), "FRF": Decimal("6.55957"),
                     "NLG": Decimal("2.20371"), "BEF": Decimal("40.3399"), "ITL": Decimal("1936.27"),
@@ -98,6 +108,10 @@ class Account:
     @property
     def type_label(self) -> str:
         return TYPE_LABELS.get(self.type, self.type)
+
+    @property
+    def type_group(self) -> str:
+        return TYPE_GROUPS.get(self.type, "trading")
 
     @property
     def mnemonic(self) -> str:

@@ -94,13 +94,42 @@
       });
     });
     var filter = document.getElementById('tree-filter');
-    if (filter) {
-      filter.addEventListener('input', function () {
-        var q = filter.value.trim().toLowerCase();
-        if (!q) { apply(); return; }
-        rows.forEach(function (r) { r.classList.toggle('d-none', r.getAttribute('data-name').indexOf(q) === -1); });
+    var groups = {};  // active type filters (empty = all)
+    var byGuid = {};
+    rows.forEach(function (r) { byGuid[r.getAttribute('data-guid')] = r; });
+    // text and type filter: show matches plus their ancestors (dimmed) so the hierarchy stays readable
+    var refresh = function () {
+      var q = filter ? filter.value.trim().toLowerCase() : '';
+      var anyGroup = Object.keys(groups).length > 0;
+      rows.forEach(function (r) { r.classList.remove('match-ancestor'); });
+      if (!q && !anyGroup) { apply(); return; }
+      var show = {};
+      rows.forEach(function (r) {
+        if ((!q || r.getAttribute('data-name').indexOf(q) !== -1) && (!anyGroup || groups[r.getAttribute('data-group')])) {
+          show[r.getAttribute('data-guid')] = 'match';
+          var p = byGuid[r.getAttribute('data-parent')];
+          while (p && !show[p.getAttribute('data-guid')]) {
+            show[p.getAttribute('data-guid')] = 'ancestor';
+            p = byGuid[p.getAttribute('data-parent')];
+          }
+        }
       });
-    }
+      rows.forEach(function (r) {
+        var m = show[r.getAttribute('data-guid')];
+        r.classList.toggle('d-none', !m);
+        r.classList.toggle('match-ancestor', m === 'ancestor');
+      });
+    };
+    if (filter) { filter.addEventListener('input', refresh); }
+    document.querySelectorAll('#type-chips [data-type-group]').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        var k = chip.getAttribute('data-type-group');
+        if (groups[k]) { delete groups[k]; } else { groups[k] = true; }
+        chip.classList.toggle('active', !!groups[k]);
+        chip.setAttribute('aria-pressed', groups[k] ? 'true' : 'false');
+        refresh();
+      });
+    });
     apply();
   }
 

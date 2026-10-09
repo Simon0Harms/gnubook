@@ -11,7 +11,7 @@ from decimal import Decimal
 from flask import (Blueprint, abort, flash, g, jsonify, redirect, render_template, request, session, url_for)
 
 from .. import checkpoints as cps
-from ..book import ASSET_TYPES, LIABILITY_TYPES, BookError, WriteLockError, latest_prices
+from ..book import ASSET_TYPES, GROUP_LABELS, LIABILITY_TYPES, BookError, WriteLockError, latest_prices
 from ..importer import is_special_account
 from ..ledger import (MULTI, annotate_rows, balances, description_suggestions, latest_by_description,
                       load_transaction, monthly_income_expense, recent_transactions, register_rows,
@@ -245,7 +245,25 @@ def accounts():
         if hidden_parent and not show_hidden:
             continue
         rows.append(acc)
-    return render_template("accounts/index.html", rows=rows, totals=totals, own=own, show_hidden=show_hidden)
+    # one summary per account class over the top-level accounts (only when they share one currency)
+    groups: dict[str, dict] = {}
+    for acc in rows:
+        t = totals.get(acc.guid)
+        if acc.depth != 0 or t is None:
+            continue
+        grp = groups.setdefault(acc.type_group, {"key": acc.type_group, "label": GROUP_LABELS[acc.type_group],
+                                                 "value": ZERO, "mnemonic": acc.mnemonic, "complete": True,
+                                                 "count": 0})
+        if grp["mnemonic"] != acc.mnemonic:
+            grp["mnemonic"] = None
+        grp["value"] += acc.display(t.value)
+        grp["complete"] = grp["complete"] and t.complete
+        grp["count"] += 1
+    order = list(GROUP_LABELS)
+    present = {a.type_group for a in rows}
+    return render_template("accounts/index.html", rows=rows, totals=totals, own=own, show_hidden=show_hidden,
+                           groups=sorted((g_ for g_ in groups.values() if g_["mnemonic"]), key=lambda x: order.index(x["key"])),
+                           type_groups=[(k, GROUP_LABELS[k]) for k in order if k in present])
 
 
 @bp.route("/accounts/<guid>")
