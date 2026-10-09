@@ -242,7 +242,11 @@ timeout = 60                 # seconds for calls to pp-core (PDF import and pric
 quotes_interval_hours = 12   # pp-update loads prices at most this often
 ```
 
-The PP files are part of `data/` and therefore of the backups made by `gnubook-update`. pp-core listens on
+The PP files are part of `data/` and therefore of the backups made by `gnubook-update`. Users who copy the
+book into their Nextcloud (*Einstellungen → Nextcloud*) get the PP file there as well, next to the book copy:
+`Hauptbuch.gnucash` → `Hauptbuch-PP.xml` (or `.portfolio`/`.zip`, the format of the uploaded file). It is
+uploaded after every change of the PP file (upload, PDF import, deletion, new prices) and with every book
+copy; Nextcloud's versions app keeps the older states. pp-core listens on
 `127.0.0.1` only and needs the token for every call.
 
 ## Limitations

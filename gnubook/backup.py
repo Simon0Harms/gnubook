@@ -104,6 +104,12 @@ def rotate(directory, prefix: str, keep: int):
         f.unlink(missing_ok=True)
 
 
+def extra_name(filename: str, suffix: str) -> str:
+    """'Hauptbuch.gnucash' + '.xml' -> 'Hauptbuch-PP.xml' (next to the book copy)."""
+    stem = filename.rsplit(".", 1)[0] if "." in filename else filename
+    return f"{stem}-PP{suffix}"
+
+
 class BackupWriter:
     """Writes the .gnucash copy in the background after changes (coalesces bursts, e.g. imports).
 
@@ -113,8 +119,14 @@ class BackupWriter:
     in `work_dir` and removed after the uploads.
     """
 
-    def __init__(self, book, path: str, keep: int = 10, delay: float = 3.0, remote=None, work_dir=None):
+    def __init__(self, book, path: str, keep: int = 10, delay: float = 3.0, remote=None, work_dir=None,
+                 extras=None):
         self.book = book
+        # extras() -> [(suffix, bytes)]: more files copied next to the .gnucash file into Nextcloud
+        # (the Portfolio Performance file, as "<name>-PP<suffix>")
+        self.extras = extras
+        self._extras_pending = threading.Event()
+        self._book_changed = False
         self.path = Path(path) if path else None
         self.keep = keep
         self.delay = delay
@@ -128,13 +140,28 @@ class BackupWriter:
         threading.Thread(target=self._loop, daemon=True, name="gnucash-backup").start()
 
     def request(self):
+        self._book_changed = True
+        self._pending.set()
+
+    def request_extras(self):
+        """Only the extra files changed (e.g. the PP file): upload them, no new .gnucash version."""
+        self._extras_pending.set()
         self._pending.set()
 
     def flush(self):
         """Write a requested copy now – for the command line, which ends before the background thread runs."""
         if self._pending.is_set():
             self._pending.clear()
-            self.run_now()
+            self._run()
+
+    def _run(self):
+        book, self._book_changed = self._book_changed, False
+        extras = self._extras_pending.is_set()
+        self._extras_pending.clear()
+        if book:
+            self.run_now()  # uploads the extra files as well
+        elif extras:
+            self.upload_extras()
 
     def _rotate(self):
         if self.keep <= 1 or not self.path.exists():
@@ -185,8 +212,42 @@ class BackupWriter:
                 if self.path is None:
                     source.unlink(missing_ok=True)
 
+    def _extra_files(self) -> list:
+        if self.extras is None:
+            return []
+        try:
+            return list(self.extras())
+        except Exception as exc:  # noqa: BLE001 – the book copy must not fail because of an extra file
+            log.warning("Zusatzdatei für Nextcloud nicht lesbar: %s", exc)
+            return []
+
+    def upload_extras(self):
+        """Upload only the extra files to every Nextcloud target."""
+        with self._lock:
+            targets = self._targets()
+            files = self._extra_files() if targets else []
+            if not files:
+                return
+            from .nextcloud import client_for
+
+            now = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+            for t in targets:
+                st = self.remote_status.setdefault(t["user_id"], {"ok": None, "error": None})
+                try:
+                    if t.get("error"):
+                        raise RuntimeError(t["error"])
+                    client = client_for(t, t["app_password"])
+                    for suffix, data in files:
+                        client.upload_bytes(data, t["folder"], extra_name(t["filename"], suffix))
+                    st.update(ok=now, error=None)
+                except Exception as exc:  # noqa: BLE001
+                    st["error"] = str(exc)
+                    log.warning("Nextcloud-Upload für Benutzer %s fehlgeschlagen: %s", t["user_id"], exc)
+
     def _upload(self, source: Path, targets, now: str):
         from .nextcloud import client_for
+
+        files = self._extra_files() if targets else []
 
         seen = set()
         for t in targets:
@@ -195,7 +256,10 @@ class BackupWriter:
             try:
                 if t.get("error"):
                     raise RuntimeError(t["error"])
-                client_for(t, t["app_password"]).upload(source, t["folder"], t["filename"])
+                client = client_for(t, t["app_password"])
+                client.upload(source, t["folder"], t["filename"])
+                for suffix, data in files:
+                    client.upload_bytes(data, t["folder"], extra_name(t["filename"], suffix))
                 st.update(ok=now, error=None)
             except Exception as exc:  # noqa: BLE001 – one failing Nextcloud must not stop the others
                 st["error"] = str(exc)
@@ -209,4 +273,4 @@ class BackupWriter:
             self._pending.wait()
             time.sleep(self.delay)
             self._pending.clear()
-            self.run_now()
+            self._run()

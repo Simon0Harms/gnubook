@@ -14,6 +14,8 @@
   account. `gnubook pp-status`, `pp-sync`, `pp-update` and the hourly timer `gnubook-pp.timer`; installer with
   signature check of the PP release, rebuild on `gnubook-update`, `gnubook-pp-update` with rollback; CI builds
   and starts pp-core with the tested PP release
+- Nextcloud copy: the Portfolio Performance file is uploaded next to the `.gnucash` copy (`<name>-PP.xml`)
+  after every change of the PP file
 - Fixed: the PostgreSQL run of the net worth price test opened the book as SQLite file
 - Portfolio report (*Depot*): holdings with average-cost basis, unrealized/realized gain and 12-month price
   change, allocation donut, market value vs. cost basis over time, price history per security; the demo book

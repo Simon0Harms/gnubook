@@ -350,3 +350,28 @@ def test_plaintext_passwords_are_migrated_and_key_change_is_reported(app, state,
     assert item["error"] and item["app_password"] == ""
     state.backup.run_now()
     assert "entschlüsseln" in state.backup.remote_status[1]["error"]
+
+
+def test_backup_writer_copies_the_pp_file_next_to_the_book(state, nc, tmp_path):
+    target = {"user_id": 1, "kind": "account", "legacy": 0, "server": nc.url, "login": LOGIN,
+              "app_password": APP_PW, "dav_user": DAV_USER, "folder": "/gnubook", "filename": "Hauptbuch.gnucash"}
+    pp = [(".xml", b"<client>1</client>")]
+    bw = BackupWriter(state.book, str(tmp_path / "buch.gnucash"), keep=3, delay=3600, remote=lambda: [target],
+                      work_dir=tmp_path / "work", extras=lambda: pp)  # the background thread stays out
+    bw.request()
+    bw.flush()  # book changed: .gnucash copy and PP file
+    assert nc.files["/gnubook/Hauptbuch-PP.xml"] == b"<client>1</client>" and "/gnubook/Hauptbuch.gnucash" in nc.files
+    versions = len(list(tmp_path.glob("buch*.gnucash")))
+    pp[0] = (".xml", b"<client>2</client>")
+    nc.files.pop("/gnubook/Hauptbuch.gnucash")
+    bw.request_extras()
+    bw.flush()  # only the PP file changed: no new .gnucash version
+    assert nc.files["/gnubook/Hauptbuch-PP.xml"] == b"<client>2</client>"
+    assert "/gnubook/Hauptbuch.gnucash" not in nc.files and len(list(tmp_path.glob("buch*.gnucash"))) == versions
+
+    def broken():
+        raise OSError("pp-core nicht erreichbar")
+    bw.extras = broken
+    bw.request()
+    bw.flush()  # the book copy still goes up
+    assert "/gnubook/Hauptbuch.gnucash" in nc.files and bw.remote_status[1]["error"] is None

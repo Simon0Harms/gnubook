@@ -480,13 +480,14 @@ def pp_update(ctx, book_ref, quotes):
                            + (f", {len(errors)} Fehler" if errors else ""))
                 for s in errors:
                     click.echo(f"  {s.get('name')}: {s.get('message')}")
+                if job.get("modified"):
+                    bc.pp.request_copy()  # new prices are in the PP file: copy it into Nextcloud
             if bc.pp.needs_sync():
                 r = bc.pp.sync(actor="timer", wait=600)
                 click.echo(f"{bc.name}: {r.summary()}")
-                if r.wrote:
-                    bc.backup.flush()
             else:
                 click.echo(f"{bc.name}: Buch ist aktuell")
+            bc.backup.flush()
         except (WriteLockError, SyncBusy) as exc:
             click.echo(f"{bc.name}: {exc} – nächster Versuch beim nächsten Lauf")
         except (PPCoreError, SyncError) as exc:

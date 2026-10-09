@@ -445,6 +445,8 @@ def security(uuid):
                 svc.client.quotes_start(svc.cid, securities=[uuid])
                 svc.request_sync(after_quotes=True)
                 flash(_("Kurse werden geladen …"), "info")
+            else:
+                svc.request_copy()
             return redirect(url_for("pp.security", uuid=uuid))
         export = svc.client.export(svc.cid, prices="none")
         sec = next((s for s in export.get("securities", []) if s["uuid"] == uuid), None)
@@ -625,6 +627,7 @@ def pp_file_create():
         svc.client.create(svc.cid, currency=idx.root.commodity.mnemonic if idx.root.commodity else "EUR",
                           portfolio=request.form.get("portfolio") or "Depot",
                           account=request.form.get("account") or "Verrechnungskonto")
+        svc.request_copy()
         flash(_("Neue, leere Portfolio-Performance-Datei angelegt."), "success")
     except PPCoreError as exc:
         flash(str(exc), "danger")

@@ -182,3 +182,14 @@ def test_csrf_is_required(web, fake):
                 "/pp/file/create", "/pp/import/s-1/apply"]:
         assert web.post(url, data={}).status_code == 400, url
     assert fake.calls == [] and fake.deleted == []
+
+
+def test_pp_changes_request_the_nextcloud_copy(web, pp_app, fake, monkeypatch):
+    st = _state(pp_app)
+    calls = []
+    monkeypatch.setattr(st.backup, "request_extras", lambda: calls.append(1))
+    web.post("/pp/file/create", data={"csrf_token": web.csrf})
+    web.post("/pp/transactions/fee-1/delete", data={"csrf_token": web.csrf})
+    assert len(calls) == 2
+    assert st.backup.extras == st.pp.backup_files
+    assert st.pp.backup_files() == [(".xml", b"<client/>")]

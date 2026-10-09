@@ -116,8 +116,30 @@ class PPService:
                 or last[:10] != date.today().isoformat())
 
     def request_sync(self, after_quotes: bool = False):
+        """After a change of the PP file: book it (when switched on) and copy the file into Nextcloud."""
         if self.enabled:
             self.worker.request(after_quotes=after_quotes)
+        if after_quotes:
+            threading.Thread(target=self._copy_after_quotes, daemon=True, name=f"pp-copy-{self.ctx.id}").start()
+        else:
+            self.request_copy()
+
+    def request_copy(self):
+        backup = getattr(self.ctx, "backup", None)
+        if backup is not None:
+            backup.request_extras()
+
+    def _copy_after_quotes(self):
+        self.worker.wait_for_quotes()
+        self.request_copy()
+
+    def backup_files(self) -> list:
+        """[(suffix, content)] of the PP file for the Nextcloud copy (empty without file)."""
+        if not self.client.summary(self.cid).get("exists"):
+            return []
+        data, name = self.client.download(self.cid)
+        suffix = "." + name.rsplit(".", 1)[1] if "." in name else ".xml"
+        return [(suffix, data)]
 
     def status(self) -> dict:
         appdb = self.ctx.appdb
@@ -155,7 +177,7 @@ class SyncWorker:
         self._stop = True
         self._event.set()
 
-    def _wait_for_quotes(self):
+    def wait_for_quotes(self):
         deadline = time.monotonic() + 1800
         while time.monotonic() < deadline and not self._stop:
             try:
@@ -180,7 +202,7 @@ class SyncWorker:
             self._retry_at = 0.0
             if self._after_quotes:
                 self._after_quotes = False
-                self._wait_for_quotes()
+                self.wait_for_quotes()
             time.sleep(1.0)  # coalesce bursts (several uploads in a row)
             self.busy = True
             try:

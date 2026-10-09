@@ -159,9 +159,11 @@ class Client:
             self._request("MKCOL", self._dav(path), ok=(201, 405))
 
     def upload(self, local: Path, folder: str, filename: str):
-        self.ensure_folder(folder)
         with open(local, "rb") as fh:
-            data = fh.read()
+            self.upload_bytes(fh.read(), folder, filename)
+
+    def upload_bytes(self, data: bytes, folder: str, filename: str):
+        self.ensure_folder(folder)
         self._request("PUT", self._dav(f"{folder}/{filename}"), data=data,
                       headers={"Content-Type": "application/octet-stream"}, ok=(201, 204))
 

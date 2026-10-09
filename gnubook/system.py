@@ -479,6 +479,7 @@ class Registry:
                 from .pp.service import PPService
 
                 ctx.pp = PPService(ctx, self.cfg, self.system)
+                ctx.backup.extras = ctx.pp.backup_files  # the PP file goes into Nextcloud next to the book copy
             self._contexts[book_id] = (key, ctx)
             return ctx
 
