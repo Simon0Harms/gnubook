@@ -15,7 +15,7 @@ from ..book import WriteLockError
 from ..i18n import _
 from .client import PPCoreClient, PPCoreError
 from .settings import PPSettings
-from .sync import SyncError, SyncResult, sync
+from .sync import SyncError, SyncResult, book_guid, sync
 
 log = logging.getLogger("gnubook.pp")
 
@@ -111,6 +111,11 @@ class PPService:
         if not summary.get("exists"):
             return False
         last = appdb.meta("pp_last_sync") or ""
+        known_book = appdb.meta("pp_book_guid")
+        if known_book:
+            with self.ctx.book.connect() as conn:
+                if book_guid(conn) != known_book:  # book replaced: book everything again
+                    return True
         return (summary.get("revision") != appdb.meta("pp_revision")
                 or settings.booking_fingerprint() != appdb.meta("pp_settings_fp")
                 or last[:10] != date.today().isoformat())

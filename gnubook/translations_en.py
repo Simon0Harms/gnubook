@@ -957,6 +957,7 @@ EN = {
     '{n} Stück mehr ausgeliefert als im Bestand (FIFO)': '{n} shares more delivered than held (FIFO)',
     'Die Übernahme nach GnuCash ist für dieses Buch ausgeschaltet.': 'Booking into GnuCash is switched off for this book.',
     'Eine andere Übernahme aus Portfolio Performance läuft gerade – bitte gleich noch einmal.': 'Another booking run from Portfolio Performance is in progress – please try again in a moment.',
+    'Buch ersetzt – Verknüpfungen neu aufgebaut': 'book replaced – links rebuilt',
     '{n} neu': '{n} new',
     '{n} geändert': '{n} changed',
     '{n} gelöscht': '{n} deleted',

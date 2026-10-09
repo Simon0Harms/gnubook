@@ -286,6 +286,14 @@ class AppDB:
             c.executemany("INSERT INTO pp_objects (key, guid) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET "
                           "guid = excluded.guid", list(mapping.items()))
 
+    def pp_reset_links(self):
+        """Forget every link to objects in the GnuCash book (bookings, securities, accounts, prices), e.g. after the
+        book was replaced. The next run finds its transactions again by their slot or books them anew."""
+        with self.conn() as c:
+            c.execute("DELETE FROM pp_sync")
+            c.execute("DELETE FROM pp_objects")
+            c.execute("DELETE FROM pp_prices")
+
     def pp_prices(self) -> dict:
         with self.conn() as c:
             return {(r["commodity_guid"], r["day"]): (r["price_guid"], r["value"])

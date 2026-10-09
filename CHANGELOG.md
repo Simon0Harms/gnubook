@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fixed (Portfolio Performance): when the GnuCash database is replaced by another book (e.g. GnuCash Desktop
+  *Save As* over it), the next run no longer marks all PP bookings as *deleted in GnuCash*. gnubook remembers the
+  book's GUID; on a different one it forgets the old links (bookings, securities, accounts, prices), finds its
+  transactions again by their slot or books them anew, and runs at once instead of waiting for the next day
 - PDF import (Portfolio Performance): several documents can be uploaded packed as ZIP or TAR (.tar.gz/.tgz,
   .tar.bz2, .tar.xz); the PDF and TXT files inside are imported, other files ignored. Limits against archive
   bombs (500 documents, 200 MB unpacked per upload); encrypted ZIPs and nested archives are not unpacked

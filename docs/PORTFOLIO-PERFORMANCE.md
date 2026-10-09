@@ -193,6 +193,8 @@ PP's desktop application and does not work in pp-core.
   version, *Buch behalten* keeps the GnuCash version and detaches the booking from PP, *wieder abgleichen*
   links it again.
 - A booking deleted in GnuCash is not created again (unless you choose *PP übernehmen*).
+- If the database is replaced by another book (for example GnuCash Desktop's *Save As* over it), gnubook notices
+  the different book GUID, forgets its links to the old book and books all PP transactions into the new one.
 - gnubook writes only while GnuCash Desktop has the book closed. While it is open, the run waits and is
   repeated every 5 minutes and with the next timer run.
 - Only one run per book takes place at a time, also across the web application, the timer and the command

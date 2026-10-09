@@ -187,6 +187,45 @@ def test_lost_mapping_is_rebuilt_from_the_slots(state):
         assert conn.execute(text("SELECT COUNT(*) FROM slots WHERE name = :n"), {"n": SLOT}).scalar() == 14
 
 
+def _replace_book(state):
+    """Like GnuCash Desktop's "Save As" over the database: another book with new GUIDs, without our bookings."""
+    with state.book.engine.begin() as conn:
+        txs = [g for (g,) in conn.execute(text("SELECT obj_guid FROM slots WHERE name = :n"), {"n": SLOT})]
+        for g in txs:
+            conn.execute(text("DELETE FROM splits WHERE tx_guid = :g"), {"g": g})
+            conn.execute(text("DELETE FROM slots WHERE obj_guid = :g"), {"g": g})
+            conn.execute(text("DELETE FROM transactions WHERE guid = :g"), {"g": g})
+        conn.execute(text("DELETE FROM prices WHERE source = 'user:price'"))
+        conn.execute(text("UPDATE books SET guid = :g"), {"g": "f" * 32})
+
+
+def test_replaced_book_is_booked_again(state):
+    sync(state, _settings(), make_export())
+    assert state.appdb.meta("pp_book_guid")
+    _replace_book(state)
+    dry = sync(state, _settings(), make_export(), dry_run=True)
+    assert dry.book_replaced and dry.created == 14 and dry.gone == 0
+    assert state.appdb.pp_records()  # a dry run keeps the old links
+    r = sync(state, _settings(), make_export())
+    assert r.book_replaced and r.created == 14 and r.gone == 0, r.summary()
+    assert r.prices_added > 0 and r.prices_removed == 0
+    assert state.appdb.meta("pp_book_guid") == "f" * 32
+    assert all(rec["status"] == "booked" for rec in state.appdb.pp_records().values())
+    r2 = sync(state, _settings(), make_export())
+    assert not r2.book_replaced and r2.unchanged == 14 and not r2.wrote
+
+
+def test_same_book_with_deleted_bookings_is_not_treated_as_replaced(state):
+    sync(state, _settings(), make_export())
+    guid = _tx(state, "taxr-1")
+    with state.book.engine.begin() as conn:
+        conn.execute(text("DELETE FROM splits WHERE tx_guid = :g"), {"g": guid})
+        conn.execute(text("DELETE FROM slots WHERE obj_guid = :g"), {"g": guid})
+        conn.execute(text("DELETE FROM transactions WHERE guid = :g"), {"g": guid})
+    r = sync(state, _settings(), make_export())
+    assert not r.book_replaced and r.gone == 1 and r.created == 0
+
+
 def test_existing_security_is_reused_by_isin(state):
     from piecash import Commodity
 

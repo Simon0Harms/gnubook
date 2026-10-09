@@ -60,13 +60,15 @@ class SyncResult:
     errors: list = field(default_factory=list)
     changes: list = field(default_factory=list)  # (action, key, description)
     wrote: bool = False
+    book_replaced: bool = False  # the GnuCash book is another one than at the last run: links were reset
 
     @property
     def ok(self) -> bool:
         return not self.errors
 
     def summary(self) -> str:
-        parts = [_("{n} neu", n=self.created), _("{n} geändert", n=self.updated),
+        parts = [_("Buch ersetzt – Verknüpfungen neu aufgebaut")] if self.book_replaced else []
+        parts += [_("{n} neu", n=self.created), _("{n} geändert", n=self.updated),
                  _("{n} gelöscht", n=self.deleted), _("{n} unverändert", n=self.unchanged)]
         if self.conflicts:
             parts.append(_("{n} Konflikte", n=self.conflicts))
@@ -108,6 +110,11 @@ def content_fingerprints(conn, book, guids) -> dict:
     return out
 
 
+def book_guid(conn) -> str | None:
+    """GUID of the GnuCash book; a different one means the database now holds another book."""
+    return conn.execute(text("SELECT guid FROM books")).scalar()
+
+
 def _norm(d: Decimal) -> str:
     d = d.normalize()
     return "0" if d == 0 else format(d, "f")
@@ -143,10 +150,22 @@ class Syncer:
         index = self.book.load_accounts()
         plan = self.plan(index)
         names = resolved(self.settings, index)
-        records = self.appdb.pp_records()
-        objects = self.appdb.pp_objects()
         r = self.result
         r.skipped = sum(1 for b in plan.bookings if b.skip)
+        with self.book.connect() as conn:
+            self._book_guid = book_guid(conn)
+        known = self.appdb.meta("pp_book_guid")
+        # the database holds another book than at the last run (e.g. GnuCash "Save As" over it): the stored
+        # transaction, commodity, account and price GUIDs belong to the old book. Without a reset every booking
+        # would count as "deleted in GnuCash" and never be booked again.
+        r.book_replaced = bool(known and self._book_guid and known != self._book_guid)
+        if r.book_replaced:
+            log.warning("PP sync: GnuCash book changed (%s -> %s), resetting the links", known, self._book_guid)
+            if not dry_run:
+                self.appdb.pp_reset_links()
+                self.appdb.audit(self.actor, "pp-book-replaced", self._book_guid, f"vorher {known}")
+        records = {} if r.book_replaced else self.appdb.pp_records()
+        objects = {} if r.book_replaced else self.appdb.pp_objects()
 
         with self.book.connect() as conn:
             existing = content_fingerprints(conn, self.book, [rec["tx_guid"] for rec in records.values()
@@ -215,7 +234,7 @@ class Syncer:
                 continue
             todo_delete.append((key, rec, True))
 
-        prices_todo = self._price_plan(plan, index, objects) if self.settings.prices else None
+        prices_todo = self._price_plan(plan, index, objects, r.book_replaced) if self.settings.prices else None
         need_write = bool(todo_create or todo_update or any(d[2] for d in todo_delete)
                           or (prices_todo and prices_todo.pending))
         if dry_run:
@@ -259,6 +278,8 @@ class Syncer:
         r = self.result
         self.appdb.set_meta("pp_revision", r.revision)
         self.appdb.set_meta("pp_settings_fp", self.settings.booking_fingerprint())
+        if getattr(self, "_book_guid", None):
+            self.appdb.set_meta("pp_book_guid", self._book_guid)
         self.appdb.set_meta("pp_last_sync", now_iso())
         details = json.dumps({"changes": r.changes[:500], "errors": r.errors}, ensure_ascii=False)
         self.appdb.pp_add_run(started, self.actor, r.revision, "ok" if r.ok else "error", r.summary(), details)
@@ -302,10 +323,10 @@ class Syncer:
         def pending(self) -> bool:
             return bool(self.add or self.update or self.remove)
 
-    def _price_plan(self, plan: Plan, index: AccountIndex, objects: dict):
+    def _price_plan(self, plan: Plan, index: AccountIndex, objects: dict, fresh: bool = False):
         """Prices to write: daily for the last price_days days, one per month before, from shortly before the
         first booking of each security on. Prices that are not gnubook's (e.g. entered in GnuCash) win."""
-        mine = self.appdb.pp_prices()
+        mine = {} if fresh else self.appdb.pp_prices()
         today = date.today()
         daily_from = today - timedelta(days=max(0, int(self.settings.price_days or 0)))
         first = {}
