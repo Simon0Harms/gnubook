@@ -150,8 +150,9 @@ def test_net_worth_values_securities_with_historical_prices(state):
     giro = idx.find("Aktiva:Barvermögen:Girokonto Musterbank")
     with state.book.connect() as conn:
         before = {p.key: p.net for p in rp.net_worth(conn, state.book, idx, date(2025, 2, 1), date(2025, 6, 30)).points}
-    path = state.book.url.split("sqlite:///", 1)[-1] if state.book.url.startswith("sqlite") else state.book.url
-    with piecash.open_book(path, readonly=False, open_if_lock=True, do_backup=False) as b:
+    url = state.book.url
+    where = {"sqlite_file": url.split("sqlite:///", 1)[-1]} if url.startswith("sqlite") else {"uri_conn": url}
+    with piecash.open_book(**where, readonly=False, open_if_lock=True, do_backup=False) as b:
         eur = b.default_currency
         etf = piecash.Commodity(namespace="FUND", mnemonic="ETF1", fullname="Test ETF", fraction=1000, book=b)
         depot = piecash.Account("Test ETF", "STOCK", etf, parent=b.accounts(fullname="Aktiva:Geldanlagen"), book=b)
@@ -161,6 +162,8 @@ def test_net_worth_values_securities_with_historical_prices(state):
             piecash.Split(b.accounts(guid=giro.guid), value=D("-1000")),
             piecash.Split(depot, value=D("1000"), quantity=D("10"))])
         b.save()
+        engine = b.session.bind
+    engine.dispose()  # piecash's own pool would keep the test database busy (PostgreSQL)
     idx = state.book.load_accounts()
     with state.book.connect() as conn:
         nw = rp.net_worth(conn, state.book, idx, date(2025, 2, 1), date(2025, 6, 30))
