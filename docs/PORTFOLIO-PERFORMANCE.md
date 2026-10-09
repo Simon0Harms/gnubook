@@ -29,7 +29,10 @@ A menu entry *Portfolio Performance* with these pages:
 | *Wertpapiere und Kurse* | securities with their price source, last price and number of prices; search for a price source (Yahoo by ISIN), update prices |
 | *Einstellungen* | upload, download or create the PP file; the GnuCash accounts used; the bank-import rule; start date and options; manual run and dry run; history of the runs |
 
-Demo users never see these pages.
+The shared demo user (*Demo ansehen*) sees *Kennzahlen*, *Vermögensaufstellung*, *Buchungen* and *Wertpapiere und
+Kurse* read-only, with a made-up PP file that pp-core builds itself (the two fictional securities of the demo
+book with savings plan, purchase, partial sale, dividends and fees, for the same 14 months). It is rebuilt with
+the demo book every month; booking into the book stays off, as the demo book already has these transactions.
 
 ## Installation
 

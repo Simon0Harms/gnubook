@@ -6,7 +6,7 @@
 {% block content %}
 {% include "pp/_nav.html" %}
 {% if not summary.exists %}
-<div class="alert alert-info">{{ _("Noch keine Portfolio-Performance-Datei.") }} <a href="{{ url_for('pp.settings') }}">{{ _("Zu den Einstellungen") }}</a></div>
+<div class="alert alert-info">{{ _("Noch keine Portfolio-Performance-Datei.") }}{% if not pp_readonly() %} <a href="{{ url_for('pp.settings') }}">{{ _("Zu den Einstellungen") }}</a>{% endif %}</div>
 {% else %}
 <form class="card card-body py-2 mb-3" method="get" action="{{ url_for('pp.transactions') }}" data-autosubmit>
   <div class="row g-2 align-items-end">
@@ -34,7 +34,7 @@
 </form>
 
 {% if not settings.enabled %}
-<div class="alert alert-secondary small">{{ _("Die Übernahme ins GnuCash-Buch ist aus – die Spalte „Im Buch“ zeigt nur, was übernommen würde.") }} <a href="{{ url_for('pp.settings') }}">{{ _("Einstellungen") }}</a></div>
+{% if not pp_readonly() %}<div class="alert alert-secondary small">{{ _("Die Übernahme ins GnuCash-Buch ist aus – die Spalte „Im Buch“ zeigt nur, was übernommen würde.") }} <a href="{{ url_for('pp.settings') }}">{{ _("Einstellungen") }}</a></div>{% endif %}
 {% endif %}
 
 <div class="card mb-4">
@@ -65,7 +65,8 @@
             {% if r.rec and r.rec.tx_guid and r.status not in ('gone',) %}<div class="small"><a href="{{ url_for('views.transaction', guid=r.rec.tx_guid) }}">{{ _("Buchung") }} #{{ ids.tx_id(r.rec.tx_guid) }}</a></div>{% endif %}
           </td>
           <td class="text-end text-nowrap">
-            {% if r.status in ('conflict', 'gone') %}
+            {% if pp_readonly() %}
+            {% elif r.status in ('conflict', 'gone') %}
             <form class="d-inline" method="post" action="{{ url_for('pp.resolve') }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="key" value="{{ b.key }}">
               <input type="hidden" name="next" value="{{ request.full_path }}">
@@ -79,7 +80,7 @@
               <button class="btn btn-sm btn-outline-secondary" name="action" value="attach" type="submit">{{ _("wieder abgleichen") }}</button>
             </form>
             {% endif %}
-            {% if b.kind != 'OPENING' %}
+            {% if b.kind != 'OPENING' and not pp_readonly() %}
             <form class="d-inline" method="post" action="{{ url_for('pp.transaction_delete', uuid=b.uuids[0] if b.uuids else b.key) }}"
                   data-confirm="{{ _("Diese Buchung in Portfolio Performance löschen? Im GnuCash-Buch wird sie danach ebenfalls entfernt (wenn dort unverändert).") }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path }}">

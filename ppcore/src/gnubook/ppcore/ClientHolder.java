@@ -246,7 +246,29 @@ final class ClientHolder
         portfolio.setName(portfolioName);
         portfolio.setReferenceAccount(account);
         c.addPortfolio(portfolio);
+        install(c);
+        forgetDemo();
+    }
+
+    /** A file from the user (upload, new file) is no demo file: the demo must never replace it. */
+    void forgetDemo() throws IOException
+    {
+        if (state().has("demo"))
+        {
+            state().remove("demo");
+            saveState();
+        }
+    }
+
+    /** Saves a client built in code as this id's file (an existing file goes to the backups). */
+    void install(Client c) throws IOException
+    {
+        Files.createDirectories(dir);
+        if (exists())
+            backup(file());
         Path target = dir.resolve("portfolio.xml");
+        for (String ext : new String[] { "portfolio", "zip" })
+            Files.deleteIfExists(dir.resolve("portfolio." + ext));
         ClientFactory.save(c, target.toFile());
         client = c;
         loadedFile = target;

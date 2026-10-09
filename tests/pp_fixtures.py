@@ -116,6 +116,7 @@ class FakePPCore:
         self.deleted = []
         self.uploaded = None
         self.quotes_state = "done"
+        self.demo_marker = None
 
     # pp-core API ---------------------------------------------------------------------------------
     def health(self):
@@ -134,7 +135,13 @@ class FakePPCore:
                 "portfolioList": [{"uuid": p["uuid"], "name": p["name"], "retired": False} for p in e["portfolios"]],
                 "accountList": [{"uuid": a["uuid"], "name": a["name"], "currency": a["currency"], "retired": False}
                                 for a in e["accounts"]],
-                "originalName": "Depot.xml", "lastPriceUpdate": "2026-10-01T09:00:00Z", "importTargets": {}}
+                "originalName": "Depot.xml", "lastPriceUpdate": "2026-10-01T09:00:00Z", "importTargets": {},
+                "demo": self.demo_marker}
+
+    def demo(self, cid, start, months, seed=7):
+        self.calls.append(("demo", cid, start, months, seed))
+        self.demo_marker = f"{start.isoformat()}/{months}/{seed}"
+        return self.summary(cid)
 
     def export(self, cid, prices="all"):
         self.calls.append(("export", prices))

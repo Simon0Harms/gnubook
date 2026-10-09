@@ -969,4 +969,5 @@ EN = {
     'in GnuCash abgeglichen – Änderung aus PP nicht übernommen': 'reconciled in GnuCash – change from PP not applied',
     'in PP und in GnuCash geändert – bitte entscheiden': 'changed in PP and in GnuCash – please decide',
     'in PP gelöscht, in GnuCash geändert oder abgeglichen – bitte selbst löschen': 'deleted in PP, changed or reconciled in GnuCash – please delete it yourself',
+    'Demo: eine erfundene Portfolio-Performance-Datei, nur zum Ansehen. Die Übernahme ins Buch ist hier ausgeschaltet – das Demo-Buch hat seine Wertpapierbuchungen schon.': 'Demo: a made-up Portfolio Performance file, for viewing only. Booking into the book is switched off here – the demo book already has its securities transactions.',
 }

@@ -4,16 +4,16 @@
 {% block subheader %}<div class="small text-body-secondary">{{ _("Kursquellen und Kurse in Portfolio Performance; die Kurse werden ins GnuCash-Buch übernommen") }}</div>{% endblock %}
 {% block actions %}
 {% if summary.exists %}
-<form method="post" action="{{ url_for('pp.quotes') }}" class="d-inline">
+{% if not pp_readonly() %}<form method="post" action="{{ url_for('pp.quotes') }}" class="d-inline">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <button class="btn btn-sm btn-primary" type="submit" {{ 'disabled' if job and job.state == 'running' }}><i class="bi bi-cloud-download"></i> {{ _("Kurse jetzt aktualisieren") }}</button>
-</form>
+</form>{% endif %}
 {% endif %}
 {% endblock %}
 {% block content %}
 {% include "pp/_nav.html" %}
 {% if not summary.exists %}
-<div class="alert alert-info">{{ _("Noch keine Portfolio-Performance-Datei.") }} <a href="{{ url_for('pp.settings') }}">{{ _("Zu den Einstellungen") }}</a></div>
+<div class="alert alert-info">{{ _("Noch keine Portfolio-Performance-Datei.") }}{% if not pp_readonly() %} <a href="{{ url_for('pp.settings') }}">{{ _("Zu den Einstellungen") }}</a>{% endif %}</div>
 {% else %}
 {% if job and job.state == 'running' %}
 <div class="alert alert-info py-2"><i class="bi bi-hourglass-split"></i> {{ _("Kursaktualisierung läuft seit {t} …", t=job.started|de_datetime) }} <a href="{{ url_for('pp.securities') }}">{{ _("neu laden") }}</a></div>

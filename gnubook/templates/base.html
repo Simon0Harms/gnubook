@@ -99,7 +99,7 @@
             <i class="nav-icon bi bi-graph-up-arrow"></i><p>{{ _("Nettovermögen") }}</p></a></li>
           <li class="nav-item"><a href="{{ url_for('reports.portfolio') }}" class="nav-link {{ 'active' if ep == 'reports.portfolio' }}">
             <i class="nav-icon bi bi-pie-chart"></i><p>{{ _("Depot") }}</p></a></li>
-          {% if pp_available() and not (current_user and current_user['is_demo']) %}
+          {% if pp_available() %}
           <li class="nav-item"><a href="{{ url_for('pp.overview') }}" class="nav-link {{ 'active' if ep.startswith('pp.') }}">
             <i class="nav-icon bi bi-briefcase"></i><p>{{ _("Portfolio Performance") }}</p></a></li>
           {% endif %}

@@ -1,5 +1,6 @@
 """Portfolio Performance pages (pp-core replaced by a fake)."""
 import io
+import re
 from pathlib import Path
 
 import pytest
@@ -168,13 +169,33 @@ def test_pp_core_down_shows_a_hint(web, fake, monkeypatch):
     assert r.status_code == 503 and "systemctl status gnubook-ppcore" in r.text
 
 
-def test_demo_users_do_not_see_it(pp_app):
+def test_demo_users_see_a_fictional_file_read_only(pp_app, fake):
+    from datetime import date
+
+    from gnubook.demo import demo_period
+
     c = pp_app.test_client()
     page = c.get("/login")
     r = c.post("/demo", data={"csrf_token": csrf_from(page.text)})
     assert r.status_code == 302
-    assert c.get("/pp/").status_code == 404
-    assert 'href="/pp/"' not in c.get("/").text
+    home = c.get("/").text
+    assert 'href="/pp/"' in home
+    csrf = csrf_from(home)
+    start, months = demo_period(date.today())
+    for url in ["/pp/", "/pp/holdings", "/pp/transactions", "/pp/securities", f"/pp/securities/{ETF}?q=MWE"]:
+        r = c.get(url)
+        assert r.status_code == 200, url
+        assert "erfundene Portfolio-Performance-Datei" in r.text
+        assert 'action="/pp/quotes"' not in r.text and 'href="/pp/settings"' not in r.text, url
+        assert not re.search(r'action="/pp/(transactions/[^"]+/delete|sync|securities/[^"?]+")', r.text), url
+    demo_calls = [x for x in fake.calls if x[0] == "demo"]
+    assert len(demo_calls) == 1 and demo_calls[0][2:] == (start, months, 7)  # created once, then reused
+    assert not [x for x in fake.calls if x[0] == "search"]
+    for url in ["/pp/settings", "/pp/import", "/pp/file"]:
+        assert c.get(url).status_code == 404, url
+    for url in ["/pp/quotes", "/pp/sync", "/pp/settings", "/pp/transactions/fee-1/delete", f"/pp/securities/{ETF}"]:
+        assert c.post(url, data={"csrf_token": csrf}).status_code == 404, url
+    assert fake.deleted == []
 
 
 def test_csrf_is_required(web, fake):

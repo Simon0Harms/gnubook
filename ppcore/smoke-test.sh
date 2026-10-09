@@ -84,6 +84,14 @@ assert "positions" in holdings, list(holdings)
 pdf = base64.b64encode(b"%PDF-1.4\n% not a real statement\n").decode()
 result = call("POST", "/clients/smoke/import", {"files": [{"name": "x.pdf", "data": pdf}], "apply": False})
 assert result["fileErrors"] and not result["items"], result
+demo = call("POST", "/clients/demo/demo", {"start": "2025-01-01", "months": 14}, expect=201)
+assert demo["securities"] == 2 and demo["transactions"] > 20, demo
+dexp = call("GET", "/clients/demo/export?prices=none")
+kinds = {t["type"] for t in dexp["transactions"]}
+assert {"BUY", "SELL", "DIVIDENDS", "DEPOSIT", "FEES"} <= kinds, kinds
+call("POST", "/clients/smoke/demo", {}, expect=409)  # never over a real file
+dperf = call("GET", "/clients/demo/performance?from=2025-01-01&to=2025-12-31")
+assert dperf["ttwror"] is not None, dperf
 raw = call("GET", "/clients/smoke/file")
 assert b"<client" in raw[:200], raw[:200]
 print("pp-core smoke test passed:", len(feeds), "price sources")

@@ -162,6 +162,29 @@ final class HttpApi
                 }
                 sendJson(ex, 201, summary(holder));
             }
+            case "demo" -> {
+                // the fictional file of gnubook's demo; replaces only a file that was a demo file itself
+                require(method, "POST");
+                JsonObject body = body(ex);
+                LocalDate start = date(orDefault(Json.str(body, "start"), LocalDate.now().minusMonths(13)
+                                .withDayOfMonth(1).toString()), "start");
+                int months = body.has("months") ? Math.max(1, Math.min(60, body.get("months").getAsInt())) : 14;
+                long seed = body.has("seed") ? body.get("seed").getAsLong() : 7L;
+                holder.acquire();
+                try
+                {
+                    if (holder.exists() && !holder.state().has("demo"))
+                        throw ApiException.conflict("exists", "there is a file already");
+                    holder.install(Demo.build(start, months, seed));
+                    holder.state().addProperty("demo", start + "/" + months + "/" + seed);
+                    holder.saveState();
+                }
+                finally
+                {
+                    holder.lock.unlock();
+                }
+                sendJson(ex, 201, summary(holder));
+            }
             case "export" -> {
                 require(method, "GET");
                 LocalDate since = null;
@@ -315,6 +338,7 @@ final class HttpApi
         try
         {
             holder.replace(content, name);
+            holder.forgetDemo();
         }
         finally
         {
@@ -362,6 +386,7 @@ final class HttpApi
             JsonObject st = holder.state();
             o.put("originalName", Json.str(st, "originalName"));
             o.put("lastPriceUpdate", Json.str(st, "lastPriceUpdate"));
+            o.put("demo", Json.str(st, "demo"));
             o.put("importTargets", st.has("importTargets") ? Json.GSON.fromJson(st.get("importTargets"), Map.class)
                             : Map.of());
             return o;

@@ -6,7 +6,7 @@
 {% block content %}
 {% include "pp/_nav.html" %}
 {% if not data %}
-<div class="alert alert-info">{{ _("Noch keine Portfolio-Performance-Datei.") }} <a href="{{ url_for('pp.settings') }}">{{ _("Zu den Einstellungen") }}</a></div>
+<div class="alert alert-info">{{ _("Noch keine Portfolio-Performance-Datei.") }}{% if not pp_readonly() %} <a href="{{ url_for('pp.settings') }}">{{ _("Zu den Einstellungen") }}</a>{% endif %}</div>
 {% else %}
 {% set cur = data.currency %}
 <form class="card card-body py-2 mb-3" method="get" action="{{ url_for('pp.holdings') }}" data-autosubmit>

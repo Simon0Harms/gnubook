@@ -10,6 +10,7 @@
     <div class="card mb-4">
       <div class="card-header"><h3 class="card-title">{{ _("Kursquelle") }}</h3></div>
       <div class="card-body">
+        {% if not pp_readonly() %}
         <form method="post" action="{{ url_for('pp.security', uuid=sec.uuid) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="mb-2">
@@ -38,6 +39,7 @@
           <button class="btn btn-primary" type="submit" name="update" value="1"><i class="bi bi-save"></i> {{ _("Speichern und Kurse laden") }}</button>
           <button class="btn btn-outline-secondary" type="submit">{{ _("Nur speichern") }}</button>
         </form>
+        {% else %}<p class="mb-0">{{ sec.feed or 'MANUAL' }}{% if sec.ticker %} · {{ sec.ticker }}{% endif %}</p>{% endif %}
         <dl class="row small mt-3 mb-0">
           <dt class="col-5">{{ _("Kurse") }}</dt><dd class="col-7">{{ sec.priceCount }}{% if sec.firstPrice %} ({{ sec.firstPrice|de_date }} – {{ sec.lastPrice|de_date }}){% endif %}</dd>
           {% if sec.latest %}<dt class="col-5">{{ _("Aktueller Kurs") }}</dt><dd class="col-7">{{ sec.latest.value|money(sec.currency, places=4) }} ({{ sec.latest.date|de_date }})</dd>{% endif %}
@@ -46,6 +48,7 @@
       </div>
     </div>
   </div>
+  {% if not pp_readonly() %}
   <div class="col-lg-7">
     <div class="card mb-4">
       <div class="card-header"><h3 class="card-title">{{ _("Kursquelle suchen") }}</h3></div>
@@ -82,5 +85,6 @@
       </div>
     </div>
   </div>
+  {% endif %}
 </div>
 {% endblock %}

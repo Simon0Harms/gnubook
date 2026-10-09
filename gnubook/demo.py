@@ -67,6 +67,16 @@ def _demo_securities(book, eur, parent, funding, start: date, months: int, seed:
 
 
 
+DEMO_MONTHS = 14
+DEMO_SEED = 7
+
+
+def demo_period(today: date) -> tuple[date, int]:
+    """Start and length of the demo data: 14 months up to the current one."""
+    m0 = today.year * 12 + today.month - 1 - (DEMO_MONTHS - 1)
+    return date(m0 // 12, m0 % 12 + 1, 1), DEMO_MONTHS
+
+
 def create_demo_book(target: str, start: date = date(2025, 8, 1), months: int = 14, seed: int = 7,
                      with_deviation: bool = True) -> str:
     """Create a GnuCash book with ~14 months of plausible data. Returns the SQLAlchemy URL.

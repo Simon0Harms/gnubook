@@ -46,26 +46,55 @@ STATUS_LABELS = {"booked": "übernommen", "edited": "in GnuCash bearbeitet", "co
 IMPORT_STATUS = {"OK": "ok", "WARNING": "Warnung", "ERROR": "Fehler", "SKIP": "übersprungen"}
 
 
+# what the shared demo user may see: the figures of a fictional PP file, nothing that changes or searches
+DEMO_ENDPOINTS = {"pp.overview", "pp.holdings", "pp.transactions", "pp.securities", "pp.security", "pp.status_json"}
+
+
 @bp.before_request
 def _demo_guard():
     from .auth import is_demo_user
 
     if is_demo_user():
-        abort(404)
+        if request.method != "GET" or request.endpoint not in DEMO_ENDPOINTS:
+            abort(404)
+
+
+def pp_demo() -> bool:
+    from .auth import is_demo_user
+
+    return is_demo_user()
+
+
+def _ensure_demo_file(ctx):
+    """The demo book gets a fictional PP file for the same period (rebuilt with the demo book every month)."""
+    from ..demo import DEMO_SEED, demo_period
+
+    start, months = demo_period(date.today())
+    marker = f"{start.isoformat()}/{months}/{DEMO_SEED}"
+    try:
+        if _summary(ctx.pp).get("demo") != marker:
+            ctx.pp.client.demo(ctx.pp.cid, start, months, DEMO_SEED)
+            g.pop("pp_summary", None)
+    except PPCoreError:
+        pass  # the page shows the error itself
 
 
 @bp.app_context_processor
 def inject_pp():
+    from .auth import is_demo_user
+
     def _pp_on():
         ctx = g.get("ctx")
         return bool(ctx is not None and ctx.pp is not None)
-    return {"pp_available": _pp_on}
+    return {"pp_available": _pp_on, "pp_readonly": is_demo_user}
 
 
 def _svc():
     ctx = state()
     if ctx.pp is None:
         abort(404)
+    if pp_demo():
+        _ensure_demo_file(ctx)
     return ctx.pp
 
 
@@ -453,7 +482,7 @@ def security(uuid):
         if sec is None:
             abort(404)
         feeds = svc.client.feeds()
-        q = request.args.get("q")
+        q = None if pp_demo() else request.args.get("q")  # no searches from the shared demo
         results = None
         if q is not None:
             q = q.strip() or sec.get("isin") or sec.get("name")

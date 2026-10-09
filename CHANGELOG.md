@@ -16,6 +16,8 @@
   and starts pp-core with the tested PP release
 - Nextcloud copy: the Portfolio Performance file is uploaded next to the `.gnucash` copy (`<name>-PP.xml`)
   after every change of the PP file
+- Demo: the shared demo user sees the Portfolio Performance pages read-only with a made-up PP file that pp-core
+  builds for the demo period (`POST /clients/{id}/demo`)
 - Fixed: the PostgreSQL run of the net worth price test opened the book as SQLite file
 - Portfolio report (*Depot*): holdings with average-cost basis, unrealized/realized gain and 12-month price
   change, allocation donut, market value vs. cost basis over time, price history per security; the demo book

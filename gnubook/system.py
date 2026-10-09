@@ -587,7 +587,7 @@ class Registry:
         """The shared read-only demo user; its demo book ends with the current month (rebuilt monthly)."""
         from datetime import date
 
-        from .demo import DEMO_VERSION, create_demo_book
+        from .demo import DEMO_VERSION, create_demo_book, demo_period
 
         with self._demo_lock:
             user = next(iter(self.system.demo_users()), None)
@@ -603,11 +603,10 @@ class Registry:
             if books and books[0]["url"] == url and path.exists():
                 return user
             if not path.exists():
-                months = 14
-                m0 = today.year * 12 + today.month - 1 - (months - 1)
+                start, months = demo_period(today)
                 path.parent.mkdir(parents=True, exist_ok=True)
                 tmp = path.with_name(f"{path.stem}.{secrets.token_hex(4)}.tmp")
-                create_demo_book(str(tmp), start=date(m0 // 12, m0 % 12 + 1, 1), months=months)
+                create_demo_book(str(tmp), start=start, months=months)
                 os.replace(tmp, path)  # atomic: other workers never see half a file
             if books:
                 # new URL: every worker reloads its cached context (the cache key contains the URL)

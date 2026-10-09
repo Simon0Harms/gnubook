@@ -93,6 +93,11 @@ class PPCoreClient:
         return self._request("POST", f"/clients/{cid}/create",
                              {"currency": currency, "portfolio": portfolio, "account": account})
 
+    def demo(self, cid: str, start: date, months: int, seed: int = 7) -> dict:
+        """Fictional demo file (replaces only an earlier demo file)."""
+        return self._request("POST", f"/clients/{cid}/demo",
+                             {"start": start.isoformat(), "months": months, "seed": seed})
+
     def export(self, cid: str, prices: str = "all") -> dict:
         """prices: 'all', 'none' or 'YYYY-MM-DD' (only prices from that day on)."""
         return self._request("GET", f"/clients/{cid}/export", params={"prices": prices},
