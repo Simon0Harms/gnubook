@@ -146,5 +146,9 @@ class PPCoreClient:
     def update_security(self, cid: str, uuid: str, fields: dict) -> dict:
         return self._request("PATCH", f"/clients/{cid}/securities/{urllib.parse.quote(uuid)}", fields)
 
+    def add_delivery(self, cid: str, fields: dict) -> dict:
+        """Manual inbound/outbound delivery (see ppcore/README.md, POST /clients/{id}/transactions)."""
+        return self._request("POST", f"/clients/{cid}/transactions", fields)
+
     def delete_transaction(self, cid: str, uuid: str) -> dict:
         return self._request("DELETE", f"/clients/{cid}/transactions/{urllib.parse.quote(uuid)}")

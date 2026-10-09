@@ -4,6 +4,7 @@
   <li class="nav-item"><a class="nav-link {{ 'active' if ep == 'pp.holdings' }}" href="{{ url_for('pp.holdings') }}"><i class="bi bi-list-columns"></i> {{ _("Vermögensaufstellung") }}</a></li>
   <li class="nav-item"><a class="nav-link {{ 'active' if ep == 'pp.transactions' }}" href="{{ url_for('pp.transactions') }}"><i class="bi bi-arrow-left-right"></i> {{ _("Buchungen") }}</a></li>
   {% if not pp_readonly() %}<li class="nav-item"><a class="nav-link {{ 'active' if ep in ('pp.pdf_import',) }}" href="{{ url_for('pp.pdf_import') }}"><i class="bi bi-file-earmark-pdf"></i> {{ _("PDF-Import") }}</a></li>{% endif %}
+  {% if not pp_readonly() %}<li class="nav-item"><a class="nav-link {{ 'active' if ep == 'pp.delivery' }}" href="{{ url_for('pp.delivery') }}"><i class="bi bi-box-arrow-in-right"></i> {{ _("Ein-/Auslieferung") }}</a></li>{% endif %}
   <li class="nav-item"><a class="nav-link {{ 'active' if ep in ('pp.securities', 'pp.security') }}" href="{{ url_for('pp.securities') }}"><i class="bi bi-graph-up"></i> {{ _("Wertpapiere und Kurse") }}</a></li>
   {% if not pp_readonly() %}<li class="nav-item"><a class="nav-link {{ 'active' if ep == 'pp.settings' }}" href="{{ url_for('pp.settings') }}"><i class="bi bi-sliders"></i> {{ _("Einstellungen") }}</a></li>{% endif %}
 </ul>

@@ -467,4 +467,14 @@
       form.submit();
     });
   });
+
+  // <div data-show-when="select-id=value">: shown only while that select has that value
+  document.querySelectorAll('[data-show-when]').forEach(function (el) {
+    var parts = el.getAttribute('data-show-when').split('=');
+    var sel = document.getElementById(parts[0]);
+    if (!sel) { return; }
+    var sync = function () { el.hidden = sel.value !== parts[1]; };
+    sel.addEventListener('change', sync);
+    sync();
+  });
 })();

@@ -204,6 +204,23 @@ class FakePPCore:
         self.calls.append(("update_security", uuid, dict(fields)))
         return {"uuid": uuid, **fields}
 
+    def add_delivery(self, cid, fields):
+        """Like pp-core: refuses to deliver more than 1000 shares out without force (stands for "more than held")."""
+        from gnubook.pp.client import PPCoreError
+
+        self.calls.append(("add_delivery", dict(fields)))
+        if (fields["type"] == "DELIVERY_OUTBOUND" and float(fields["shares"]) > 1000
+                and not fields.get("force")):
+            raise PPCoreError("only 10 shares of Musterwelt Aktien ETF in Depot Musterbank", 409,
+                              "not_enough_shares")
+        uuid = f"manual-{len(self.calls)}"
+        sec = fields.get("security") or ETF
+        self.export_data = copy.deepcopy(self.export_data)
+        self.export_data["transactions"].append(
+            _t(uuid, "portfolio", fields.get("portfolio") or P1, fields["type"], fields["date"],
+               fields.get("amount") or "100", shares=fields["shares"], security=sec, note=fields.get("note")))
+        return {"uuid": uuid, "type": fields["type"], "security": sec, "shares": fields["shares"]}
+
     def delete_transaction(self, cid, uuid):
         self.deleted.append(uuid)
         self.export_data = without(self.export_data, uuid)

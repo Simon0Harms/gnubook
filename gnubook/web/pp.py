@@ -8,6 +8,7 @@ from __future__ import annotations
 from ..i18n import gettext as _
 
 import logging
+import re
 from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -431,6 +432,107 @@ def pdf_import_apply(sid):
     except PPCoreError as exc:
         flash(str(exc), "danger")
     return redirect(url_for("pp.pdf_import", session=sid))
+
+
+# ------------------------------------------------------------------------------------------ manual deliveries
+
+DELIVERY_TYPES = ("DELIVERY_OUTBOUND", "DELIVERY_INBOUND")
+
+
+def _delivery_fields(form) -> dict:
+    """The form as pp-core's body for POST /clients/{id}/transactions (amounts as plain decimal strings)."""
+    from ..money import AmountError, parse_amount, to_api_string
+
+    kind = form.get("type", "")
+    if kind not in DELIVERY_TYPES:
+        raise ValueError(_("Bitte Ein- oder Auslieferung wählen."))
+    day = _parse_date(form.get("date"))
+    if day is None:
+        raise ValueError(_("Bitte ein gültiges Datum angeben."))
+    if day > date.today():
+        raise ValueError(_("Das Datum liegt in der Zukunft."))
+
+    def num(name, fraction=100):
+        try:
+            value = parse_amount(form.get(name), fraction=fraction)
+        except AmountError:
+            raise ValueError(_("Ungültige Zahl: {a0}", a0=form.get(name))) from None
+        if value is not None and value < 0:
+            raise ValueError(_("Ungültige Zahl: {a0}", a0=form.get(name)))
+        return value
+
+    shares = num("shares", 10 ** 8)
+    if not shares:
+        raise ValueError(_("Bitte die Stückzahl angeben."))
+    fields = {"type": kind, "portfolio": form.get("portfolio") or None, "date": day.isoformat(),
+              "shares": format(shares.normalize(), "f"), "note": (form.get("note") or "").strip() or None,
+              "force": form.get("force") == "1"}
+    for name in ("amount", "fees", "taxes"):
+        value = num(name)
+        if value is not None:
+            fields[name] = to_api_string(value)
+    security = form.get("security") or ""
+    if security and security != "new":
+        fields["security"] = security
+    else:
+        isin = (form.get("isin") or "").strip().upper()
+        if not re.fullmatch(r"[A-Z]{2}[A-Z0-9]{9}[0-9]", isin):
+            raise ValueError(_("Bitte ein Wertpapier wählen oder eine gültige ISIN angeben."))
+        fields["isin"] = isin
+        if (form.get("name") or "").strip():
+            fields["name"] = form.get("name").strip()
+        if (form.get("currency") or "").strip():
+            fields["currency"] = form.get("currency").strip().upper()
+    return fields
+
+
+@bp.route("/delivery", methods=["GET", "POST"])
+@login_required
+def delivery():
+    """Manual inbound/outbound delivery – for documents PP's PDF importers do not read (e.g. Depotauslieferung)."""
+    svc = _svc()
+    try:
+        summary = _summary(svc)
+        export = svc.client.export(svc.cid, prices="none") if summary.get("exists") else None
+    except PPCoreError as exc:
+        return _pp_error(exc)
+    form = request.form if request.method == "POST" else request.args
+    confirm = None
+    if request.method == "POST" and export is not None:
+        try:
+            fields = _delivery_fields(request.form)
+            result = svc.client.add_delivery(svc.cid, fields)
+            g.pop("pp_summary", None)
+            flash(_("{a0} in Portfolio Performance angelegt.", a0=_(KIND_LABELS[fields["type"]])), "success")
+            if svc.enabled:
+                svc.request_sync()
+                flash(_("Die Buchungen werden im Hintergrund ins GnuCash-Buch übernommen."), "info")
+            isin = fields.get("isin") or next((x.get("isin") for x in export.get("securities", [])
+                                               if x["uuid"] == result.get("security")), None)
+            return redirect(url_for("pp.transactions", q=isin or None))
+        except ValueError as exc:
+            flash(str(exc), "warning")
+        except PPCoreError as exc:
+            if exc.code == "not_enough_shares":
+                confirm = str(exc)
+            else:
+                flash(str(exc), "danger")
+    securities = []
+    if export is not None:
+        held = {}
+        for t in export.get("transactions", []):
+            if t.get("security") and t.get("shares"):
+                sign = 1 if t.get("type") in ("BUY", "TRANSFER_IN", "DELIVERY_INBOUND") else (
+                    -1 if t.get("type") in ("SELL", "TRANSFER_OUT", "DELIVERY_OUTBOUND") else 0)
+                held[t["security"]] = held.get(t["security"], ZERO) + sign * Decimal(str(t["shares"]))
+        for s in export.get("securities", []):
+            if s.get("exchangeRate") or (s.get("retired") and not held.get(s["uuid"])):
+                continue
+            securities.append({"uuid": s["uuid"], "name": s["name"], "isin": s.get("isin"),
+                               "currency": s.get("currency"), "held": held.get(s["uuid"], ZERO)})
+        securities.sort(key=lambda s: (s["held"] <= 0, s["name"].casefold()))
+    return render_template("pp/delivery.html", summary=summary, securities=securities, form=form,
+                           confirm=confirm, today=date.today(), KIND_LABELS=KIND_LABELS)
 
 
 # ------------------------------------------------------------------------------------------ securities & prices

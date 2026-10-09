@@ -291,6 +291,12 @@ final class HttpApi
                 sendJson(ex, 200, updateSecurity(holder, seg[3], body(ex)));
             }
             case "transactions" -> {
+                if (seg.length == 3)
+                {
+                    require(method, "POST");
+                    sendJson(ex, 201, ManualTransaction.create(holder, body(ex)));
+                    return;
+                }
                 if (seg.length != 4 || !UUID_LIKE.matcher(seg[3]).matches())
                     throw ApiException.notFound("unknown path");
                 require(method, "DELETE");

@@ -92,6 +92,26 @@ assert {"BUY", "SELL", "DIVIDENDS", "DEPOSIT", "FEES"} <= kinds, kinds
 call("POST", "/clients/smoke/demo", {}, expect=409)  # never over a real file
 dperf = call("GET", "/clients/demo/performance?from=2025-01-01&to=2025-12-31")
 assert dperf["ttwror"] is not None, dperf
+# manual deliveries
+port = summary["portfolioList"][0]["uuid"]
+inb = call("POST", "/clients/smoke/transactions", {"type": "DELIVERY_INBOUND", "portfolio": port, "isin": "IE00BKM4GZ66",
+           "name": "Test EM IMI", "date": "2023-01-02", "shares": "20", "amount": "500.00", "fees": "1.50"},
+           expect=201)
+assert float(inb["amount"]) == 500 and inb["shares"] == "20", inb
+call("POST", "/clients/smoke/transactions", {"type": "DELIVERY_OUTBOUND", "isin": "IE00BKM4GZ66",
+     "date": "2023-10-04", "shares": "21", "amount": "0"}, expect=409)
+call("POST", "/clients/smoke/transactions", {"type": "DELIVERY_OUTBOUND", "isin": "IE00BKM4GZ66",
+     "date": "2023-10-04", "shares": "20"}, expect=400)  # no price, no value
+out = call("POST", "/clients/smoke/transactions", {"type": "DELIVERY_OUTBOUND", "security": inb["security"],
+           "date": "2023-10-04", "shares": "20", "amount": "520", "note": "Depotauslieferung"}, expect=201)
+mexp = call("GET", "/clients/smoke/export?prices=none")
+mt = {t["uuid"]: t for t in mexp["transactions"]}
+assert mt[out["uuid"]]["type"] == "DELIVERY_OUTBOUND" and mt[inb["uuid"]]["type"] == "DELIVERY_INBOUND", mt
+dsec = dexp["securities"][0]["uuid"]
+dport = dexp["portfolios"][0]["uuid"]
+priced = call("POST", "/clients/demo/transactions", {"type": "DELIVERY_OUTBOUND", "portfolio": dport,
+              "security": dsec, "date": "2025-12-01", "shares": "1"}, expect=201)
+assert float(priced["amount"]) > 0, priced
 raw = call("GET", "/clients/smoke/file")
 assert b"<client" in raw[:200], raw[:200]
 print("pp-core smoke test passed:", len(feeds), "price sources")

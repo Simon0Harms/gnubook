@@ -26,6 +26,7 @@ A menu entry *Portfolio Performance* with these pages:
 | *Vermögensaufstellung* | holdings on any date: shares, price, value, FIFO cost, unrealised and realised gains, dividends, IRR and TTWROR per security; cash accounts |
 | *Buchungen* | all PP transactions with their state in the GnuCash book (booked, edited in GnuCash, conflict, deleted in GnuCash, detached, not booked and why); conflicts are resolved here; transactions can be deleted in PP |
 | *PDF-Import* | upload bank statements (contract notes, dividends, taxes) as PDF, several at once also as ZIP or TAR archive; PP's importers read them; possible duplicates and warnings are shown and only imported when you allow it |
+| *Ein-/Auslieferung* | enter an inbound or outbound delivery by hand (securities into or out of a securities account without cash flow), for documents PP's importers do not read – e.g. Baader Bank / Scalable Capital *Depotauslieferung*; value empty = shares × price of that day; more shares out than held only after confirmation |
 | *Wertpapiere und Kurse* | securities with their price source, last price and number of prices; search for a price source (Yahoo by ISIN), update prices |
 | *Einstellungen* | upload, download or create the PP file; the GnuCash accounts used; the bank-import rule; start date and options; manual run and dry run; history of the runs |
 
@@ -257,8 +258,8 @@ copy; Nextcloud's versions app keeps the older states. pp-core listens on
 ## Limitations
 
 - PP's desktop user interface is not available; what gnubook's pages do not cover (taxonomies, investment
-  plans, watchlists, dashboards, editing single transactions) needs PP's desktop application with the
-  downloaded file (see above). As far as I know, PP creates the transactions of investment plans in its
+  plans, watchlists, dashboards, editing single transactions; of new transactions only deliveries can be
+  entered) needs PP's desktop application with the downloaded file (see above). As far as I know, PP creates the transactions of investment plans in its
   desktop application, so pp-core does not execute investment plans; import the statements instead.
 - Password-protected PP files are not supported.
 - Cash accounts in other currencies than the book's are not booked.

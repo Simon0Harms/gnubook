@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Ein-/Auslieferung") }}{% endblock %}
+{% block header %}{{ _("Portfolio Performance") }}{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">{{ _("Wertpapiere ohne Geldfluss ins Depot einbuchen oder aus dem Depot ausbuchen – für Belege, die der PDF-Import nicht liest (z. B. Depotauslieferung)") }}</div>{% endblock %}
+{% block content %}
+{% include "pp/_nav.html" %}
+{% if not summary.exists %}
+<div class="alert alert-info">{{ _("Zuerst eine Portfolio-Performance-Datei hochladen oder anlegen.") }} <a href="{{ url_for('pp.settings') }}">{{ _("Zu den Einstellungen") }}</a></div>
+{% else %}
+{% set kind = form.get('type') or 'DELIVERY_OUTBOUND' %}
+{% set sel = form.get('security') or '' %}
+<form method="post" action="{{ url_for('pp.delivery') }}" class="card mb-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="card-header"><h3 class="card-title"><i class="bi bi-box-arrow-in-right"></i> {{ _("Ein-/Auslieferung erfassen") }}</h3></div>
+  <div class="card-body">
+    {% if confirm %}
+    <div class="alert alert-warning">
+      <div>{{ _("Mehr Stück als im Depot:") }} {{ confirm }}</div>
+      <div class="form-check mt-2">
+        <input class="form-check-input" type="checkbox" id="force" name="force" value="1">
+        <label class="form-check-label" for="force">{{ _("Trotzdem ausliefern") }}</label>
+      </div>
+    </div>
+    {% endif %}
+    <div class="row g-3">
+      <div class="col-12">
+        <div class="btn-group" role="group">
+          {% for k in ('DELIVERY_OUTBOUND', 'DELIVERY_INBOUND') %}
+          <input type="radio" class="btn-check" name="type" id="type-{{ k }}" value="{{ k }}" {{ 'checked' if kind == k }}>
+          <label class="btn btn-outline-primary" for="type-{{ k }}">{{ _(KIND_LABELS[k]) }}</label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label" for="security">{{ _("Wertpapier") }}</label>
+        <select class="form-select" id="security" name="security">
+          {% for s in securities %}<option value="{{ s.uuid }}" {{ 'selected' if sel == s.uuid }}>{{ s.name }}{% if s.isin %} · {{ s.isin }}{% endif %}{% if s.held %} ({{ _("Bestand") }} {{ s.held|string|replace('.', ',') }}){% endif %}</option>{% endfor %}
+          <option value="new" {{ 'selected' if sel == 'new' or not securities }}>{{ _("Neues Wertpapier (nur Einlieferung) …") }}</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label" for="portfolio">{{ _("Depot") }}</label>
+        <select class="form-select" id="portfolio" name="portfolio">
+          {% for p in summary.portfolioList or [] if not p.retired %}<option value="{{ p.uuid }}" {{ 'selected' if form.get('portfolio') == p.uuid }}>{{ p.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-12" id="new-security" data-show-when="security=new">
+        <div class="row g-2">
+          <div class="col-12 col-md-4"><label class="form-label small mb-0" for="isin">{{ _("ISIN") }}</label>
+            <input class="form-control" id="isin" name="isin" value="{{ form.get('isin', '') }}" maxlength="12" autocomplete="off"></div>
+          <div class="col-12 col-md-6"><label class="form-label small mb-0" for="name">{{ _("Name") }}</label>
+            <input class="form-control" id="name" name="name" value="{{ form.get('name', '') }}"></div>
+          <div class="col-12 col-md-2"><label class="form-label small mb-0" for="currency">{{ _("Währung") }}</label>
+            <input class="form-control" id="currency" name="currency" value="{{ form.get('currency', '') }}" maxlength="3" placeholder="EUR"></div>
+        </div>
+        <div class="form-text">{{ _("Gibt es die ISIN in der PP-Datei schon, wird dieses Wertpapier genommen.") }}</div>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label" for="date">{{ _("Datum") }}</label>
+        <input class="form-control" type="date" id="date" name="date" value="{{ form.get('date') or today.isoformat() }}" max="{{ today.isoformat() }}" required>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label" for="shares">{{ _("Stück") }}</label>
+        <input class="form-control" id="shares" name="shares" value="{{ form.get('shares', '') }}" inputmode="decimal" required>
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label" for="amount">{{ _("Wert") }}</label>
+        <input class="form-control" id="amount" name="amount" value="{{ form.get('amount', '') }}" inputmode="decimal">
+        <div class="form-text">{{ _("Leer = Stück × Kurs am Datum aus der PP-Datei. Wie in PP: bei der Einlieferung einschließlich, bei der Auslieferung abzüglich Gebühren und Steuern.") }}</div>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label" for="fees">{{ _("Gebühren") }}</label>
+        <input class="form-control" id="fees" name="fees" value="{{ form.get('fees', '') }}" inputmode="decimal">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label" for="taxes">{{ _("Steuern") }}</label>
+        <input class="form-control" id="taxes" name="taxes" value="{{ form.get('taxes', '') }}" inputmode="decimal">
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label" for="note">{{ _("Notiz") }}</label>
+        <input class="form-control" id="note" name="note" value="{{ form.get('note', '') }}">
+      </div>
+    </div>
+    <div class="alert alert-secondary small mt-3 mb-0">{{ _("Im GnuCash-Buch wird eine Auslieferung zum FIFO-Einstandswert gegen das Konto für Einlieferungen gebucht – der Wert hier zählt nur für die Kennzahlen in Portfolio Performance. Geht das Wertpapier in ein anderes Depot dieser PP-Datei, ist ein Depotwechsel in PP Desktop die bessere Wahl.") }}</div>
+  </div>
+  <div class="card-footer"><button class="btn btn-primary" type="submit"><i class="bi bi-check-lg"></i> {{ _("Anlegen") }}</button></div>
+</form>
+{% endif %}
+{% endblock %}

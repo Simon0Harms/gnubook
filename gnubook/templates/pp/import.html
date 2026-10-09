@@ -55,6 +55,7 @@
     {% for e in result.fileErrors %}
       <div class="alert alert-warning py-1 small mb-2"><strong>{{ e.file }}</strong>: {{ e.message }}</div>
     {% endfor %}
+    {% if result.fileErrors %}<div class="small text-body-secondary mb-3">{{ _("Ein Beleg über eine Ein- oder Auslieferung wird nicht erkannt?") }} <a href="{{ url_for('pp.delivery') }}">{{ _("Von Hand erfassen") }}</a></div>{% endif %}
 
     {% for t in result.targets if t.missing %}
     <form class="border rounded p-2 mb-3" method="post" action="{{ url_for('pp.pdf_import_apply', sid=result.session) }}">

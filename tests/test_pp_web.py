@@ -8,7 +8,7 @@ import pytest
 from gnubook.pp.client import PPCoreError
 
 from .conftest import PASSWORD, csrf_from
-from .pp_fixtures import ETF, fake, find, make_export, pp_app  # noqa: F401 – fixtures
+from .pp_fixtures import ETF, P1, fake, find, make_export, pp_app  # noqa: F401 – fixtures
 
 
 @pytest.fixture
@@ -38,7 +38,7 @@ def test_all_pages_render(web, lang):
     assert "/pp/" in web.get("/").text
     for url in ["/pp/", "/pp/?period=all", "/pp/?period=custom&from=2024-01-01&to=2024-06-30", "/pp/holdings",
                 "/pp/holdings?date=2024-02-01", "/pp/transactions", "/pp/transactions?status=attention&q=muster",
-                "/pp/import", "/pp/securities", "/pp/securities?all=1", f"/pp/securities/{ETF}",
+                "/pp/import", "/pp/delivery", "/pp/securities", "/pp/securities?all=1", f"/pp/securities/{ETF}",
                 f"/pp/securities/{ETF}?q=MWE", "/pp/settings"]:
         r = web.get(url)
         assert r.status_code == 200, url
@@ -259,3 +259,50 @@ def test_archive_limits(monkeypatch):
     monkeypatch.setattr(archive, "MAX_TOTAL", 100)
     docs, problems = archive.expand([("gross.zip", _zip({"a.pdf": b"0" * 1000}))])
     assert docs == [] and problems == [("gross.zip", "entpackt größer als 0 MB")]
+
+
+def test_manual_delivery(web, fake):
+    page = web.get("/pp/delivery")
+    assert page.status_code == 200 and "Ein-/Auslieferung" in page.text and ETF in page.text
+    r = web.post("/pp/delivery", data={"csrf_token": web.csrf, "type": "DELIVERY_OUTBOUND", "security": ETF,
+                                       "portfolio": P1, "date": "04.10.2023", "shares": "2", "amount": "1.234,50",
+                                       "fees": "", "taxes": "", "note": "Depotauslieferung"})
+    assert r.status_code == 302 and "/pp/transactions" in r.headers["Location"]
+    call = [c for c in fake.calls if c[0] == "add_delivery"][-1][1]
+    assert call == {"type": "DELIVERY_OUTBOUND", "portfolio": P1, "date": "2023-10-04", "shares": "2",
+                    "note": "Depotauslieferung", "force": False, "amount": "1234.50", "security": ETF}
+    assert any(t["type"] == "DELIVERY_OUTBOUND" and t.get("note") == "Depotauslieferung"
+               for t in fake.export_data["transactions"])
+
+
+def test_manual_delivery_new_security_and_value_from_price(web, fake):
+    r = web.post("/pp/delivery", data={"csrf_token": web.csrf, "type": "DELIVERY_INBOUND", "security": "new",
+                                       "isin": "ie00bkm4gz66", "name": "iShs Core MSCI EM IMI", "date": "2023-01-02",
+                                       "shares": "20,5", "amount": ""})
+    assert r.status_code == 302
+    call = [c for c in fake.calls if c[0] == "add_delivery"][-1][1]
+    assert call["isin"] == "IE00BKM4GZ66" and call["name"] == "iShs Core MSCI EM IMI"
+    assert call["shares"] == "20.5" and "amount" not in call and "security" not in call
+
+
+def test_manual_delivery_validation_and_confirmation(web, fake):
+    base = {"csrf_token": web.csrf, "type": "DELIVERY_OUTBOUND", "security": ETF, "date": "2023-10-04"}
+    r = web.post("/pp/delivery", data={**base, "shares": ""}, follow_redirects=True)
+    assert "Stückzahl" in r.text
+    r = web.post("/pp/delivery", data={**base, "shares": "2", "date": "2999-01-01"}, follow_redirects=True)
+    assert "Zukunft" in r.text
+    r = web.post("/pp/delivery", data={**base, "security": "new", "isin": "XX", "shares": "2"},
+                 follow_redirects=True)
+    assert "ISIN" in r.text
+    assert not [c for c in fake.calls if c[0] == "add_delivery"]
+    # more than held: pp-core refuses, the form asks for confirmation and keeps the input
+    r = web.post("/pp/delivery", data={**base, "shares": "5000"})
+    assert r.status_code == 200 and 'name="force"' in r.text and 'value="5000"' in r.text
+    r = web.post("/pp/delivery", data={**base, "shares": "5000", "force": "1"})
+    assert r.status_code == 302
+
+
+def test_delivery_hidden_from_demo_user(pp_app):
+    from gnubook.web import pp as pp_views
+
+    assert "pp.delivery" not in pp_views.DEMO_ENDPOINTS
