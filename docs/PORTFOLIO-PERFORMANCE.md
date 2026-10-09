@@ -25,7 +25,7 @@ A menu entry *Portfolio Performance* with these pages:
 | *Kennzahlen* | TTWROR (cumulative and per year), IRR, absolute change, max. drawdown, volatility for a period (this year, 12 months, 3/5 years, all, custom) and for all or one securities account; charts of the performance and of the value against the invested capital; PP's calculation table (initial value, capital gains, earnings, fees, taxes, final value) |
 | *Vermögensaufstellung* | holdings on any date: shares, price, value, FIFO cost, unrealised and realised gains, dividends, IRR and TTWROR per security; cash accounts |
 | *Buchungen* | all PP transactions with their state in the GnuCash book (booked, edited in GnuCash, conflict, deleted in GnuCash, detached, not booked and why); conflicts are resolved here; transactions can be deleted in PP |
-| *PDF-Import* | upload bank statements (contract notes, dividends, taxes) as PDF; PP's importers read them; possible duplicates and warnings are shown and only imported when you allow it |
+| *PDF-Import* | upload bank statements (contract notes, dividends, taxes) as PDF, several at once also as ZIP or TAR archive; PP's importers read them; possible duplicates and warnings are shown and only imported when you allow it |
 | *Wertpapiere und Kurse* | securities with their price source, last price and number of prices; search for a price source (Yahoo by ISIN), update prices |
 | *Einstellungen* | upload, download or create the PP file; the GnuCash accounts used; the bank-import rule; start date and options; manual run and dry run; history of the runs |
 

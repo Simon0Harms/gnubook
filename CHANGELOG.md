@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- PDF import (Portfolio Performance): several documents can be uploaded packed as ZIP or TAR (.tar.gz/.tgz,
+  .tar.bz2, .tar.xz); the PDF and TXT files inside are imported, other files ignored. Limits against archive
+  bombs (500 documents, 200 MB unpacked per upload); encrypted ZIPs and nested archives are not unpacked
 - Portfolio Performance (optional, `deploy/install-pp.sh`, docs/PORTFOLIO-PERFORMANCE.md): PP runs on the server
   without its desktop interface as service *pp-core* (PP's own bundles started by Equinox with a small extra
   bundle and JSON API, one PP file per book). New pages *Portfolio Performance*: performance figures and charts

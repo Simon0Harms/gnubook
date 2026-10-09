@@ -18,6 +18,7 @@ from flask import (Blueprint, Response, abort, flash, g, jsonify, redirect, rend
 from .. import reports as rp
 from ..book import WriteLockError
 from ..money import ZERO
+from ..pp import archive
 from ..pp.client import PPCoreError
 from ..pp.plan import SKIP_REASONS, build_plan
 from ..pp.settings import ROLE_LABELS, ROLE_TYPES, PPSettings, default_name, resolved
@@ -377,9 +378,12 @@ def pdf_import():
                 flash(_("Zuerst eine Portfolio-Performance-Datei hochladen oder anlegen."), "warning")
                 return redirect(url_for("pp.settings"))
             files = [(f.filename or "dokument.pdf", f.read()) for f in request.files.getlist("files") if f]
-            files = [(n, d) for n, d in files if d]
+            files, problems = archive.expand([(n, d) for n, d in files if d])
+            for name, message in problems:
+                flash(_("{a0}: {a1}", a0=name, a1=message), "warning")
             if not files:
-                flash(_("Bitte mindestens eine PDF-Datei auswählen."), "warning")
+                if not problems:
+                    flash(_("Bitte mindestens eine PDF-Datei oder ein Archiv auswählen."), "warning")
                 return redirect(url_for("pp.pdf_import"))
             result = svc.client.import_pdfs(svc.cid, files, portfolio=request.form.get("portfolio") or None,
                                             account=request.form.get("account") or None,
@@ -397,7 +401,8 @@ def pdf_import():
                 flash(_("Das Importergebnis ist nicht mehr verfügbar."), "info")
     except PPCoreError as exc:
         return _pp_error(exc)
-    return render_template("pp/import.html", summary=summary, result=result, IMPORT_STATUS=IMPORT_STATUS)
+    return render_template("pp/import.html", summary=summary, result=result, IMPORT_STATUS=IMPORT_STATUS,
+                           ACCEPT=archive.ACCEPT)
 
 
 def _after_import(svc, result: dict):

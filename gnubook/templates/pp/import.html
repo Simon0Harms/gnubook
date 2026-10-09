@@ -10,14 +10,15 @@
 {% else %}
 
 <div class="card mb-4">
-  <div class="card-header"><h3 class="card-title"><i class="bi bi-file-earmark-arrow-up"></i> {{ _("PDF-Dokumente hochladen") }}</h3></div>
+  <div class="card-header"><h3 class="card-title"><i class="bi bi-file-earmark-arrow-up"></i> {{ _("PDF-Dokumente oder Archive hochladen") }}</h3></div>
   <div class="card-body">
     <form method="post" action="{{ url_for('pp.pdf_import') }}" enctype="multipart/form-data">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="row g-3 align-items-end">
         <div class="col-12 col-lg-5">
           <label class="form-label" for="files">{{ _("Dateien") }}</label>
-          <input class="form-control" type="file" id="files" name="files" accept=".pdf,application/pdf,.txt" multiple required>
+          <input class="form-control" type="file" id="files" name="files" accept="{{ ACCEPT }}" multiple required>
+          <div class="form-text">{{ _("Einzelne PDFs oder mehrere gepackt als ZIP oder TAR (.tar.gz, .tgz, .tar.bz2, .tar.xz).") }}</div>
         </div>
         <div class="col-6 col-lg-2">
           <label class="form-label" for="portfolio">{{ _("Depot") }}</label>

@@ -130,7 +130,7 @@ def test_pdf_import(web, fake):
 def test_import_needs_files(web):
     r = web.post("/pp/import", data={"csrf_token": web.csrf}, content_type="multipart/form-data",
                  follow_redirects=True)
-    assert "mindestens eine PDF" in r.text
+    assert "mindestens eine PDF-Datei oder ein Archiv" in r.text
 
 
 def test_securities_quotes_and_delete(web, fake):
@@ -214,3 +214,48 @@ def test_pp_changes_request_the_nextcloud_copy(web, pp_app, fake, monkeypatch):
     assert len(calls) == 2
     assert st.backup.extras == st.pp.backup_files
     assert st.pp.backup_files() == [(".xml", b"<client/>")]
+
+
+def _zip(members: dict) -> bytes:
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for name, data in members.items():
+            zf.writestr(name, data)
+    return buf.getvalue()
+
+
+def test_pdf_import_unpacks_archives(web, fake):
+    import tarfile
+    tbuf = io.BytesIO()
+    with tarfile.open(fileobj=tbuf, mode="w:gz") as tf:
+        info = tarfile.TarInfo("2026/Dividende.pdf")
+        info.size = 10
+        tf.addfile(info, io.BytesIO(b"%PDF-1.4 y"))
+    z = _zip({"a/Kauf.pdf": b"%PDF-1.4 x", "liesmich.md": b"x", "__MACOSX/a/._Kauf.pdf": b"x", "b/": b""})
+    r = web.post("/pp/import", data={"csrf_token": web.csrf, "auto_feed": "1",
+                                     "files": [(io.BytesIO(z), "belege.zip"), (io.BytesIO(tbuf.getvalue()), "alt.tgz"),
+                                               (io.BytesIO(b"%PDF-1.4 z"), "Verkauf.pdf")]},
+                 content_type="multipart/form-data")
+    assert r.status_code == 302
+    assert fake.calls[-1][:2] == ("import", ["belege.zip/a/Kauf.pdf", "alt.tgz/2026/Dividende.pdf", "Verkauf.pdf"])
+
+
+def test_pdf_import_reports_bad_archives(web, fake):
+    n = len(fake.calls)
+    r = web.post("/pp/import", data={"csrf_token": web.csrf,
+                                     "files": [(io.BytesIO(b"kein zip"), "kaputt.zip"),
+                                               (io.BytesIO(_zip({"x.md": b"x"})), "leer.zip")]},
+                 content_type="multipart/form-data", follow_redirects=True)
+    assert "kaputt.zip: Archiv nicht lesbar" in r.text and "leer.zip: enthält keine PDF" in r.text
+    assert "mindestens eine PDF" not in r.text and len(fake.calls) == n
+
+
+def test_archive_limits(monkeypatch):
+    from gnubook.pp import archive
+    monkeypatch.setattr(archive, "MAX_MEMBERS", 2)
+    docs, problems = archive.expand([("viel.zip", _zip({f"{i}.pdf": b"%PDF" for i in range(3)}))])
+    assert docs == [] and problems == [("viel.zip", "mehr als 2 Dokumente")]
+    monkeypatch.setattr(archive, "MAX_TOTAL", 100)
+    docs, problems = archive.expand([("gross.zip", _zip({"a.pdf": b"0" * 1000}))])
+    assert docs == [] and problems == [("gross.zip", "entpackt größer als 0 MB")]
