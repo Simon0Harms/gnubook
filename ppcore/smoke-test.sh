@@ -104,6 +104,15 @@ call("POST", "/clients/smoke/transactions", {"type": "DELIVERY_OUTBOUND", "isin"
      "date": "2023-10-04", "shares": "20"}, expect=400)  # no price, no value
 out = call("POST", "/clients/smoke/transactions", {"type": "DELIVERY_OUTBOUND", "security": inb["security"],
            "date": "2023-10-04", "shares": "20", "amount": "520", "note": "Depotauslieferung"}, expect=201)
+# outbound of a security that is not in the file yet: refused without force and nothing added, then created
+before = call("GET", "/clients/smoke")["securities"]
+newout = {"type": "DELIVERY_OUTBOUND", "isin": "LU2573966905", "name": "Amundi EM", "date": "2023-10-04",
+          "shares": "2"}
+call("POST", "/clients/smoke/transactions", newout, expect=409)
+call("POST", "/clients/smoke/transactions", {**newout, "force": True}, expect=400)  # no price, no value
+assert call("GET", "/clients/smoke")["securities"] == before
+call("POST", "/clients/smoke/transactions", {**newout, "force": True, "amount": "30"}, expect=201)
+assert call("GET", "/clients/smoke")["securities"] == before + 1
 mexp = call("GET", "/clients/smoke/export?prices=none")
 mt = {t["uuid"]: t for t in mexp["transactions"]}
 assert mt[out["uuid"]]["type"] == "DELIVERY_OUTBOUND" and mt[inb["uuid"]]["type"] == "DELIVERY_INBOUND", mt

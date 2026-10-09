@@ -25,9 +25,9 @@ import name.abuchen.portfolio.money.Values;
  *
  * <p>Body of {@code POST /clients/{id}/transactions}:
  * {@code type} (DELIVERY_INBOUND | DELIVERY_OUTBOUND), {@code portfolio} (UUID; optional with one active
- * portfolio), {@code security} (UUID) or {@code isin} (an existing security, or a new one for an inbound delivery
- * with {@code name} and optional {@code currency}), {@code date} (YYYY-MM-DD), {@code shares}, optional
- * {@code amount} (value in the portfolio's currency; empty = shares × price on that day), {@code fees},
+ * portfolio), {@code security} (UUID) or {@code isin} (an existing security, or a new one with {@code name} and
+ * optional {@code currency}; outbound from a new security needs {@code force}, as nothing is held),
+ * {@code date} (YYYY-MM-DD), {@code shares}, optional {@code amount} (value in the portfolio's currency; empty = shares × price on that day), {@code fees},
  * {@code taxes}, {@code note}, {@code force} (allow delivering more shares than held).
  *
  * <p>As in PP, the amount of an inbound delivery includes fees and taxes, the amount of an outbound delivery is
@@ -54,13 +54,25 @@ final class ManualTransaction
             if (day.isAfter(LocalDate.now()))
                 throw ApiException.badRequest("date is in the future");
             long shares = shares(body);
-            Security security = security(client, body, type, currency);
             boolean outbound = type == PortfolioTransaction.Type.DELIVERY_OUTBOUND;
+            Security security = existing(client, body);
+            String newName = security == null ? newName(body) : null;
 
-            long held = held(portfolio, security, day);
+            // checked before a new security is added, so that a refused request leaves the client untouched
+            long held = security == null ? 0L : held(portfolio, security, day);
             if (outbound && shares > held && !Json.bool(body, "force", false))
-                throw ApiException.conflict("not_enough_shares", "only " + Json.shares(held)
-                                + " shares of " + security.getName() + " in " + portfolio.getName() + " on " + day);
+                throw ApiException.conflict("not_enough_shares", "only " + Json.shares(held) + " shares of "
+                                + (security == null ? newName : security.getName()) + " in " + portfolio.getName()
+                                + " on " + day);
+
+            boolean created = false;
+            if (security == null)
+            {
+                String cur = Json.str(body, "currency");
+                security = new Security(newName, cur == null || cur.isBlank() ? currency : cur.trim().toUpperCase());
+                security.setIsin(isin(body));
+                created = true;
+            }
 
             long fees = money(body, "fees", 0L);
             long taxes = money(body, "taxes", 0L);
@@ -118,6 +130,8 @@ final class ManualTransaction
                 t.addUnit(new Unit(Unit.Type.FEE, Money.of(currency, fees)));
             if (taxes != 0)
                 t.addUnit(new Unit(Unit.Type.TAX, Money.of(currency, taxes)));
+            if (created)
+                client.addSecurity(security);
             portfolio.addTransaction(t);
             client.markDirty();
             holder.save();
@@ -155,31 +169,34 @@ final class ManualTransaction
                         .orElseThrow(() -> ApiException.badRequest("unknown portfolio"));
     }
 
-    private static Security security(Client client, JsonObject body, PortfolioTransaction.Type type, String currency)
+    /** The security named by {@code security} (UUID) or {@code isin}; null when the ISIN is not in the file. */
+    private static Security existing(Client client, JsonObject body)
     {
         String uuid = Json.str(body, "security");
         if (uuid != null && !uuid.isBlank())
             return client.getSecurities().stream().filter(s -> s.getUUID().equals(uuid)).findFirst()
                             .orElseThrow(() -> ApiException.badRequest("unknown security"));
+        String wanted = isin(body);
+        return client.getSecurities().stream().filter(s -> wanted.equals(s.getIsin())).findFirst().orElse(null);
+    }
+
+    private static String isin(JsonObject body)
+    {
         String isin = Json.str(body, "isin");
         if (isin == null || isin.isBlank())
             throw ApiException.badRequest("security or isin required");
         String wanted = isin.trim().toUpperCase();
         if (!wanted.matches("[A-Z]{2}[A-Z0-9]{9}[0-9]"))
             throw ApiException.badRequest("isin: invalid");
-        var found = client.getSecurities().stream().filter(s -> wanted.equals(s.getIsin())).findFirst();
-        if (found.isPresent())
-            return found.get();
-        if (type != PortfolioTransaction.Type.DELIVERY_INBOUND)
-            throw ApiException.badRequest("no security with ISIN " + wanted + " in the file");
+        return wanted;
+    }
+
+    private static String newName(JsonObject body)
+    {
         String name = Json.str(body, "name");
         if (name == null || name.isBlank())
-            throw ApiException.badRequest("name required for a new security");
-        String cur = Json.str(body, "currency");
-        Security s = new Security(name.trim(), cur == null || cur.isBlank() ? currency : cur.trim().toUpperCase());
-        s.setIsin(wanted);
-        client.addSecurity(s);
-        return s;
+            throw ApiException.badRequest("ISIN " + isin(body) + " is not in the file yet – enter a name");
+        return name.trim();
     }
 
     /** Shares of the security in the portfolio at the end of the day. */

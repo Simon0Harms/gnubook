@@ -35,7 +35,7 @@
         <label class="form-label" for="security">{{ _("Wertpapier") }}</label>
         <select class="form-select" id="security" name="security">
           {% for s in securities %}<option value="{{ s.uuid }}" {{ 'selected' if sel == s.uuid }}>{{ s.name }}{% if s.isin %} · {{ s.isin }}{% endif %}{% if s.held %} ({{ _("Bestand") }} {{ s.held|string|replace('.', ',') }}){% endif %}</option>{% endfor %}
-          <option value="new" {{ 'selected' if sel == 'new' or not securities }}>{{ _("Neues Wertpapier (nur Einlieferung) …") }}</option>
+          <option value="new" {{ 'selected' if sel == 'new' or not securities }}>{{ _("Neues Wertpapier …") }}</option>
         </select>
       </div>
       <div class="col-12 col-md-6">

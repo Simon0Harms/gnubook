@@ -90,7 +90,7 @@ All paths below `/api/v1`, JSON in and out, errors as `{"error": code, "message"
 | `GET /clients/{id}/holdings?date` | positions with FIFO cost, gains, dividends, IRR/TTWROR per security; cash accounts; totals |
 | `GET /clients/{id}/search?q` | search price sources (Yahoo and PP's other search providers) |
 | `PATCH /clients/{id}/securities/{uuid}` | change `feed`, `ticker`, `feedUrl`, `latestFeed`, `latestFeedUrl`, `name`, `isin`, `wkn`, `retired` |
-| `POST /clients/{id}/transactions` | manual inbound/outbound delivery (class `ManualTransaction`) `{"type": "DELIVERY_INBOUND"\|"DELIVERY_OUTBOUND", "portfolio", "security"` or `"isin"` (new security on inbound: plus `"name"`, `"currency"`)`, "date", "shares", "amount", "fees", "taxes", "note", "force"}` → 201; `amount` empty = shares × price of that day; foreign-currency securities get a gross value unit with the rate of that day; 409 `not_enough_shares` when more shares go out than are held, unless `force` |
+| `POST /clients/{id}/transactions` | manual inbound/outbound delivery (class `ManualTransaction`) `{"type": "DELIVERY_INBOUND"\|"DELIVERY_OUTBOUND", "portfolio", "security"` or `"isin"` (not yet in the file: plus `"name"`, `"currency"`; outbound then only with `"force"`)`, "date", "shares", "amount", "fees", "taxes", "note", "force"}` → 201; `amount` empty = shares × price of that day; foreign-currency securities get a gross value unit with the rate of that day; 409 `not_enough_shares` when more shares go out than are held, unless `force` |
 | `DELETE /clients/{id}/transactions/{uuid}` | delete a transaction (with its cross entry) |
 
 Every change is saved at once (atomically, with a backup of the previous version).

@@ -6,7 +6,7 @@
   with transactions in that portfolio. The filter is kept when toggling *auch aufgelöste …*
 - Portfolio Performance: new page *Ein-/Auslieferung* to enter inbound and outbound deliveries by hand, for
   documents PP's PDF importers do not read (e.g. Baader Bank / Scalable Capital *Depotauslieferung*). Existing
-  security or a new one by ISIN (inbound), value optional (shares × price of that day), fees, taxes, note;
+  security or a new one by ISIN, value optional (shares × price of that day), fees, taxes, note;
   more shares out than held only after confirmation. pp-core: `POST /clients/{id}/transactions`. The PDF
   import links to the page when a document is not recognised
 - Fixed (Portfolio Performance): when the GnuCash database is replaced by another book (e.g. GnuCash Desktop

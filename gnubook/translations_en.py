@@ -992,7 +992,7 @@ EN = {
     'Im GnuCash-Buch wird eine Auslieferung zum FIFO-Einstandswert gegen das Konto für Einlieferungen gebucht – der Wert hier zählt nur für die Kennzahlen in Portfolio Performance. Geht das Wertpapier in ein anderes Depot dieser PP-Datei, ist ein Depotwechsel in PP Desktop die bessere Wahl.': 'In the GnuCash book an outbound delivery is booked at FIFO cost against the account for deliveries – the value here only counts for the figures in Portfolio Performance. If the security moves to another securities account of this PP file, a transfer in PP Desktop is the better choice.',
     'Leer = Stück × Kurs am Datum aus der PP-Datei. Wie in PP: bei der Einlieferung einschließlich, bei der Auslieferung abzüglich Gebühren und Steuern.': 'Empty = shares × price on that date from the PP file. As in PP: for an inbound delivery including, for an outbound delivery less fees and taxes.',
     'Mehr Stück als im Depot:': 'More shares than held:',
-    'Neues Wertpapier (nur Einlieferung) …': 'New security (inbound only) …',
+    'Neues Wertpapier …': 'New security …',
     'Notiz': 'Note',
     'Trotzdem ausliefern': 'Deliver anyway',
     'Ungültige Zahl: {a0}': 'Invalid number: {a0}',
