@@ -34,7 +34,7 @@
       {% for r in rows %}
         {% set s = r.s %}
         <tr class="clickable" data-href="{{ url_for('pp.security', uuid=s.uuid) }}">
-          <td><a href="{{ url_for('pp.security', uuid=s.uuid) }}">{{ s.name }}</a>{% if not r.used %} <span class="badge text-bg-light border text-body-secondary">{{ _("ohne Buchungen") }}</span>{% endif %}
+          <td><a href="{{ url_for('pp.security', uuid=s.uuid) }}">{{ s.name }}</a>{% if not r.used %} <span class="badge bg-body-tertiary border text-body-secondary">{{ _("ohne Buchungen") }}</span>{% endif %}
             {% if s.retired %} <span class="badge text-bg-secondary">{{ _("aufgelöst") }}</span>{% endif %}</td>
           <td class="small">{{ s.isin or '' }}{% if s.wkn %}<div class="text-body-secondary">{{ s.wkn }}</div>{% endif %}</td>
           <td class="small">{% if s.feed and s.feed != 'MANUAL' %}{{ r.feed }}{% if s.ticker %}<div class="text-body-secondary">{{ s.ticker }}</div>{% endif %}{% else %}<span class="text-warning-emphasis"><i class="bi bi-exclamation-circle"></i> {{ _("keine") }}</span>{% endif %}</td>
