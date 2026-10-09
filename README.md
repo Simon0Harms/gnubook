@@ -36,6 +36,12 @@ German format in both languages.
   - change over the period (amount and percent), composition by account group at the start and end, and a
     table of monthly values;
   - periods: last 12 months, this/last year, last 3 or 5 years, all time, custom.
+- **Investment portfolio** (*Depot*, inspired by [GnuDash](https://github.com/QuirkyTurtle94/GnuDash)), read-only:
+  - holdings of all Stock/Mutual Fund accounts with shares, price, market value, cost basis (average cost),
+    unrealized and realized gain, 12-month price change and share of the portfolio; per security or per account;
+  - allocation donut, market value and cost basis at every month end as a line chart;
+  - price history (chart and price database) per security. Dividends are not included.
+
 - **Accounts and registers.** The account tree shows balances in GnuCash's sign convention. Each account has
   a register with running balance, text, amount and date filters, and paging. Placeholder accounts can be
   shown with their sub-accounts.
@@ -101,8 +107,8 @@ German format in both languages.
 | ![Register](docs/screenshots/register.png) | ![Splits](docs/screenshots/split-form.png) |
 | **Balance checkpoints** | **Bank import review** |
 | ![Checkpoints](docs/screenshots/checkpoints.png) | ![Imports](docs/screenshots/imports.png) |
-| **Net worth** | |
-| ![Net worth](docs/screenshots/net-worth.png) | |
+| **Net worth** | **Portfolio** |
+| ![Net worth](docs/screenshots/net-worth.png) | ![Portfolio](docs/screenshots/portfolio.png) |
 
 ## How it works
 

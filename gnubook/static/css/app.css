@@ -72,6 +72,8 @@ tr.future { opacity: .6; }
 .nw-hover rect { fill: transparent; }
 .nw-hover circle { fill: #2f6fb0; stroke: var(--bs-body-bg); stroke-width: 2; opacity: 0; transition: opacity .1s; }
 .nw-hover:hover circle { opacity: 1; }
+.pf-cost, .legend-cost { stroke: var(--bs-secondary-color); background: var(--bs-secondary-color); stroke-dasharray: 6 4; }
+.pf-price { stroke: #3d9a5b; }
 .nw-table { max-height: 28rem; overflow-y: auto; }
 .budget-table td { padding-top: .3rem; padding-bottom: .3rem; }
 

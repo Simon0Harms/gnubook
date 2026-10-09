@@ -28,6 +28,42 @@ def _fmt_bank(v: D) -> str:
     return f"{s}{'H' if v >= 0 else 'S'}"
 
 
+def _demo_securities(book, eur, parent, funding, start: date, months: int, seed: int) -> None:
+    """Two fictional securities with monthly prices: an ETF savings plan and a share bought once and partly
+    sold (realized gain). Paid from and to `funding`; own random generator so the other data stays the same."""
+    from piecash import Account, Commodity, Price, Split, Transaction
+
+    rnd = random.Random(seed + 1)
+    etf = Commodity(namespace="FUND", mnemonic="WELT", fullname="Musterwelt Aktien ETF", fraction=1000, book=book)
+    share = Commodity(namespace="XETRA", mnemonic="MUST", fullname="Muster Industrie AG", fraction=1, book=book)
+    depot = Account(name="Depot Musterbank", type="ASSET", parent=parent, commodity=eur, placeholder=1)
+    etf_acc = Account(name="Musterwelt ETF", type="MUTUAL", parent=depot, commodity=etf)
+    share_acc = Account(name="Muster Industrie", type="STOCK", parent=depot, commodity=share)
+    p_etf, p_share = D("92.40"), D("31.80")
+    q3, q4 = D("0.001"), D("0.01")
+    for m in range(months):
+        first = date(start.year + (start.month - 1 + m) // 12, (start.month - 1 + m) % 12 + 1, 1)
+        for d in (first + timedelta(days=14), _month_end(first)):
+            p_etf = (p_etf * (D(1) + D(rnd.randint(-35, 50)) / 1000)).quantize(q4)
+            p_share = (p_share * (D(1) + D(rnd.randint(-70, 80)) / 1000)).quantize(q4)
+            Price(etf, eur, d, p_etf, type="last", source="Finance::Quote")
+            Price(share, eur, d, p_share, type="last", source="Finance::Quote")
+            if d.day == 15:  # savings plan
+                qty = (D("150") / p_etf).quantize(q3)
+                Transaction(currency=eur, description="WERTPAPIERKAUF Sparplan Musterwelt ETF", post_date=d, splits=[
+                    Split(account=funding, value=D("-150.00")),
+                    Split(account=etf_acc, value=D("150.00"), quantity=qty)])
+                if m == 1:
+                    value = (40 * p_share).quantize(q4)
+                    Transaction(currency=eur, description="WERTPAPIERKAUF Muster Industrie AG", post_date=d, splits=[
+                        Split(account=funding, value=-value), Split(account=share_acc, value=value, quantity=D(40))])
+                if m == months - 4:
+                    value = (15 * p_share).quantize(q4)
+                    Transaction(currency=eur, description="WERTPAPIERVERKAUF Muster Industrie AG", post_date=d, splits=[
+                        Split(account=funding, value=value), Split(account=share_acc, value=-value, quantity=D(-15))])
+
+
+
 def create_demo_book(target: str, start: date = date(2025, 8, 1), months: int = 14, seed: int = 7,
                      with_deviation: bool = True) -> str:
     """Create a GnuCash book with ~14 months of plausible data. Returns the SQLAlchemy URL.
@@ -188,6 +224,7 @@ def create_demo_book(target: str, start: date = date(2025, 8, 1), months: int = 
                          splits=[Split(account=a, value=v, memo=memo, reconcile_state=rs) for a, v, memo, rs in splits])
         if notes:
             tx.notes = notes
+    _demo_securities(book, eur, anlagen, tagesgeld, start, months, seed)
     book.save()
     guids = {"giro": giro.guid, "giro2": giro2.guid, "lebensm": lebensm.guid, "tanken": tanken.guid,
              "gebuehr": gebuehr.guid}

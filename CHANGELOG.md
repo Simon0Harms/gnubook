@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Portfolio report (*Depot*): holdings with average-cost basis, unrealized/realized gain and 12-month price
+  change, allocation donut, market value vs. cost basis over time, price history per security; the demo book
+  has an ETF savings plan and a share that is partly sold
 - Demo from the login page (`[app] demo`, on by default): *Demo ansehen* logs in as a shared, read-only
   demo user. Its book is the synthetic demo book, rebuilt monthly so the data reaches the current month.
   Every change is refused unless `[app] demo_writable = true`; never API tokens, Nextcloud or password

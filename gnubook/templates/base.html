@@ -97,6 +97,8 @@
             <i class="nav-icon bi bi-bar-chart-line"></i><p>{{ _("Einnahmen/Ausgaben") }}</p></a></li>
           <li class="nav-item"><a href="{{ url_for('reports.net_worth') }}" class="nav-link {{ 'active' if ep == 'reports.net_worth' }}">
             <i class="nav-icon bi bi-graph-up-arrow"></i><p>{{ _("Nettovermögen") }}</p></a></li>
+          <li class="nav-item"><a href="{{ url_for('reports.portfolio') }}" class="nav-link {{ 'active' if ep == 'reports.portfolio' }}">
+            <i class="nav-icon bi bi-pie-chart"></i><p>{{ _("Depot") }}</p></a></li>
           <li class="nav-item"><a href="{{ url_for('views.transaction_new') }}" class="nav-link {{ 'active' if ep == 'views.transaction_new' }}">
             <i class="nav-icon bi bi-plus-circle"></i><p>{{ _("Neue Buchung") }}</p></a></li>
           <li class="nav-item"><a href="{{ url_for('views.search') }}" class="nav-link {{ 'active' if ep == 'views.search' }}">

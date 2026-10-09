@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% from "macros.html" import amount %}
+{% set cur = base.mnemonic if base else 'EUR' %}
+{% macro pct(v, sign=True) -%}
+{% if v is none %}–{% else %}<span class="{{ 'text-danger' if v < 0 else 'text-success' if v > 0 }}">{{ ((('%+.1f' if sign else '%.1f')|format(v))|replace('.', ',')) }} %</span>{% endif %}
+{%- endmacro %}
+{% set args = request.args.to_dict() %}
+{% block title %}{{ _("Depot") }}{% endblock %}
+{% block header %}{{ _("Depot") }}{% if sec_cdty %} <span class="badge text-bg-primary fs-6 align-middle">{{ sec_cdty.mnemonic }}
+  <a class="text-white ms-1" href="{{ url_for('reports.portfolio', **dict(args, sec='')) }}" title="{{ _("Filter entfernen") }}"><i class="bi bi-x-lg"></i></a></span>{% endif %}{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">{{ _("Wertpapiere und Fonds (Kontotyp Aktie/Investmentfonds), bewertet mit dem jeweils gültigen Kurs") }}</div>{% endblock %}
+{% block content %}
+
+<form class="card card-body py-2 mb-3" method="get" action="{{ url_for('reports.portfolio') }}" data-autosubmit>
+  <div class="row g-2 align-items-end">
+    <div class="col-6 col-md-3">
+      <label class="form-label small mb-0" for="period">{{ _("Zeitraum") }}</label>
+      <select class="form-select form-select-sm" id="period" name="period">
+        {% for key, label in PERIOD_LABELS.items() %}<option value="{{ key }}" {{ 'selected' if key == period }}>{{ _(label) }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2 period-custom">
+      <label class="form-label small mb-0" for="from">{{ _("von") }}</label>
+      <input class="form-control form-control-sm" type="date" id="from" name="from" value="{{ start.isoformat() }}">
+    </div>
+    <div class="col-6 col-md-2 period-custom">
+      <label class="form-label small mb-0" for="to">{{ _("bis") }}</label>
+      <input class="form-control form-control-sm" type="date" id="to" name="to" value="{{ end.isoformat() }}">
+    </div>
+    <div class="col-6 col-md-3">
+      <label class="form-label small mb-0" for="sec">{{ _("Wertpapier") }}</label>
+      <select class="form-select form-select-sm" id="sec" name="sec">
+        <option value="">{{ _("Alle Wertpapiere") }}</option>
+        {% for guid, c in pf.securities %}<option value="{{ guid }}" {{ 'selected' if guid == security }}>{{ c.mnemonic }} – {{ c.fullname or c.mnemonic }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-md">
+      <div class="form-check form-switch mb-0">
+        <input class="form-check-input" type="checkbox" role="switch" id="grouped" name="grouped" value="1" {{ 'checked' if grouped }}>
+        <input type="hidden" name="grouped" value="0">
+        <label class="form-check-label small" for="grouped">{{ _("Konten je Wertpapier zusammenfassen") }}</label>
+      </div>
+      <div class="form-check form-switch mb-1">
+        <input class="form-check-input" type="checkbox" role="switch" id="closed" name="closed" value="1" {{ 'checked' if closed }}>
+        <label class="form-check-label small" for="closed">{{ _("Verkaufte Positionen zeigen") }}</label>
+      </div>
+    </div>
+    <div class="col-auto"><noscript><button class="btn btn-sm btn-primary" type="submit">{{ _("Anzeigen") }}</button></noscript></div>
+  </div>
+</form>
+
+{% if unconverted %}
+<div class="alert alert-warning small">{{ _('{n} Positionen ohne Kurs oder Wechselkurs wurden nicht bewertet.', n=unconverted) }}</div>
+{% endif %}
+
+{% if not pf.holdings %}
+<div class="alert alert-info">{{ _("Keine Wertpapierkonten im Buch. Lege in GnuCash ein Konto vom Typ Aktie oder Investmentfonds an.") }}</div>
+{% else %}
+
+<div class="row">
+  <div class="col-lg-3 col-6"><div class="info-box"><span class="info-box-icon text-bg-primary"><i class="bi bi-briefcase"></i></span>
+    <div class="info-box-content"><span class="info-box-text">{{ _("Marktwert") }}</span><span class="info-box-number amount">{{ pf.total('value')|money(cur) }}</span>
+      <span class="small text-body-secondary">{{ _('Stand {day}', day=today|de_date) }}</span></div></div></div>
+  <div class="col-lg-3 col-6"><div class="info-box"><span class="info-box-icon text-bg-secondary"><i class="bi bi-cash-stack"></i></span>
+    <div class="info-box-content"><span class="info-box-text">{{ _("Einstandswert") }}</span><span class="info-box-number amount">{{ pf.total('cost')|money(cur) }}</span>
+      <span class="small text-body-secondary">{{ _("Durchschnittskosten") }}</span></div></div></div>
+  <div class="col-lg-3 col-6"><div class="info-box"><span class="info-box-icon text-bg-success"><i class="bi bi-graph-up"></i></span>
+    <div class="info-box-content"><span class="info-box-text">{{ _("Kursgewinn (offen)") }}</span><span class="info-box-number">{{ amount(pf.total('gain'), cur, sign=True) }}</span>
+      <span class="small">{{ pct(pf.gain_pct) }}</span></div></div></div>
+  <div class="col-lg-3 col-6"><div class="info-box"><span class="info-box-icon text-bg-warning"><i class="bi bi-check2-circle"></i></span>
+    <div class="info-box-content"><span class="info-box-text">{{ _("Realisiert") }}</span><span class="info-box-number">{{ amount(pf.total('realized'), cur, sign=True) }}</span>
+      <span class="small text-body-secondary">{{ _("aus Verkäufen") }}</span></div></div></div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header"><h3 class="card-title">{{ _("Depotwert im Zeitverlauf") }}{% if sec_cdty %} – {{ sec_cdty.mnemonic }}{% endif %}</h3>
+    {% if chart %}<div class="card-tools small text-body-secondary">{{ _("Veränderung") }} {{ amount(change, cur, sign=True) }} · {{ _("davon Käufe/Verkäufe") }} {{ amount(flows, cur, sign=True) }}</div>{% endif %}</div>
+  <div class="card-body">
+    {% if chart %}
+    <div class="nw-wrap">
+      <svg class="nw-chart" viewBox="-80 -12 {{ chart.width + 100 }} {{ chart.height + 40 }}" role="img" aria-label="{{ _("Liniendiagramm von Marktwert und Einstandswert je Monat") }}">
+        {% for t in chart.ticks %}
+          <line class="nw-grid" x1="0" x2="{{ chart.width }}" y1="{{ '%.1f'|format(t.y) }}" y2="{{ '%.1f'|format(t.y) }}"></line>
+          <text class="nw-axis" x="-8" y="{{ '%.1f'|format(t.y) }}" text-anchor="end" dominant-baseline="middle">{{ t.text }}</text>
+        {% endfor %}
+        {% for l in chart.labels %}<text class="nw-axis" x="{{ '%.1f'|format(l.x) }}" y="{{ chart.height + 20 }}" text-anchor="middle">{{ l.p.label }}</text>{% endfor %}
+        <path class="nw-area" d="{{ chart.lines.value.area }}"></path>
+        <polyline class="nw-line pf-cost" points="{{ chart.lines.cost.points }}"></polyline>
+        <polyline class="nw-line nw-net" points="{{ chart.lines.value.points }}"></polyline>
+        {% for d in chart.lines.value.dots %}
+          <g class="nw-hover">
+            <rect x="{{ '%.1f'|format(d.x - [chart.step / 2, 4]|max) }}" y="0" width="{{ '%.1f'|format([chart.step, 8]|max) }}" height="{{ chart.height }}"></rect>
+            <circle cx="{{ '%.1f'|format(d.x) }}" cy="{{ '%.1f'|format(d.y) }}" r="4"></circle>
+            <title>{{ d.p.label }} ({{ d.p.day|de_date }}) – {{ _("Marktwert") }}: {{ d.p.value|money(cur) }} · {{ _("Einstandswert") }}: {{ d.p.cost|money(cur) }} · {{ _("Kursgewinn") }}: {{ d.p.gain|money(cur, sign=True) }}</title>
+          </g>
+        {% endfor %}
+      </svg>
+    </div>
+    <div class="small mt-2"><span class="legend legend-net"></span> {{ _("Marktwert") }} &nbsp; <span class="legend legend-cost"></span> {{ _("Einstandswert") }}</div>
+    {% else %}<p class="text-body-secondary mb-0">{{ _("Keine Bestände im gewählten Zeitraum.") }}</p>{% endif %}
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-xl-4">
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title">{{ _("Aufteilung") }}</h3></div>
+      <div class="card-body">
+        {% if segments %}
+        <div class="donut-wrap">
+          <svg class="donut" viewBox="0 0 200 200" role="img" aria-label="{{ _("Kreisdiagramm nach Wertpapier") }}">
+            <g transform="rotate(-90 100 100)">
+            {% for s in segments %}
+              {% set h = s.h %}
+              {% set href = url_for('reports.portfolio', **dict(args, sec=h.commodity.guid)) if h.commodity else None %}
+              {% if href %}<a href="{{ href }}">{% endif %}
+              <circle cx="100" cy="100" r="70" fill="none" stroke="{{ h.color }}" stroke-width="34" stroke-dasharray="{{ s.dash }}" stroke-dashoffset="{{ s.offset }}" {% if security and h.commodity and h.commodity.guid != security %}opacity=".3"{% endif %}><title>{{ h.name }}: {{ h.value|money(cur) }} ({{ '%.1f'|format(h.share * 100)|replace('.', ',') }} %)</title></circle>
+              {% if href %}</a>{% endif %}
+            {% endfor %}
+            </g>
+            <text x="100" y="96" text-anchor="middle" class="donut-label">{{ _("Marktwert") }}</text>
+            <text x="100" y="114" text-anchor="middle" class="donut-total">{{ pf.total('value')|money(cur) }}</text>
+          </svg>
+        </div>
+        <ul class="list-unstyled small mt-3 mb-0">
+          {% for s in segments %}<li class="d-flex justify-content-between"><span><span class="legend" style="background: {{ s.h.color }}"></span> {{ s.h.commodity.mnemonic if s.h.commodity else s.h.name }}{% if not grouped %} <span class="text-body-secondary">({{ s.h.name }})</span>{% endif %}</span>
+            <span class="text-nowrap">{{ '%.1f'|format(s.h.share * 100)|replace('.', ',') }} %</span></li>{% endfor %}
+        </ul>
+        {% else %}<p class="text-body-secondary mb-0">{{ _("Keine bewerteten Bestände.") }}</p>{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-8">
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title">{{ _("Bestände") }}</h3></div>
+      <div class="card-body p-0 table-responsive">
+        <table class="table table-sm table-hover mb-0 small align-middle">
+          <thead><tr><th>{{ _("Wertpapier") }}</th><th class="text-end">{{ _("Stück") }}</th><th class="text-end d-none d-md-table-cell">{{ _("Kurs") }}</th>
+            <th class="text-end">{{ _("Marktwert") }}</th><th class="text-end d-none d-sm-table-cell">{{ _("Einstandswert") }}</th>
+            <th class="text-end">{{ _("Kursgewinn") }}</th><th class="text-end d-none d-xxl-table-cell">{{ _("Realisiert") }}</th>
+            <th class="text-end text-nowrap d-none d-xxl-table-cell" title="{{ _("Kursveränderung der letzten 12 Monate") }}">{{ _("12 Monate") }}</th><th class="text-end d-none d-xl-table-cell">{{ _("Anteil") }}</th></tr></thead>
+          <tbody>
+          {% for h in holdings %}
+            <tr class="{{ 'table-active' if security and h.commodity and h.commodity.guid == security }} {{ 'text-body-secondary' if not h.active }}">
+              <td><span class="legend" style="background: {{ h.color }}"></span>
+                {% if h.commodity %}<a class="link-body-emphasis link-underline-opacity-0 fw-semibold" href="{{ url_for('reports.portfolio', **dict(args, sec=h.commodity.guid)) }}">{{ h.commodity.mnemonic }}</a>{% endif %}
+                <span class="d-block text-body-secondary">{% for a in h.accounts %}<a class="link-secondary link-underline-opacity-0" href="{{ url_for('views.register', guid=a.guid) }}">{{ a.name if grouped else a.full_name }}</a>{{ ', ' if not loop.last }}{% endfor %}</span></td>
+              <td class="text-end text-nowrap">{{ h.shares|money(None, (h.commodity.fraction|string|length - 1) if h.commodity else 2) }}</td>
+              <td class="text-end text-nowrap d-none d-md-table-cell">{% if h.price is not none %}<span class="amount">{{ h.price|money(cur, 4 if h.price < 1 else 2) }}</span>{% if h.price_day %}<span class="d-block text-body-secondary">{{ h.price_day|de_date }}</span>{% endif %}{% else %}–{% endif %}</td>
+              <td class="text-end text-nowrap amount">{{ h.value|money(cur) if h.value is not none else '–' }}</td>
+              <td class="text-end text-nowrap amount d-none d-sm-table-cell">{{ h.cost|money(cur) }}</td>
+              <td class="text-end text-nowrap">{% if h.active and h.gain is not none %}{{ amount(h.gain, cur, sign=True) }}<span class="d-block">{{ pct(h.gain_pct) }}</span>{% else %}–{% endif %}</td>
+              <td class="text-end text-nowrap d-none d-xxl-table-cell">{% if h.realized %}{{ amount(h.realized, cur, sign=True) }}{% else %}–{% endif %}</td>
+              <td class="text-end text-nowrap d-none d-xxl-table-cell">{{ pct(h.change_12m_pct) }}</td>
+              <td class="text-end text-nowrap d-none d-xl-table-cell">{% if h.share %}{{ '%.1f'|format(h.share * 100)|replace('.', ',') }} %{% else %}–{% endif %}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="9" class="text-body-secondary">{{ _("Keine Bestände.") }}</td></tr>
+          {% endfor %}
+          </tbody>
+          <tfoot><tr class="fw-semibold"><td>{{ _("Summe") }}</td><td></td><td class="d-none d-md-table-cell"></td>
+            <td class="text-end text-nowrap amount">{{ pf.total('value')|money(cur) }}</td>
+            <td class="text-end text-nowrap amount d-none d-sm-table-cell">{{ pf.total('cost')|money(cur) }}</td>
+            <td class="text-end text-nowrap">{{ amount(pf.total('gain'), cur, sign=True) }}<span class="d-block">{{ pct(pf.gain_pct) }}</span></td>
+            <td class="text-end text-nowrap d-none d-xxl-table-cell">{{ amount(pf.total('realized'), cur, sign=True) }}</td>
+            <td class="d-none d-xxl-table-cell"></td><td class="d-none d-xl-table-cell"></td></tr></tfoot>
+        </table>
+      </div>
+      <div class="card-footer small text-body-secondary">{{ _("Einstandswert nach Durchschnittskosten: Käufe erhöhen ihn, Verkäufe mindern ihn anteilig; der Rest des Erlöses ist realisiert. Gebühren zählen nur, wenn sie auf das Wertpapierkonto gebucht sind. Dividenden sind nicht enthalten.") }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header"><h3 class="card-title">{{ _("Kurshistorie") }}{% if sec_cdty %} – {{ sec_cdty.mnemonic }}{% endif %}</h3>
+    <div class="card-tools small text-body-secondary">{{ _('{n} Kurse', n=n_prices) }}{% if n_prices > prices|length %} · {{ _('die neuesten {n} angezeigt', n=prices|length) }}{% endif %}</div></div>
+  <div class="card-body">
+    {% if price_chart %}
+    <div class="nw-wrap mb-3">
+      <svg class="nw-chart" viewBox="-80 -12 {{ price_chart.width + 100 }} {{ price_chart.height + 40 }}" role="img" aria-label="{{ _("Kursverlauf zum Monatsende") }}">
+        {% for t in price_chart.ticks %}
+          <line class="nw-grid" x1="0" x2="{{ price_chart.width }}" y1="{{ '%.1f'|format(t.y) }}" y2="{{ '%.1f'|format(t.y) }}"></line>
+          <text class="nw-axis" x="-8" y="{{ '%.1f'|format(t.y) }}" text-anchor="end" dominant-baseline="middle">{{ t.text }}</text>
+        {% endfor %}
+        {% for l in price_chart.labels %}<text class="nw-axis" x="{{ '%.1f'|format(l.x) }}" y="{{ price_chart.height + 20 }}" text-anchor="middle">{{ l.p.label }}</text>{% endfor %}
+        <polyline class="nw-line pf-price" points="{{ price_chart.lines.price.points }}"></polyline>
+        {% for d in price_chart.lines.price.dots %}
+          <g class="nw-hover"><rect x="{{ '%.1f'|format(d.x - [price_chart.step / 2, 4]|max) }}" y="0" width="{{ '%.1f'|format([price_chart.step, 8]|max) }}" height="{{ price_chart.height }}"></rect>
+            <circle cx="{{ '%.1f'|format(d.x) }}" cy="{{ '%.1f'|format(d.y) }}" r="4"></circle>
+            <title>{{ d.p.label }} ({{ d.p.day|de_date }}) – {{ _("Kurs") }}: {{ d.p.price|money(cur, 4 if d.p.price < 1 else 2) }}</title></g>
+        {% endfor %}
+      </svg>
+    </div>
+    {% elif not security %}<p class="small text-body-secondary">{{ _("Wähle ein Wertpapier, um seinen Kursverlauf zu sehen.") }}</p>{% endif %}
+  </div>
+  <div class="card-body p-0 table-responsive nw-table">
+    <table class="table table-sm mb-0 small">
+      <thead><tr><th>{{ _("Datum") }}</th><th>{{ _("Wertpapier") }}</th><th class="text-end">{{ _("Kurs") }}</th><th>{{ _("Währung") }}</th><th class="d-none d-sm-table-cell">{{ _("Quelle") }}</th></tr></thead>
+      <tbody>
+      {% for p in prices %}
+        <tr><td class="text-nowrap">{{ p.day|de_date }}</td>
+          <td>{% if p.commodity %}<a class="link-body-emphasis link-underline-opacity-0" href="{{ url_for('reports.portfolio', **dict(args, sec=p.commodity.guid)) }}">{{ p.commodity.mnemonic }}</a>{% endif %}</td>
+          <td class="text-end text-nowrap amount">{{ p.value|money(None, 4 if p.value < 1 else 2) }}</td>
+          <td>{{ p.currency.mnemonic if p.currency else '' }}</td>
+          <td class="d-none d-sm-table-cell text-body-secondary">{{ p.source }}{% if p.type %} ({{ p.type }}){% endif %}</td></tr>
+      {% else %}
+        <tr><td colspan="5" class="text-body-secondary">{{ _("Keine Kurse in der Preisdatenbank.") }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

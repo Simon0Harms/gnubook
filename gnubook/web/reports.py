@@ -193,3 +193,49 @@ def net_worth():
         "reports/net_worth.html", period=period, start=start, end=end, parts=parts, points=points, rows=rows,
         chart=chart, first=first_p, last=last_p, change=change, pct=pct, groups=groups,
         unconverted=nw.unconverted, base=idx.root.commodity, PERIOD_LABELS=NW_PERIOD_LABELS)
+
+
+PF_PERIOD_LABELS = NW_PERIOD_LABELS
+
+
+@bp.route("/portfolio")
+@login_required
+def portfolio():
+    st = state()
+    idx = index()
+    today = st.book.today()
+    period = request.args.get("period", "all")
+    if period not in rp.PF_PERIODS:
+        period = "all"
+    grouped = request.args.get("grouped", "1") == "1"
+    closed = request.args.get("closed") == "1"
+    security = request.args.get("sec") or None
+    with st.book.connect() as conn:
+        first = rp.first_security_booking(conn, st.book, idx)
+        start, end = rp.nw_period_range(period, today, first, _parse_date(request.args.get("from")),
+                                        _parse_date(request.args.get("to")))
+        known = {a.commodity_guid for a in rp.security_accounts(idx)}
+        if security not in known:
+            security = None
+        pf = rp.portfolio(conn, st.book, idx, start, end, today, grouped=grouped, security=security,
+                          opening=period != "all")
+        prices, n_prices = rp.price_list(conn, st.book, idx, {security} if security else known)
+    for p in pf.points:
+        p.label = _(MONTHS[int(p.key[5:]) - 1]) + " " + p.key[2:4]
+    points = pf.points
+    has_data = any(p.value or p.cost for p in points)
+    chart = rp.line_chart(points, ("value", "cost")) if has_data else None
+    price_points = [p for p in points if p.price is not None]
+    price_chart = rp.line_chart(price_points, ("price",), zero=False) if security and len(price_points) > 1 else None
+    holdings = [h for h in pf.holdings if h.active or closed]
+    active = [h for h in pf.holdings if h.active]
+    first_p, last_p = (points[0], points[-1]) if points else (None, None)
+    change = last_p.value - first_p.value if points else ZERO
+    flows = (last_p.cost - first_p.cost) if points else ZERO  # net purchases in the period (cost basis change)
+    sec_cdty = idx.commodities.get(security) if security else None
+    return render_template(
+        "reports/portfolio.html", period=period, start=start, end=end, grouped=grouped, closed=closed,
+        security=security, sec_cdty=sec_cdty, pf=pf, holdings=holdings, active=active,
+        segments=rp.allocation(pf.holdings), points=points, chart=chart, price_chart=price_chart,
+        first=first_p, last=last_p, change=change, flows=flows, prices=prices, n_prices=n_prices,
+        unconverted=pf.unconverted, base=idx.root.commodity, today=today, PERIOD_LABELS=PF_PERIOD_LABELS)

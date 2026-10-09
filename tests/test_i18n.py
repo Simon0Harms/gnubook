@@ -32,6 +32,7 @@ def message_ids():
     ids.update(views.SOURCE_LABELS.values())
     ids.update(report_views.PERIOD_LABELS.values())
     ids.update(report_views.NW_PERIOD_LABELS.values())
+    ids.update(report_views.PF_PERIOD_LABELS.values())
     ids.update(report_views.KIND_LABELS.values())
     ids.update(report_views.MONTHS)
     ids.update({ledger.MULTI, "Soll", "Haben", "Beschreibung", "Nummer", "Notizen"})

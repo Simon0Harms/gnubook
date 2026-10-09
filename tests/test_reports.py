@@ -5,7 +5,7 @@ from decimal import Decimal as D
 from sqlalchemy import text
 
 from gnubook import reports as rp
-from gnubook.book import latest_prices
+from gnubook.book import convert, latest_prices
 
 
 def _sum_month(state, start, end, closing=False):
@@ -127,9 +127,12 @@ def test_net_worth_matches_balances(state):
     with state.book.connect() as conn:
         nw = rp.net_worth(conn, state.book, idx, date(2025, 1, 1), today)
         own = balances(conn, state.book, upto=today)
+        prices = rp.PriceHistory(conn, state.book).at(today)
     last = nw.points[-1]
     assert last.day == today and nw.unconverted == 0
-    assert last.assets == sum((v for g, v in own.items() if idx.get(g).type in ASSET_TYPES), D(0))
+    # securities (demo depot) valued with today's price
+    assert last.assets == sum((convert(v, idx.get(g).commodity, idx.root.commodity, prices)
+                               for g, v in own.items() if idx.get(g).type in ASSET_TYPES), D(0))
     assert last.liabilities == -sum((v for g, v in own.items() if idx.get(g).type in LIABILITY_TYPES), D(0))
     assert [p.key for p in nw.points][:3] == ["2024-12", "2025-01", "2025-02"]
     assert nw.points[0].day == date(2024, 12, 31) and nw.points[1].day == date(2025, 1, 31)
@@ -178,3 +181,51 @@ def test_net_worth_page(client):
               "?period=custom&from=2010-01-01&to=2010-02-01", "?period=custom&from=xx&to="]:
         assert client.get("/reports/net-worth" + q).status_code == 200, q
     assert "/reports/net-worth" in client.get("/").text
+
+
+def test_holding_average_cost():
+    h = rp.Holding("k", "X", None)
+    h.apply(D(10), D(1000))
+    h.apply(D(10), D(1400))
+    assert h.shares == 20 and h.cost == D(2400) and h.invested == D(2400)
+    h.apply(D(-5), D(-700))           # sold 5 at 140, average cost 120
+    assert h.shares == 15 and h.cost == D(1800) and h.realized == D(100)
+    h.apply(D(15), D(0))              # 2:1 split: more shares, same cost
+    assert h.shares == 30 and h.cost == D(1800)
+    h.apply(D(0), D(-50))             # GnuCash capital-gain split is ignored
+    assert h.cost == D(1800) and h.realized == D(100)
+    h.apply(D(-30), D(-1500))         # everything sold below cost
+    assert h.shares == 0 and h.cost == 0 and h.realized == D(-200) and not h.active
+
+
+def test_portfolio_demo(state):
+    idx = state.book.load_accounts()
+    today = state.book.today()
+    with state.book.connect() as conn:
+        pf = rp.portfolio(conn, state.book, idx, date(2025, 8, 1), today, today)
+        nw = rp.net_worth(conn, state.book, idx, date(2025, 8, 1), today)
+    names = {h.commodity.mnemonic: h for h in pf.holdings}
+    assert set(names) == {"WELT", "MUST"} and pf.unconverted == 0
+    must = names["MUST"]
+    assert must.shares == 25 and must.realized != 0 and must.cost > 0
+    assert names["WELT"].realized == 0 and names["WELT"].invested == D(150) * 14  # one savings plan rate per demo month
+    assert abs(sum(h.share for h in pf.holdings) - 1) < 1e-9
+    assert pf.total("value") == sum(h.value for h in pf.holdings)
+    # the portfolio's last point equals the depot share of the net worth
+    depot = idx.find("Aktiva:Geldanlagen")
+    assert pf.points[-1].value == nw.points[-1].groups[depot.guid]
+    assert pf.points[-1].cost == pf.total("cost")
+    with state.book.connect() as conn:
+        one = rp.portfolio(conn, state.book, idx, date(2025, 8, 1), today, today, grouped=False,
+                           security=must.commodity.guid)
+    assert one.points[-1].value == must.value and one.points[-1].price == must.price
+    assert len(one.holdings) == 2
+
+
+def test_portfolio_page(client):
+    r = client.get("/reports/portfolio")
+    assert r.status_code == 200 and "WELT" in r.text and "Muster Industrie" in r.text and "Kurshistorie" in r.text
+    for q in ("?period=12m", "?period=custom&from=2025-09-01&to=2025-12-31", "?grouped=0&grouped=0&closed=1",
+              "?sec=unknown", "?period=bogus"):
+        assert client.get("/reports/portfolio" + q).status_code == 200, q
+    assert "/reports/portfolio" in client.get("/").text

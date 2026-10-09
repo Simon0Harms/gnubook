@@ -1,5 +1,5 @@
 """Reports (read-only): income/expenses with category totals, monthly trend, Sankey flow, budget vs. actual;
-net worth over time.
+net worth over time; investment portfolio (holdings, allocation, performance, value and prices over time).
 
 All amounts are converted into the book currency (root account commodity) with the latest prices. Income is
 reported positive (GnuCash stores it as credit, i.e. negative), expenses positive. Book-closing transactions
@@ -470,6 +470,21 @@ class PriceHistory:
             lst.sort(key=lambda r: r[0])  # same day: the later row wins
             self._rows[key] = ([r[0] for r in lst], [r[1] for r in lst])
 
+    def first_day(self, commodity_guid: str) -> date | None:
+        """Day of the earliest price of a commodity (in any currency)."""
+        days = [d[0] for (cg, _), (d, _) in self._rows.items() if cg == commodity_guid and d]
+        return min(days) if days else None
+
+    def last_day(self, commodity_guid: str, day: date) -> date | None:
+        """Day of the price of a commodity that is valid on `day` (latest one not after it)."""
+        out = None
+        for (cg, _), (days, _) in self._rows.items():
+            if cg == commodity_guid:
+                i = bisect.bisect_right(days, day)
+                if i and (out is None or days[i - 1] > out):
+                    out = days[i - 1]
+        return out
+
     def at(self, day: date) -> dict:
         out = {}
         for key, (days, values) in self._rows.items():
@@ -609,12 +624,13 @@ def nice_ticks(lo: float, hi: float, count: int = 5) -> list[float]:
     return ticks
 
 
-def line_chart(points: list[NetWorthPoint], series: tuple = ("net",), width: float = 900, height: float = 300):
+def line_chart(points: list[NetWorthPoint], series: tuple = ("net",), width: float = 900, height: float = 300,
+               zero: bool = True):
     """Coordinates for an SVG line chart of the net worth series (server-side, no JS library)."""
     if not points:
         return None
     vals = {s: [float(getattr(p, s)) for p in points] for s in series}
-    every = [v for lst in vals.values() for v in lst] + [0.0]
+    every = [v for lst in vals.values() for v in lst] + ([0.0] if zero else [])
     ticks = nice_ticks(min(every), max(every))
     y0, y1 = ticks[0], ticks[-1]
     n = len(points)
@@ -632,9 +648,10 @@ def line_chart(points: list[NetWorthPoint], series: tuple = ("net",), width: flo
         lines[s] = {"points": " ".join(f"{a:.1f},{b:.1f}" for a, b in coords),
                     "dots": [{"x": a, "y": b, "p": p} for (a, b), p in zip(coords, points)]}
     zero = y(0.0)
-    if "net" in lines:
-        pts = lines["net"]["points"]
-        lines["net"]["area"] = f"M{x(0):.1f},{zero:.1f} L{pts.replace(' ', ' L')} L{x(n - 1):.1f},{zero:.1f} Z"
+    main = series[0]
+    if main in lines:
+        pts = lines[main]["points"]
+        lines[main]["area"] = f"M{x(0):.1f},{zero:.1f} L{pts.replace(' ', ' L')} L{x(n - 1):.1f},{zero:.1f} Z"
     # x labels: at most ~12, prefer January
     every_n = max(1, math.ceil(n / 12))
     labels = [{"x": x(i), "p": p} for i, p in enumerate(points)
@@ -642,3 +659,266 @@ def line_chart(points: list[NetWorthPoint], series: tuple = ("net",), width: flo
                              else p.key.endswith("-01"))]
     return {"width": width, "height": height, "lines": lines, "zero": zero,
             "ticks": [{"v": t, "y": y(t), "text": fmt(Decimal(str(t)), 0)} for t in ticks], "labels": labels, "step": step}
+
+
+# ------------------------------------------------------------------------------------------ portfolio
+
+SECURITY_TYPES = ("STOCK", "MUTUAL")
+PF_PERIODS = NW_PERIODS
+
+
+@dataclass
+class Holding:
+    """A position in one security: one STOCK/MUTUAL account, or all accounts of a security when grouped.
+
+    Amounts are in the book currency. The cost basis uses the average cost method: buys add their value,
+    a sale removes the average cost of the sold shares, and the difference to the proceeds is realized.
+    """
+    key: str
+    name: str
+    commodity: object
+    accounts: list = field(default_factory=list)
+    shares: Decimal = ZERO
+    cost: Decimal = ZERO       # cost basis of the shares still held
+    invested: Decimal = ZERO   # sum of all purchases
+    realized: Decimal = ZERO   # realized gain/loss of sales
+    price: Decimal | None = None      # price per share in the book currency
+    price_day: date | None = None
+    price_12m: Decimal | None = None  # price one year earlier, if the price history goes back that far
+    value: Decimal | None = None      # market value (None: no price known)
+    color: str = OTHER_COLOR
+    share: float = 0.0                # part of the portfolio value
+
+    @property
+    def gain(self) -> Decimal | None:
+        return None if self.value is None else self.value - self.cost
+
+    @property
+    def gain_pct(self) -> float | None:
+        return float(self.gain / self.cost * 100) if self.gain is not None and self.cost > 0 else None
+
+    @property
+    def total_gain(self) -> Decimal | None:
+        return None if self.gain is None else self.gain + self.realized
+
+    @property
+    def change_12m_pct(self) -> float | None:
+        if self.price is None or not self.price_12m:
+            return None
+        return float((self.price - self.price_12m) / self.price_12m * 100)
+
+    @property
+    def active(self) -> bool:
+        return bool(self.shares)
+
+    def apply(self, qty: Decimal, value: Decimal) -> None:
+        """Book one split (quantity in shares, value in the book currency)."""
+        if qty > 0:
+            self.shares += qty
+            self.cost += value
+            self.invested += value
+        elif qty < 0:
+            sold = -qty
+            part = self.cost if sold >= self.shares or self.shares <= 0 else self.cost * sold / self.shares
+            self.cost -= part
+            self.shares -= sold
+            self.realized += -value - part
+            if self.shares <= 0:
+                self.cost = ZERO
+        # qty == 0: GnuCash's capital-gain splits of lot scrubbing; the gain is computed here already
+
+
+@dataclass
+class PortfolioPoint:
+    key: str
+    day: date
+    value: Decimal
+    cost: Decimal
+    price: Decimal | None = None   # price of the selected security, if one is selected
+    label: str = ""
+
+    @property
+    def gain(self) -> Decimal:
+        return self.value - self.cost
+
+
+@dataclass
+class Portfolio:
+    holdings: list            # Holding, largest value first
+    points: list              # PortfolioPoint per month end
+    securities: list          # (guid, commodity) of all securities with an account
+    unconverted: int = 0      # holdings without a price or exchange rate
+
+    def total(self, attr: str) -> Decimal:
+        return sum((getattr(h, attr) or ZERO for h in self.holdings), ZERO)
+
+    @property
+    def gain_pct(self) -> float | None:
+        cost = self.total("cost")
+        return float(self.total("gain") / cost * 100) if cost > 0 else None
+
+
+def security_accounts(index: AccountIndex) -> list[Account]:
+    return [a for a in index.by_guid.values() if a.type in SECURITY_TYPES]
+
+
+def _security_splits(conn, book: Book, index: AccountIndex, accounts: dict, history: PriceHistory):
+    """(day, account guid, quantity, value in book currency) of all splits of security accounts, by date."""
+    base = index.root.commodity
+    out, bad = [], 0
+    if not accounts:
+        return out, bad
+    cache: dict[date, dict] = {}
+    for ag, qn, qd, vn, vd, cur, pd in conn.execute(text(
+            "SELECT s.account_guid, s.quantity_num, s.quantity_denom, s.value_num, s.value_denom, "
+            "t.currency_guid, t.post_date FROM splits s JOIN transactions t ON t.guid = s.tx_guid "
+            "ORDER BY t.post_date, t.enter_date")):
+        if ag not in accounts:
+            continue
+        day = book.day_of(pd)
+        qty = gnc_decimal(int(qn or 0), int(qd or 1))
+        val = gnc_decimal(int(vn or 0), int(vd or 1))
+        prices = cache.get(day)
+        if prices is None:
+            prices = cache[day] = history.at(day)
+        conv = convert(val, index.commodities.get(cur), base, prices)
+        if conv is None:
+            bad += 1
+            conv = ZERO
+        out.append((day, ag, qty, conv))
+    return out, bad
+
+
+def portfolio(conn, book: Book, index: AccountIndex, start: date, end: date, today: date,
+              grouped: bool = True, security: str | None = None, opening: bool = True) -> Portfolio:
+    """Holdings as of `today` and the portfolio value/cost basis at every month end between `start` and
+    `end` (only `security` if given). Securities are valued with the price valid on the day."""
+    base = index.root.commodity
+    accounts = {a.guid: a for a in security_accounts(index)}
+    history = PriceHistory(conn, book)
+    splits, bad_tx = _security_splits(conn, book, index, accounts, history)
+
+    # holdings as of today
+    per_acc = {g: Holding(g, a.name, a.commodity, [a]) for g, a in accounts.items()}
+    for day, ag, qty, val in splits:
+        if day <= today:
+            per_acc[ag].apply(qty, val)
+    if grouped:
+        merged: dict[str, Holding] = {}
+        for h in per_acc.values():
+            c = h.commodity
+            k = c.guid if c else h.key
+            g = merged.get(k)
+            if g is None:
+                g = merged[k] = Holding(k, (c.fullname or c.mnemonic) if c else h.name, c)
+            g.accounts += h.accounts
+            for attr in ("shares", "cost", "invested", "realized"):
+                setattr(g, attr, getattr(g, attr) + getattr(h, attr))
+        holdings = list(merged.values())
+    else:
+        holdings = list(per_acc.values())
+
+    now = history.at(today)
+    year_ago = today - timedelta(days=365)
+    then = history.at(year_ago)
+    unconverted = 0
+    for h in holdings:
+        c = h.commodity
+        h.price = convert(Decimal(1), c, base, now) if c else None
+        if c is not None and c.guid != (base.guid if base else None):
+            h.price_day = history.last_day(c.guid, today)
+            first = history.first_day(c.guid)
+            if first is not None and first <= year_ago:
+                h.price_12m = convert(Decimal(1), c, base, then)
+        if h.price is not None:
+            h.value = h.shares * h.price
+        elif h.shares:
+            unconverted += 1
+    holdings.sort(key=lambda h: (not h.active, -(h.value or ZERO), h.name.casefold()))
+    total = sum((h.value or ZERO for h in holdings if h.active and h.value and h.value > 0), ZERO)
+    i = 0
+    for h in holdings:
+        if h.active and h.value and h.value > 0:
+            h.share = float(h.value / total) if total else 0.0
+            h.color = PALETTE[i % len(PALETTE)]
+            i += 1
+
+    # value over time
+    sel = {g for g, a in accounts.items() if security is None or a.commodity_guid == security}
+    first_day = month_start(start) - timedelta(days=1)
+    days = [(f"{first_day.year:04d}-{first_day.month:02d}", first_day)] if opening else []
+    for key in month_keys(start, end):
+        y, m = int(key[:4]), int(key[5:])
+        days.append((key, min(add_months(date(y, m, 1), 1) - timedelta(days=1), end)))
+    state = {g: Holding(g, accounts[g].name, accounts[g].commodity) for g in sel}
+    sec_cdty = index.commodities.get(security) if security else None
+    points, j = [], 0
+    for key, day in days:
+        while j < len(splits) and splits[j][0] <= day:
+            _, ag, qty, val = splits[j]
+            if ag in state:
+                state[ag].apply(qty, val)
+            j += 1
+        prices = history.at(day)
+        value = cost = ZERO
+        for h in state.values():
+            cost += h.cost
+            if h.shares:
+                v = convert(h.shares, h.commodity, base, prices)
+                value += v if v is not None else ZERO
+        price = convert(Decimal(1), sec_cdty, base, prices) if sec_cdty and history.first_day(security) else None
+        points.append(PortfolioPoint(key, day, value, cost, price))
+    # drop leading months before the first purchase
+    while len(points) > 1 and not points[0].value and not points[0].cost and not points[1].value and not points[1].cost:
+        points.pop(0)
+
+    securities = sorted({a.commodity_guid: a.commodity for a in accounts.values() if a.commodity}.items(),
+                        key=lambda kv: (kv[1].fullname or kv[1].mnemonic).casefold())
+    return Portfolio(holdings, points, securities, unconverted + (1 if bad_tx else 0))
+
+
+def first_security_booking(conn, book: Book, index: AccountIndex) -> date | None:
+    guids = [a.guid for a in security_accounts(index)]
+    if not guids:
+        return None
+    first = None
+    for ag, pd in conn.execute(text("SELECT s.account_guid, MIN(t.post_date) FROM splits s "
+                                    "JOIN transactions t ON t.guid = s.tx_guid GROUP BY s.account_guid")):
+        if ag in guids and pd is not None:
+            d = book.day_of(pd)
+            first = d if first is None or d < first else first
+    return first
+
+
+def allocation(holdings: list, radius: float = 70.0):
+    """Donut segments (circle stroke-dasharray) of the active holdings by market value."""
+    items = [h for h in holdings if h.active and h.value and h.value > 0]
+    circ = 2 * math.pi * radius
+    segs, offset = [], 0.0
+    for h in items:
+        length = h.share * circ
+        segs.append({"h": h, "dash": f"{length:.2f} {circ - length:.2f}", "offset": f"{-offset:.2f}"})
+        offset += length
+    return segs
+
+
+@dataclass
+class PriceRow:
+    day: date
+    commodity: object
+    currency: object
+    value: Decimal
+    source: str
+    type: str
+
+
+def price_list(conn, book: Book, index: AccountIndex, commodities: set, limit: int = 200) -> tuple[list, int]:
+    """Prices of the given commodities, newest first (at most `limit`), and their total number."""
+    rows = []
+    for cg, cug, d, num, den, src, typ in conn.execute(text(
+            "SELECT commodity_guid, currency_guid, date, value_num, value_denom, source, type FROM prices")):
+        if cg in commodities and den:
+            rows.append(PriceRow(book.day_of(d), index.commodities.get(cg), index.commodities.get(cug),
+                                 gnc_decimal(int(num), int(den)), src or "", typ or ""))
+    rows.sort(key=lambda r: (r.day or date.min), reverse=True)
+    return rows[:limit], len(rows)
