@@ -559,7 +559,7 @@ class Registry:
         """The shared read-only demo user; its demo book ends with the current month (rebuilt monthly)."""
         from datetime import date
 
-        from .demo import create_demo_book
+        from .demo import DEMO_VERSION, create_demo_book
 
         with self._demo_lock:
             user = next(iter(self.system.demo_users()), None)
@@ -569,7 +569,7 @@ class Registry:
                     name = f"demo-{secrets.token_hex(3)}"
                 user = self.system.user(self.system.add_demo_user(name))
             today = date.today()
-            path = (self.data / "demo" / f"demo-{today:%Y%m}.gnucash").resolve()
+            path = (self.data / "demo" / f"demo-{today:%Y%m}-v{DEMO_VERSION}.gnucash").resolve()
             url = f"sqlite:///{path}"
             books = self.system.user_books(user["id"])
             if books and books[0]["url"] == url and path.exists():

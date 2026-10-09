@@ -122,3 +122,20 @@ def test_demo_writable_when_configured(cfg):
         assert reg.system.tokens(book["id"]) == []
     finally:
         reg.dispose()
+
+
+def test_demo_book_rebuilt_for_new_demo_version(cfg, monkeypatch):
+    """Changed demo data (DEMO_VERSION) must not wait for the next month."""
+    from gnubook import demo
+    app = _demo_app(cfg)
+    reg = app.extensions["gnubook"]
+    try:
+        old_url = reg.system.user_books(reg.demo_user()["id"])[0]["url"]
+        assert f"-v{demo.DEMO_VERSION}.gnucash" in old_url
+        monkeypatch.setattr(demo, "DEMO_VERSION", demo.DEMO_VERSION + 1)
+        user = reg.demo_user()
+        new_url = reg.system.user_books(user["id"])[0]["url"]
+        assert new_url != old_url and f"-v{demo.DEMO_VERSION}.gnucash" in new_url
+        assert not __import__("pathlib").Path(old_url.split("sqlite:///", 1)[1]).exists()
+    finally:
+        reg.dispose()

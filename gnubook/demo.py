@@ -8,6 +8,9 @@ from decimal import Decimal as D
 
 from sqlalchemy import create_engine, text
 
+# bump when the generated data changes, so the shared demo book is rebuilt at once (not only next month)
+DEMO_VERSION = 2
+
 DEMO_BLZ = {"Musterbank": "10010010", "Beispielbank": "20020020"}
 DEMO_KTO = {"Musterbank": "0123456789", "Beispielbank": "0987654321"}
 
