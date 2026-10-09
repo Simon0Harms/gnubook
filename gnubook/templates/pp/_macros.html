@@ -1,0 +1,21 @@
+{% macro pct(v, sign=True, places=2) -%}
+{% if v is none %}–{% else %}{% set x = v * 100 %}{% set tiny = (x|abs) < 0.5 * 10 ** -places %}<span class="amount {{ '' if tiny else 'text-danger' if x < 0 else 'text-success' if x > 0 }}">{{ ((('%+.' ~ places ~ 'f') if sign and not tiny else ('%.' ~ places ~ 'f'))|format(0 if tiny else x))|replace('.', ',' if lang != 'en' else '.') }} %</span>{% endif %}
+{%- endmacro %}
+
+{% macro money(m, sign=False, colored=False) -%}
+{% if m is none %}–{% else %}{% set v = m.amount if m is mapping else m %}{% set c = m.currency if m is mapping else None %}<span class="amount {{ (v|amount_class) if colored }}">{{ v|money(c, sign=sign) }}</span>{% endif %}
+{%- endmacro %}
+
+{% macro shares(v) -%}
+{% if v is none or v == '' %}–{% else %}{{ v|money(None, places=(v|string).split('.')[1]|length if '.' in (v|string) else 0) }}{% endif %}
+{%- endmacro %}
+
+{% macro sync_badge(status, rec=None) -%}
+{% if status == 'booked' %}<span class="badge text-bg-success"><i class="bi bi-check-lg"></i> {{ _("übernommen") }}</span>
+{% elif status == 'edited' %}<span class="badge text-bg-info" title="{{ _("in GnuCash bearbeitet – bleibt so, solange PP die Buchung nicht ändert") }}"><i class="bi bi-pencil"></i> {{ _("in GnuCash bearbeitet") }}</span>
+{% elif status == 'conflict' %}<span class="badge text-bg-danger" title="{{ _(rec.message) if rec and rec.message else '' }}"><i class="bi bi-exclamation-triangle"></i> {{ _("Konflikt") }}</span>
+{% elif status == 'gone' %}<span class="badge text-bg-warning"><i class="bi bi-trash"></i> {{ _("in GnuCash gelöscht") }}</span>
+{% elif status == 'detached' %}<span class="badge text-bg-secondary"><i class="bi bi-link-45deg"></i> {{ _("abgekoppelt") }}</span>
+{% elif status == 'pending' %}<span class="badge text-bg-primary"><i class="bi bi-hourglass-split"></i> {{ _("wartet") }}</span>
+{% else %}<span class="badge text-bg-light border text-body-secondary">{{ _("nicht übernommen") }}</span>{% endif %}
+{%- endmacro %}

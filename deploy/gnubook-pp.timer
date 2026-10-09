@@ -1,0 +1,11 @@
+[Unit]
+Description=gnubook – hourly: prices from Portfolio Performance into GnuCash (pp-update)
+
+[Timer]
+# pp-update itself loads prices only every [pp] quotes_interval_hours (default 12) and books only changes
+OnCalendar=hourly
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

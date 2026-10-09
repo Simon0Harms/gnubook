@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Portfolio Performance") }}{% endblock %}
+{% block header %}{{ _("Portfolio Performance") }}{% endblock %}
+{% block content %}
+{% include "pp/_nav.html" %}
+<div class="alert alert-danger">
+  <h5 class="alert-heading"><i class="bi bi-plug"></i> {{ _("pp-core antwortet nicht wie erwartet") }}</h5>
+  <p class="mb-2">{{ error }}</p>
+  {% if unreachable %}
+  <p class="small mb-0">{{ _("Läuft der Dienst? Auf dem Server:") }} <code>systemctl status gnubook-ppcore</code> {{ _("und") }} <code>journalctl -u gnubook-ppcore -n 50</code>.
+    {{ _("Adresse und Token stehen in config.toml unter [pp].") }}</p>
+  {% endif %}
+</div>
+{% endblock %}

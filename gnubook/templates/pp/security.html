@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}{{ sec.name }}{% endblock %}
+{% block header %}{{ sec.name }}{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">{{ sec.isin or '' }}{% if sec.wkn %} · {{ _("WKN") }} {{ sec.wkn }}{% endif %} · {{ sec.currency or '' }}</div>{% endblock %}
+{% block actions %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('pp.securities') }}"><i class="bi bi-arrow-left"></i> {{ _("Wertpapiere") }}</a>{% endblock %}
+{% block content %}
+{% include "pp/_nav.html" %}
+<div class="row">
+  <div class="col-lg-5">
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title">{{ _("Kursquelle") }}</h3></div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('pp.security', uuid=sec.uuid) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-2">
+            <label class="form-label" for="feed">{{ _("Historische Kurse") }}</label>
+            <select class="form-select" id="feed" name="feed">
+              <option value="MANUAL" {{ 'selected' if not sec.feed or sec.feed == 'MANUAL' }}>{{ _("keine (manuell)") }}</option>
+              {% for f in feeds if f.id != 'MANUAL' %}<option value="{{ f.id }}" {{ 'selected' if f.id == sec.feed }}>{{ f.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="ticker">{{ _("Ticker-Symbol") }}</label>
+            <input class="form-control" id="ticker" name="ticker" value="{{ sec.ticker or '' }}" placeholder="{{ _("z. B. EUNL.DE") }}">
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="feedUrl">{{ _("URL (nur für Quellen mit URL, z. B. JSON oder Tabelle auf Webseite)") }}</label>
+            <input class="form-control" id="feedUrl" name="feedUrl" value="{{ sec.feedUrl or '' }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="latestFeed">{{ _("Aktueller Kurs") }}</label>
+            <select class="form-select" id="latestFeed" name="latestFeed">
+              <option value="" {{ 'selected' if not sec.latestFeed }}>{{ _("wie historische Kurse") }}</option>
+              <option value="MANUAL" {{ 'selected' if sec.latestFeed == 'MANUAL' }}>{{ _("keinen laden") }}</option>
+              {% for f in feeds if f.id != 'MANUAL' %}<option value="{{ f.id }}" {{ 'selected' if f.id == sec.latestFeed }}>{{ f.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <button class="btn btn-primary" type="submit" name="update" value="1"><i class="bi bi-save"></i> {{ _("Speichern und Kurse laden") }}</button>
+          <button class="btn btn-outline-secondary" type="submit">{{ _("Nur speichern") }}</button>
+        </form>
+        <dl class="row small mt-3 mb-0">
+          <dt class="col-5">{{ _("Kurse") }}</dt><dd class="col-7">{{ sec.priceCount }}{% if sec.firstPrice %} ({{ sec.firstPrice|de_date }} – {{ sec.lastPrice|de_date }}){% endif %}</dd>
+          {% if sec.latest %}<dt class="col-5">{{ _("Aktueller Kurs") }}</dt><dd class="col-7">{{ sec.latest.value|money(sec.currency, places=4) }} ({{ sec.latest.date|de_date }})</dd>{% endif %}
+          {% if result %}<dt class="col-5">{{ _("Letzte Aktualisierung") }}</dt><dd class="col-7">{{ result.status }}{% if result.message %}: {{ result.message }}{% endif %}</dd>{% endif %}
+        </dl>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title">{{ _("Kursquelle suchen") }}</h3></div>
+      <div class="card-body">
+        <form class="row g-2 mb-3" method="get" action="{{ url_for('pp.security', uuid=sec.uuid) }}">
+          <div class="col"><input class="form-control" name="q" value="{{ q }}" placeholder="{{ _("ISIN, WKN, Name oder Symbol") }}"></div>
+          <div class="col-auto"><button class="btn btn-outline-primary" type="submit"><i class="bi bi-search"></i> {{ _("Suchen") }}</button></div>
+        </form>
+        {% if results is not none %}
+          {% if results %}
+          <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+            <thead class="table-light"><tr><th>{{ _("Name") }}</th><th>{{ _("Symbol") }}</th><th>{{ _("Börse") }}</th><th>{{ _("Quelle") }}</th><th></th></tr></thead>
+            <tbody>
+            {% for r in results %}
+              <tr>
+                <td>{{ r.name }}<div class="small text-body-secondary">{{ r.isin or '' }} {{ r.type or '' }}</div></td>
+                <td>{{ r.symbol or '' }}</td><td class="small">{{ r.exchange or '' }}{% if r.currency %} · {{ r.currency }}{% endif %}</td>
+                <td class="small">{{ r.provider }}{% if r.needsLogin %}<div class="text-warning-emphasis">{{ _("braucht Anmeldung") }}</div>{% endif %}</td>
+                <td class="text-end">{% if r.feed and r.symbol and not r.needsLogin %}
+                  <form method="post" action="{{ url_for('pp.security', uuid=sec.uuid) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="feed" value="{{ r.feed }}"><input type="hidden" name="ticker" value="{{ r.symbol }}">
+                    <input type="hidden" name="latestFeed" value="">
+                    <button class="btn btn-sm btn-primary" type="submit" name="update" value="1">{{ _("übernehmen") }}</button>
+                  </form>{% endif %}</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table></div>
+          {% else %}<p class="text-body-secondary mb-0">{{ _("Nichts gefunden (oder die Suchdienste sind nicht erreichbar).") }}</p>{% endif %}
+        {% else %}
+          <p class="small text-body-secondary mb-0">{{ _("Sucht bei Yahoo Finance und den anderen Suchdiensten von Portfolio Performance.") }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

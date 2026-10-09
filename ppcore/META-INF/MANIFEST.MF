@@ -1,0 +1,14 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: gnubook pp-core (headless Portfolio Performance service)
+Bundle-SymbolicName: gnubook.ppcore;singleton:=true
+Bundle-Version: 0.1.0
+Bundle-Vendor: gnubook
+Bundle-License: GPL-3.0-or-later WITH linking exception (see ppcore/README.md)
+Bundle-RequiredExecutionEnvironment: JavaSE-21
+Require-Bundle: name.abuchen.portfolio,
+ org.eclipse.core.runtime,
+ org.eclipse.equinox.app,
+ com.google.gson
+Import-Package: com.sun.net.httpserver
+Bundle-ActivationPolicy: lazy

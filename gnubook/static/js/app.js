@@ -446,6 +446,13 @@
   }
 
   /* ---------------------------------------------------------------- report filters */
+  /* ---------------------------------------------------------------- searchable multi-selects */
+  document.querySelectorAll('select.ts-multi').forEach(function (sel) {
+    if (typeof TomSelect === 'undefined' || sel.tomselect) { return; }
+    new TomSelect(sel, { plugins: ['remove_button'], maxOptions: 400, hidePlaceholder: true,
+      placeholder: t('Konten wählen …', 'Choose accounts …') });
+  });
+
   document.querySelectorAll('form[data-autosubmit]').forEach(function (form) {
     var period = form.querySelector('select[name="period"]');
     var custom = form.querySelectorAll('.period-custom');

@@ -105,6 +105,16 @@ class NextcloudConfig:
 
 
 @dataclass
+class PPConfig:
+    # pp-core, the headless Portfolio Performance service (see docs/PORTFOLIO-PERFORMANCE.md); empty = off
+    url: str = ""
+    token: str = ""
+    timeout: int = 60
+    # update prices at most every N hours (gnubook pp-update, run by a timer)
+    quotes_interval_hours: int = 12
+
+
+@dataclass
 class Config:
     book: BookConfig = field(default_factory=BookConfig)
     app: AppConfig = field(default_factory=AppConfig)
@@ -114,6 +124,7 @@ class Config:
     postgres: PostgresConfig = field(default_factory=PostgresConfig)
     checkpoints: CheckpointsConfig = field(default_factory=CheckpointsConfig)
     nextcloud: NextcloudConfig = field(default_factory=NextcloudConfig)
+    pp: PPConfig = field(default_factory=PPConfig)
     source: str = ""
 
     @property
@@ -148,7 +159,7 @@ def load_config(path: str | os.PathLike | None = None, env: dict | None = None) 
                 data = tomllib.load(fh)
             sections = {"book": cfg.book, "app": cfg.app, "api": cfg.api, "import": cfg.importer, "backup": cfg.backup,
                         "postgres": cfg.postgres, "checkpoints": cfg.checkpoints,
-                        "nextcloud": cfg.nextcloud}
+                        "nextcloud": cfg.nextcloud, "pp": cfg.pp}
             for name, values in data.items():
                 if name not in sections:
                     raise ConfigError(f"Unbekannter Konfigurationsabschnitt [{name}] in {cand}")
@@ -160,7 +171,7 @@ def load_config(path: str | os.PathLike | None = None, env: dict | None = None) 
         raise ConfigError(f"Konfigurationsdatei {explicit} nicht gefunden")
 
     for section_name, obj in (("BOOK", cfg.book), ("APP", cfg.app), ("API", cfg.api), ("IMPORT", cfg.importer), ("BACKUP", cfg.backup),
-                              ("POSTGRES", cfg.postgres), ("NEXTCLOUD", cfg.nextcloud)):
+                              ("POSTGRES", cfg.postgres), ("NEXTCLOUD", cfg.nextcloud), ("PP", cfg.pp)):
         for key in vars(obj):
             env_key = f"GNUBOOK_{section_name}_{key.upper()}"
             if env_key in env:

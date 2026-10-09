@@ -217,6 +217,19 @@ working with it, use *Speichern unter* to a new name instead of editing the back
 *Einstellungen* shows when the last copy was written. It is an additional copy, not a replacement for the
 PostgreSQL dumps.
 
+### Optional: Portfolio Performance
+
+To manage securities with Portfolio Performance and book them into GnuCash automatically, install pp-core in
+the gnubook container:
+
+```bash
+bash /opt/gnubook/src/deploy/install-pp.sh
+```
+
+It needs about 80 MB of disk and a few hundred MB of memory more (plan for 1–1.5 GB for the container). Setup,
+booking rules and the clearing account for the bank import are described in
+[PORTFOLIO-PERFORMANCE.md](PORTFOLIO-PERFORMANCE.md).
+
 ## 4. Updates
 
 ```bash
@@ -228,7 +241,11 @@ The update does the following:
 
 - saves `config.toml`, `gunicorn.conf.py` and `data/` to `/opt/gnubook/backup/` (the last 10 are kept);
 - installs the new version and restarts the service;
-- returns to the previous version if gnubook does not come up again.
+- returns to the previous version if gnubook does not come up again;
+- rebuilds pp-core (if installed) when its code changed; a build that does not start is not activated.
+
+Portfolio Performance itself is updated with `gnubook-pp-update` (newest release) or
+`gnubook-pp-update 0.88.0`.
 
 The GnuCash book itself is not touched by updates. Its backups are the PostgreSQL dumps.
 
@@ -249,3 +266,6 @@ The GnuCash book itself is not touched by updates. Its backups are the PostgreSQ
 | `/opt/gnubook/data/gnubook.sqlite` | API ids, import records, accepted differences, audit log |
 | `/opt/gnubook/backup/` | backups made by `gnubook-update` |
 | `/etc/systemd/system/gnubook.service` | service (`journalctl -u gnubook` for logs) |
+| `/opt/gnubook/ppcore.properties`, `/opt/gnubook/pp/` | pp-core settings and builds, if Portfolio Performance is installed |
+| `/opt/gnubook/data/ppcore/` | the Portfolio Performance files of the books |
+| `gnubook-ppcore.service`, `gnubook-pp.timer` | pp-core and its hourly price update (`journalctl -u gnubook-ppcore`) |

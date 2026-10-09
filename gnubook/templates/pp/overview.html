@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% from "pp/_macros.html" import pct, money %}
+{% block title %}{{ _("Portfolio Performance") }}{% endblock %}
+{% block header %}{{ _("Portfolio Performance") }}{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">{{ _("Kennzahlen, berechnet von Portfolio Performance selbst (pp-core)") }}{% if summary.exists %} · {{ summary.originalName or summary.file }}{% endif %}</div>{% endblock %}
+{% block actions %}
+{% if summary.exists %}
+<a class="btn btn-sm btn-primary" href="{{ url_for('pp.pdf_import') }}"><i class="bi bi-file-earmark-arrow-up"></i> {{ _("Abrechnungen importieren") }}</a>
+{% endif %}
+{% endblock %}
+{% block content %}
+{% include "pp/_nav.html" %}
+
+{% if not summary.exists %}
+<div class="card card-body">
+  <h5><i class="bi bi-briefcase"></i> {{ _("Noch keine Portfolio-Performance-Datei") }}</h5>
+  <p class="mb-2">{{ _("Lade deine bestehende PP-Datei hoch (XML oder .portfolio, ohne Passwort) oder lege eine neue an. Danach kannst du Abrechnungen als PDF importieren, Kurse laden und alles ins GnuCash-Buch übernehmen.") }}</p>
+  <div><a class="btn btn-primary" href="{{ url_for('pp.settings') }}"><i class="bi bi-upload"></i> {{ _("Zu den Einstellungen") }}</a></div>
+</div>
+{% else %}
+{% set cur = perf.currency %}
+
+<form class="card card-body py-2 mb-3" method="get" action="{{ url_for('pp.overview') }}" data-autosubmit>
+  <div class="row g-2 align-items-end">
+    <div class="col-6 col-md-3">
+      <label class="form-label small mb-0" for="period">{{ _("Zeitraum") }}</label>
+      <select class="form-select form-select-sm" id="period" name="period">
+        {% for key, label in PERIOD_LABELS.items() %}<option value="{{ key }}" {{ 'selected' if key == period }}>{{ _(label) }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2 period-custom">
+      <label class="form-label small mb-0" for="from">{{ _("von") }}</label>
+      <input class="form-control form-control-sm" type="date" id="from" name="from" value="{{ start.isoformat() }}">
+    </div>
+    <div class="col-6 col-md-2 period-custom">
+      <label class="form-label small mb-0" for="to">{{ _("bis") }}</label>
+      <input class="form-control form-control-sm" type="date" id="to" name="to" value="{{ end.isoformat() }}">
+    </div>
+    <div class="col-6 col-md-3">
+      <label class="form-label small mb-0" for="portfolio">{{ _("Depot") }}</label>
+      <select class="form-select form-select-sm" id="portfolio" name="portfolio">
+        <option value="">{{ _("Alle Depots und Konten") }}</option>
+        {% for p in summary.portfolioList or [] %}<option value="{{ p.uuid }}" {{ 'selected' if p.uuid == portfolio }}>{{ p.name }}{% if p.retired %} ({{ _("aufgelöst") }}){% endif %}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-auto"><noscript><button class="btn btn-sm btn-primary" type="submit">{{ _("Anzeigen") }}</button></noscript></div>
+  </div>
+</form>
+
+{% for w in perf.warnings or [] %}<div class="alert alert-warning small py-2">{{ w }}</div>{% endfor %}
+
+<div class="row">
+  <div class="col-lg-3 col-6"><div class="info-box"><span class="info-box-icon text-bg-primary"><i class="bi bi-percent"></i></span>
+    <div class="info-box-content"><span class="info-box-text" title="{{ _("True Time-Weighted Rate of Return: Wertentwicklung ohne Einfluss von Ein- und Auszahlungen") }}">{{ _("TTWROR") }}</span>
+      <span class="info-box-number">{{ pct(perf.ttwror) }}</span>
+      <span class="small text-body-secondary">{{ pct(perf.ttwrorAnnualized) }} {{ _("p. a.") }}</span></div></div></div>
+  <div class="col-lg-3 col-6"><div class="info-box"><span class="info-box-icon text-bg-success"><i class="bi bi-graph-up-arrow"></i></span>
+    <div class="info-box-content"><span class="info-box-text" title="{{ _("Interner Zinsfuß: Rendite des eingesetzten Geldes pro Jahr") }}">{{ _("IZF") }}</span>
+      <span class="info-box-number">{{ pct(perf.irr) }}</span>
+      <span class="small text-body-secondary">{{ _("p. a., geldgewichtet") }}</span></div></div></div>
+  <div class="col-lg-3 col-6"><div class="info-box"><span class="info-box-icon text-bg-warning"><i class="bi bi-plus-slash-minus"></i></span>
+    <div class="info-box-content"><span class="info-box-text" title="{{ _("Kursgewinne, Erträge, Währungsgewinne abzüglich Gebühren und Steuern") }}">{{ _("Absolute Performance") }}</span>
+      <span class="info-box-number">{{ money(perf.delta, sign=True, colored=True) }}</span>
+      <span class="small text-body-secondary">{{ _("Wertänderung") }} {{ money(perf.absoluteChange, sign=True) }}</span></div></div></div>
+  <div class="col-lg-3 col-6"><div class="info-box"><span class="info-box-icon text-bg-secondary"><i class="bi bi-briefcase"></i></span>
+    <div class="info-box-content"><span class="info-box-text">{{ _("Vermögen") }}</span>
+      <span class="info-box-number">{{ money(perf.finalValue) }}</span>
+      <span class="small text-body-secondary">{{ _("Max. Drawdown") }} {{ pct(-(perf.maxDrawdown or 0), sign=False) if perf.maxDrawdown else '–' }} · {{ _("Volatilität") }} {{ pct(perf.volatility, sign=False) }}</span></div></div></div>
+</div>
+
+<div class="row">
+  <div class="col-xl-8">
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title">{{ _("Performance (TTWROR kumuliert)") }}</h3>
+        <div class="card-tools small text-body-secondary">{{ start|de_date }} – {{ end|de_date }}</div></div>
+      <div class="card-body">
+        {% if chart %}
+        <div class="nw-wrap">
+          <svg class="nw-chart" viewBox="-70 -12 {{ chart.width + 90 }} {{ chart.height + 40 }}" role="img" aria-label="{{ _("Liniendiagramm der kumulierten Performance") }}">
+            {% for t in chart.ticks %}
+              <line class="nw-grid" x1="0" x2="{{ chart.width }}" y1="{{ '%.1f'|format(t.y) }}" y2="{{ '%.1f'|format(t.y) }}"></line>
+              <text class="nw-axis" x="-8" y="{{ '%.1f'|format(t.y) }}" text-anchor="end" dominant-baseline="middle">{{ t.text }}</text>
+            {% endfor %}
+            {% for l in chart.labels %}<text class="nw-axis" x="{{ '%.1f'|format(l.x) }}" y="{{ chart.height + 20 }}" text-anchor="middle">{{ l.text }}</text>{% endfor %}
+            <line class="nw-zero" x1="0" x2="{{ chart.width }}" y1="{{ '%.1f'|format(chart.zero) }}" y2="{{ '%.1f'|format(chart.zero) }}"></line>
+            <path class="nw-area" d="{{ chart.area }}"></path>
+            <polyline class="nw-line nw-net" points="{{ chart.points }}"></polyline>
+            {% for d in chart.dots %}
+              <g class="nw-hover"><rect x="{{ '%.1f'|format(d.x - chart.hover / 2) }}" y="0" width="{{ '%.1f'|format(chart.hover) }}" height="{{ chart.height }}"></rect>
+                <circle cx="{{ '%.1f'|format(d.x) }}" cy="{{ '%.1f'|format(d.y) }}" r="4"></circle>
+                <title>{{ d.p.day|de_date }}: {{ '%+.2f'|format(d.p.ttwror * 100) }} % · {{ _("Vermögen") }} {{ d.p.value|money(cur) }}</title></g>
+            {% endfor %}
+          </svg>
+        </div>
+        {% else %}<p class="text-body-secondary mb-0">{{ _("Zu wenige Daten für ein Diagramm.") }}</p>{% endif %}
+      </div>
+    </div>
+    {% if value_chart %}
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title">{{ _("Vermögen und investiertes Kapital") }}</h3></div>
+      <div class="card-body">
+        <div class="nw-wrap">
+          <svg class="nw-chart" viewBox="-80 -12 {{ value_chart.width + 100 }} {{ value_chart.height + 40 }}" role="img" aria-label="{{ _("Liniendiagramm des Vermögens") }}">
+            {% for t in value_chart.ticks %}
+              <line class="nw-grid" x1="0" x2="{{ value_chart.width }}" y1="{{ '%.1f'|format(t.y) }}" y2="{{ '%.1f'|format(t.y) }}"></line>
+              <text class="nw-axis" x="-8" y="{{ '%.1f'|format(t.y) }}" text-anchor="end" dominant-baseline="middle">{{ t.text }}</text>
+            {% endfor %}
+            {% for l in value_chart.labels %}<text class="nw-axis" x="{{ '%.1f'|format(l.x) }}" y="{{ value_chart.height + 20 }}" text-anchor="middle">{{ l.text }}</text>{% endfor %}
+            <path class="nw-area" d="{{ value_chart.area }}"></path>
+            {% if value_chart.points2 %}<polyline class="nw-line pf-cost" points="{{ value_chart.points2 }}"></polyline>{% endif %}
+            <polyline class="nw-line nw-net" points="{{ value_chart.points }}"></polyline>
+          </svg>
+        </div>
+        <div class="small mt-2"><span class="legend legend-net"></span> {{ _("Vermögen") }} &nbsp; <span class="legend legend-cost"></span> {{ _("Investiertes Kapital (Einlagen minus Entnahmen)") }}</div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  <div class="col-xl-4">
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title">{{ _("Berechnung") }}</h3></div>
+      <div class="card-body p-0">
+        <table class="table table-sm small mb-0">
+          {% for key, c in categories %}
+          <tr class="{{ 'fw-semibold table-light' if key in ('INITIAL_VALUE', 'FINAL_VALUE') }}">
+            <td class="text-body-secondary" style="width:1.5rem">{{ CATEGORY_SIGNS.get(key, '') }}</td>
+            <td>{% if c.positions %}<details><summary>{{ c.label }}</summary>
+              <ul class="list-unstyled small mb-0 mt-1">{% for p in c.positions[:40] %}<li class="d-flex justify-content-between gap-2"><span class="text-truncate">{{ p.label }}</span><span>{{ money(p.value) }}</span></li>{% endfor %}
+              {% if c.positions|length > 40 %}<li class="text-body-secondary">… {{ c.positions|length - 40 }} {{ _("weitere") }}</li>{% endif %}</ul></details>
+              {% else %}{{ c.label }}{% endif %}</td>
+            <td class="text-end text-nowrap">{{ money(c.value) }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title"><i class="bi bi-arrow-repeat"></i> {{ _("Übernahme ins GnuCash-Buch") }}</h3></div>
+      <div class="card-body small">
+        {% if not settings.enabled %}
+          <p class="mb-2">{{ _("Ausgeschaltet – Portfolio Performance und das Buch laufen getrennt.") }}</p>
+          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('pp.settings') }}">{{ _("Einrichten") }}</a>
+        {% else %}
+          <dl class="row mb-2">
+            <dt class="col-5">{{ _("Letzter Lauf") }}</dt><dd class="col-7">{{ status.last_sync|de_datetime if status.last_sync else '–' }}</dd>
+            {% if status.last_run %}<dt class="col-5">{{ _("Ergebnis") }}</dt><dd class="col-7">{{ status.last_run.summary }}</dd>{% endif %}
+            {% if clearing %}<dt class="col-5">{{ _("Zwischenkonto") }}</dt><dd class="col-7"><a href="{{ url_for('views.register', guid=clearing.account.guid) }}">{{ clearing.balance|money(cur) }}</a>
+              {% if clearing.balance %}<div class="text-body-secondary">{{ _("Saldo ≠ 0: Bank- oder PP-Seite fehlt noch") }}</div>{% endif %}</dd>{% endif %}
+          </dl>
+          {% if status.busy %}<div class="alert alert-info py-1 mb-2">{{ _("Übernahme läuft …") }}</div>{% endif %}
+          {% if status.waiting %}<div class="alert alert-warning py-1 mb-2">{{ status.waiting }} {{ _("Nächster Versuch in einigen Minuten.") }}</div>{% endif %}
+          {% if status.error %}<div class="alert alert-danger py-1 mb-2">{{ status.error }}</div>{% endif %}
+          {% if conflicts %}<div class="alert alert-danger py-1 mb-2"><a href="{{ url_for('pp.transactions', status='attention') }}">{{ _("{n} Konflikte prüfen", n=conflicts) }}</a></div>{% endif %}
+          <form method="post" action="{{ url_for('pp.sync_now') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <button class="btn btn-sm btn-outline-primary" type="submit"><i class="bi bi-arrow-repeat"></i> {{ _("Jetzt übernehmen") }}</button>
+            <a class="btn btn-sm btn-link" href="{{ url_for('reports.portfolio') }}">{{ _("Depot im Buch") }}</a>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

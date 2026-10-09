@@ -52,6 +52,20 @@ CREATE TABLE IF NOT EXISTS audit (
     tx_guid TEXT, summary TEXT
 );
 CREATE TABLE IF NOT EXISTS login_failures (ip TEXT NOT NULL, ts REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS pp_sync (
+    pp_key TEXT PRIMARY KEY, tx_guid TEXT, spec_fp TEXT, gc_fp TEXT, status TEXT NOT NULL, message TEXT,
+    kind TEXT, day TEXT, description TEXT, amount TEXT, updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS pp_sync_tx ON pp_sync (tx_guid);
+CREATE TABLE IF NOT EXISTS pp_objects (key TEXT PRIMARY KEY, guid TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS pp_prices (
+    commodity_guid TEXT NOT NULL, day TEXT NOT NULL, price_guid TEXT NOT NULL, value TEXT NOT NULL,
+    PRIMARY KEY (commodity_guid, day)
+);
+CREATE TABLE IF NOT EXISTS pp_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL, finished_at TEXT, actor TEXT, revision TEXT,
+    status TEXT NOT NULL, summary TEXT, details TEXT
+);
 """
 
 
@@ -218,6 +232,84 @@ class AppDB:
     def unaccept(self, account_guid: str, tx_guid: str):
         with self.conn() as c:
             c.execute("DELETE FROM checkpoint_acceptance WHERE account_guid = ? AND tx_guid = ?", (account_guid, tx_guid))
+
+    # ------------------------------------------------------------------ Portfolio Performance link
+    def meta(self, key: str, default: str | None = None) -> str | None:
+        with self.conn() as c:
+            row = c.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+            return row["value"] if row else default
+
+    def set_meta(self, key: str, value: str | None):
+        with self.conn() as c:
+            if value is None:
+                c.execute("DELETE FROM meta WHERE key = ?", (key,))
+            else:
+                c.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET "
+                          "value = excluded.value", (key, value))
+
+    def pp_records(self) -> dict:
+        with self.conn() as c:
+            return {r["pp_key"]: dict(r) for r in c.execute("SELECT * FROM pp_sync")}
+
+    def pp_record_for_tx(self, tx_guid: str):
+        with self.conn() as c:
+            row = c.execute("SELECT * FROM pp_sync WHERE tx_guid = ?", (tx_guid,)).fetchone()
+            return dict(row) if row else None
+
+    def pp_save_records(self, rows: list[dict], delete_keys=()):
+        with self.conn() as c:
+            for key in delete_keys:
+                c.execute("DELETE FROM pp_sync WHERE pp_key = ?", (key,))
+            for r in rows:
+                r = dict(r, updated_at=now_iso())
+                c.execute("INSERT INTO pp_sync (pp_key, tx_guid, spec_fp, gc_fp, status, message, kind, day, "
+                          "description, amount, updated_at) VALUES (:pp_key, :tx_guid, :spec_fp, :gc_fp, :status, "
+                          ":message, :kind, :day, :description, :amount, :updated_at) ON CONFLICT(pp_key) DO UPDATE "
+                          "SET tx_guid = excluded.tx_guid, spec_fp = excluded.spec_fp, gc_fp = excluded.gc_fp, "
+                          "status = excluded.status, message = excluded.message, kind = excluded.kind, "
+                          "day = excluded.day, description = excluded.description, amount = excluded.amount, "
+                          "updated_at = excluded.updated_at",
+                          {k: r.get(k) for k in ("pp_key", "tx_guid", "spec_fp", "gc_fp", "status", "message",
+                                                 "kind", "day", "description", "amount", "updated_at")})
+
+    def pp_set_status(self, key: str, status: str, message: str | None = None):
+        with self.conn() as c:
+            c.execute("UPDATE pp_sync SET status = ?, message = ?, updated_at = ? WHERE pp_key = ?",
+                      (status, message, now_iso(), key))
+
+    def pp_objects(self) -> dict:
+        with self.conn() as c:
+            return {r["key"]: r["guid"] for r in c.execute("SELECT key, guid FROM pp_objects")}
+
+    def pp_save_objects(self, mapping: dict):
+        with self.conn() as c:
+            c.executemany("INSERT INTO pp_objects (key, guid) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET "
+                          "guid = excluded.guid", list(mapping.items()))
+
+    def pp_prices(self) -> dict:
+        with self.conn() as c:
+            return {(r["commodity_guid"], r["day"]): (r["price_guid"], r["value"])
+                    for r in c.execute("SELECT * FROM pp_prices")}
+
+    def pp_save_prices(self, upserts: dict, deletes=()):
+        with self.conn() as c:
+            c.executemany("DELETE FROM pp_prices WHERE commodity_guid = ? AND day = ?", list(deletes))
+            c.executemany("INSERT INTO pp_prices (commodity_guid, day, price_guid, value) VALUES (?, ?, ?, ?) "
+                          "ON CONFLICT(commodity_guid, day) DO UPDATE SET price_guid = excluded.price_guid, "
+                          "value = excluded.value", [(k[0], k[1], v[0], v[1]) for k, v in upserts.items()])
+
+    def pp_add_run(self, started_at: str, actor: str, revision: str, status: str, summary: str,
+                   details: str = "") -> int:
+        with self.conn() as c:
+            rid = int(c.execute("INSERT INTO pp_runs (started_at, finished_at, actor, revision, status, summary, "
+                                "details) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                (started_at, now_iso(), actor, revision, status, summary, details[:20000])).lastrowid)
+            c.execute("DELETE FROM pp_runs WHERE id <= ?", (rid - 200,))
+            return rid
+
+    def pp_runs(self, limit: int = 20):
+        with self.conn() as c:
+            return c.execute("SELECT * FROM pp_runs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
 
     # ------------------------------------------------------------------ audit & login throttle
     def audit(self, actor: str, action: str, tx_guid: str | None, summary: str = ""):

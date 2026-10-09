@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Wertpapiere und Kurse") }}{% endblock %}
+{% block header %}{{ _("Portfolio Performance") }}{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">{{ _("Kursquellen und Kurse in Portfolio Performance; die Kurse werden ins GnuCash-Buch übernommen") }}</div>{% endblock %}
+{% block actions %}
+{% if summary.exists %}
+<form method="post" action="{{ url_for('pp.quotes') }}" class="d-inline">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button class="btn btn-sm btn-primary" type="submit" {{ 'disabled' if job and job.state == 'running' }}><i class="bi bi-cloud-download"></i> {{ _("Kurse jetzt aktualisieren") }}</button>
+</form>
+{% endif %}
+{% endblock %}
+{% block content %}
+{% include "pp/_nav.html" %}
+{% if not summary.exists %}
+<div class="alert alert-info">{{ _("Noch keine Portfolio-Performance-Datei.") }} <a href="{{ url_for('pp.settings') }}">{{ _("Zu den Einstellungen") }}</a></div>
+{% else %}
+{% if job and job.state == 'running' %}
+<div class="alert alert-info py-2"><i class="bi bi-hourglass-split"></i> {{ _("Kursaktualisierung läuft seit {t} …", t=job.started|de_datetime) }} <a href="{{ url_for('pp.securities') }}">{{ _("neu laden") }}</a></div>
+{% elif job and job.state in ('done', 'failed') %}
+<div class="alert alert-{{ 'secondary' if job.state == 'done' else 'danger' }} py-2 small">{{ _("Letzte Kursaktualisierung: {t}", t=job.finished|de_datetime) }} – {{ _("{n} Wertpapiere geändert", n=job.modified) }}{% if job.error %}: {{ job.error }}{% endif %}</div>
+{% elif summary.lastPriceUpdate %}
+<div class="alert alert-secondary py-2 small">{{ _("Letzte Kursaktualisierung: {t}", t=summary.lastPriceUpdate|de_datetime) }}</div>
+{% endif %}
+
+<div class="card mb-4">
+  <div class="card-header"><h3 class="card-title">{{ rows|length }} {{ _("Wertpapiere") }}</h3>
+    <div class="card-tools small"><a href="{{ url_for('pp.securities', all=None if show_all else '1') }}">{{ _("nur aktive") if show_all else _("auch aufgelöste und Wechselkurse zeigen") }}</a></div></div>
+  <div class="card-body p-0 table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-light"><tr><th>{{ _("Wertpapier") }}</th><th>{{ _("ISIN / WKN") }}</th><th>{{ _("Kursquelle") }}</th>
+        <th class="text-end">{{ _("Letzter Kurs") }}</th><th class="text-end">{{ _("Kurse") }}</th><th>{{ _("Letzte Aktualisierung") }}</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+        {% set s = r.s %}
+        <tr class="clickable" data-href="{{ url_for('pp.security', uuid=s.uuid) }}">
+          <td><a href="{{ url_for('pp.security', uuid=s.uuid) }}">{{ s.name }}</a>{% if not r.used %} <span class="badge text-bg-light border text-body-secondary">{{ _("ohne Buchungen") }}</span>{% endif %}
+            {% if s.retired %} <span class="badge text-bg-secondary">{{ _("aufgelöst") }}</span>{% endif %}</td>
+          <td class="small">{{ s.isin or '' }}{% if s.wkn %}<div class="text-body-secondary">{{ s.wkn }}</div>{% endif %}</td>
+          <td class="small">{% if s.feed and s.feed != 'MANUAL' %}{{ r.feed }}{% if s.ticker %}<div class="text-body-secondary">{{ s.ticker }}</div>{% endif %}{% else %}<span class="text-warning-emphasis"><i class="bi bi-exclamation-circle"></i> {{ _("keine") }}</span>{% endif %}</td>
+          <td class="text-end text-nowrap">{% if s.latest %}{{ s.latest.value|money(s.currency, places=(4 if (s.latest.value|float) < 1 else 2)) }}<div class="small text-body-secondary">{{ s.latest.date|de_date }}</div>{% elif s.lastPrice %}<span class="small">{{ s.lastPrice|de_date }}</span>{% else %}–{% endif %}</td>
+          <td class="text-end small">{{ s.priceCount }}{% if s.firstPrice %}<div class="text-body-secondary">{{ _("ab") }} {{ s.firstPrice|de_date }}</div>{% endif %}</td>
+          <td class="small">{% if r.result %}
+              {% if r.result.status == 'error' %}<span class="text-danger"><i class="bi bi-x-circle"></i> {{ r.result.message }}</span>
+              {% elif r.result.status == 'skipped' %}<span class="text-body-secondary">{{ r.result.message }}</span>
+              {% elif r.result.status == 'updated' %}<span class="text-success"><i class="bi bi-check-lg"></i> {{ _("{n} neue Kurse", n=r.result.newPrices) }}</span>
+              {% else %}<span class="text-body-secondary">{{ _("aktuell") }}</span>{% endif %}
+            {% endif %}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="text-body-secondary">{{ _("Keine Wertpapiere.") }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<p class="small text-body-secondary">{{ _("Die eigene Kursquelle von Portfolio Performance braucht eine Anmeldung, die auf dem Server nicht möglich ist. Für solche Wertpapiere bitte Yahoo Finance oder eine andere Quelle wählen.") }}</p>
+{% endif %}
+{% endblock %}

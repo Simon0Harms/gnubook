@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Portfolio Performance – Einstellungen") }}{% endblock %}
+{% block header %}{{ _("Portfolio Performance") }}{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">{{ _("PP-Datei und Übernahme ins GnuCash-Buch") }}</div>{% endblock %}
+{% block content %}
+{% include "pp/_nav.html" %}
+<div class="row">
+  <div class="col-xl-5">
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title"><i class="bi bi-file-earmark"></i> {{ _("Portfolio-Performance-Datei") }}</h3></div>
+      <div class="card-body">
+        {% if summary.error %}
+          <div class="alert alert-danger small">{{ summary.error }}</div>
+        {% elif summary.exists %}
+          <dl class="row small mb-3">
+            <dt class="col-5">{{ _("Datei") }}</dt><dd class="col-7">{{ summary.originalName or summary.file }}</dd>
+            <dt class="col-5">{{ _("Geändert") }}</dt><dd class="col-7">{{ summary.modified|de_datetime }}</dd>
+            <dt class="col-5">{{ _("Inhalt") }}</dt><dd class="col-7">{{ summary.securities }} {{ _("Wertpapiere") }}, {{ summary.portfolios }} {{ _("Depots") }}, {{ summary.accounts }} {{ _("Konten") }}, {{ summary.transactions }} {{ _("Buchungen") }}</dd>
+            <dt class="col-5">{{ _("Basiswährung") }}</dt><dd class="col-7">{{ summary.baseCurrency }}</dd>
+            {% if health %}<dt class="col-5">{{ _("Portfolio Performance") }}</dt><dd class="col-7">{{ health.ppVersion }} (pp-core)</dd>{% endif %}
+          </dl>
+          <a class="btn btn-sm btn-outline-secondary mb-3" href="{{ url_for('pp.pp_file') }}"><i class="bi bi-download"></i> {{ _("Herunterladen") }}</a>
+          <p class="small text-body-secondary">{{ _("Zum Bearbeiten in Portfolio Performance am PC: herunterladen, bearbeiten, ohne Passwort speichern und hier wieder hochladen. In der Zwischenzeit hier nichts importieren – das Hochladen ersetzt die Datei.") }}</p>
+        {% else %}
+          <p class="small">{{ _("Noch keine Datei. Lade deine bestehende PP-Datei hoch oder lege eine leere an.") }}</p>
+          <form class="row g-2 mb-3" method="post" action="{{ url_for('pp.pp_file_create') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-6"><input class="form-control form-control-sm" name="portfolio" placeholder="{{ _("Depot") }}" value="Depot"></div>
+            <div class="col-6"><input class="form-control form-control-sm" name="account" placeholder="{{ _("Verrechnungskonto") }}" value="Verrechnungskonto"></div>
+            <div class="col-12"><button class="btn btn-sm btn-outline-primary" type="submit"><i class="bi bi-plus-lg"></i> {{ _("Leere Datei anlegen") }}</button></div>
+          </form>
+        {% endif %}
+        {% if not summary.error %}
+        <form method="post" action="{{ url_for('pp.pp_file') }}" enctype="multipart/form-data"
+              {% if summary.exists %}data-confirm="{{ _("Die PP-Datei in gnubook durch die hochgeladene ersetzen? Die bisherige bleibt als Sicherung erhalten.") }}"{% endif %}>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label class="form-label small" for="file">{{ _("Datei hochladen (.xml, .portfolio oder .zip, ohne Passwort)") }}</label>
+          <div class="input-group input-group-sm">
+            <input class="form-control" type="file" id="file" name="file" accept=".xml,.portfolio,.zip" required>
+            <button class="btn btn-primary" type="submit"><i class="bi bi-upload"></i> {{ _("Hochladen") }}</button>
+          </div>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title"><i class="bi bi-clock-history"></i> {{ _("Letzte Läufe") }}</h3></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0 small">
+          {% for r in runs %}
+          <tr><td class="text-nowrap">{{ r['finished_at']|de_datetime }}<div class="text-body-secondary">{{ r['actor'] }}</div></td>
+            <td>{% if r['status'] == 'ok' %}<i class="bi bi-check-lg text-success"></i>{% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %} {{ r['summary'] }}</td></tr>
+          {% else %}<tr><td class="text-body-secondary">{{ _("Noch keine.") }}</td></tr>{% endfor %}
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-7">
+    <form class="card mb-4" method="post" action="{{ url_for('pp.settings') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="card-header"><h3 class="card-title"><i class="bi bi-arrow-repeat"></i> {{ _("Übernahme ins GnuCash-Buch") }}</h3></div>
+      <div class="card-body">
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" role="switch" id="enabled" name="enabled" value="1" {{ 'checked' if settings.enabled }}>
+          <label class="form-check-label fw-semibold" for="enabled">{{ _("Buchungen und Kurse aus Portfolio Performance automatisch ins Buch übernehmen") }}</label>
+        </div>
+        <p class="small text-body-secondary">{{ _("Käufe, Verkäufe, Dividenden, Zinsen, Gebühren und Steuern werden gegen ein Zwischenkonto gebucht. Die Bankzeilen des Verrechnungskontos bucht der Bankimport gegen dasselbe Zwischenkonto – so wird nichts doppelt gebucht und das Zwischenkonto geht auf null auf. Einzahlungen, Auszahlungen und Umbuchungen kommen nur über den Bankimport.") }}</p>
+
+        <h6 class="mt-3">{{ _("Konten im Buch") }}</h6>
+        <div class="mb-2">
+          <label class="form-label small mb-0" for="securities_root">{{ _("Wertpapierkonten unter") }}</label>
+          <input class="form-control form-control-sm" id="securities_root" name="securities_root" list="asset-accounts" value="{{ settings.securities_root }}" placeholder="{{ default_root }}">
+          <div class="form-text">{{ _("Je PP-Depot ein Platzhalter darunter, je Wertpapier ein Konto vom Typ Aktie/Fonds. Jetzt:") }} <code>{{ names.securities_root }}</code></div>
+        </div>
+        <datalist id="asset-accounts">{% for a in asset_choices %}<option value="{{ a.full_name }}"></option>{% endfor %}</datalist>
+        <div class="row g-2">
+        {% for r in roles %}
+          <div class="col-md-6">
+            <label class="form-label small mb-0" for="role_{{ r.role }}">{{ _(r.label) }}</label>
+            <input class="form-control form-control-sm" id="role_{{ r.role }}" name="role_{{ r.role }}" list="choices-{{ r.role }}" value="{{ r.value }}" placeholder="{{ r.default }}">
+            <datalist id="choices-{{ r.role }}">{% for a in r.choices %}<option value="{{ a.full_name }}"></option>{% endfor %}</datalist>
+            {% if not r.exists %}<div class="form-text">{{ _("wird angelegt:") }} {{ r.effective }}</div>{% endif %}
+          </div>
+        {% endfor %}
+        </div>
+
+        {% if summary.exists and summary.accountList %}
+        <h6 class="mt-3">{{ _("Geldseite je PP-Konto") }}</h6>
+        <p class="small text-body-secondary mb-1">{{ _("Leer = Zwischenkonto (empfohlen, wenn das Konto per Bankimport kommt). Nur für Konten ohne Bankimport ein echtes Konto eintragen.") }}</p>
+        {% for a in summary.accountList %}
+          <div class="row g-2 align-items-center mb-1">
+            <div class="col-md-5 small">{{ a.name }} ({{ a.currency }}){% if a.retired %} – {{ _("aufgelöst") }}{% endif %}</div>
+            <div class="col-md-7"><input class="form-control form-control-sm" name="cash_{{ a.uuid }}" list="bank-accounts" value="{{ settings.cash_accounts.get(a.uuid, '') }}" placeholder="{{ names.clearing }}"></div>
+          </div>
+        {% endfor %}
+        {% endif %}
+        <datalist id="bank-accounts">{% for a in bank_choices %}<option value="{{ a.full_name }}"></option>{% endfor %}</datalist>
+
+        <h6 class="mt-3">{{ _("Bankimport") }}</h6>
+        <label class="form-label small mb-0" for="bank_accounts">{{ _("Verrechnungskonten der Depots im Buch (deren Bankzeilen gehen ans Zwischenkonto)") }}</label>
+        <select class="form-select form-select-sm ts-multi" id="bank_accounts" name="bank_accounts" multiple size="5">
+          {% for a in bank_choices %}<option value="{{ a.full_name }}" {{ 'selected' if a.full_name in settings.bank_accounts or a.guid in settings.bank_accounts }}>{{ a.full_name }}</option>{% endfor %}
+        </select>
+        <div class="form-text">{{ _("Ausnahme: Überträge von und zu eigenen Konten bucht der Import weiterhin als Umbuchung.") }}</div>
+
+        <h6 class="mt-3">{{ _("Regeln") }}</h6>
+        <div class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label small mb-0" for="sync_from">{{ _("Buchungen ab") }}</label>
+            <input class="form-control form-control-sm" type="date" id="sync_from" name="sync_from" value="{{ settings.sync_from }}">
+            <div class="form-text">{{ _("Leer = alles. Mit Datum: ältere PP-Buchungen werden nicht gebucht; der Bestand am Vortag kommt als Anfangsbestand (FIFO-Einstand).") }}</div>
+          </div>
+          <div class="col-md-6">
+            <div class="form-check"><input class="form-check-input" type="checkbox" id="realized_gains" name="realized_gains" value="1" {{ 'checked' if settings.realized_gains }}>
+              <label class="form-check-label small" for="realized_gains">{{ _("Realisierte Kursgewinne buchen (FIFO je Depot)") }}</label></div>
+            <div class="form-check"><input class="form-check-input" type="checkbox" id="capitalize_fees" name="capitalize_fees" value="1" {{ 'checked' if settings.capitalize_fees }}>
+              <label class="form-check-label small" for="capitalize_fees">{{ _("Kaufgebühren in den Einstand (statt Aufwand)") }}</label></div>
+            <div class="form-check"><input class="form-check-input" type="checkbox" id="prices" name="prices" value="1" {{ 'checked' if settings.prices }}>
+              <label class="form-check-label small" for="prices">{{ _("Kurse in die GnuCash-Preisdatenbank übernehmen") }}</label></div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small mb-0" for="price_days">{{ _("Tageskurse der letzten … Tage (ältere: einer je Monat)") }}</label>
+            <input class="form-control form-control-sm" type="number" min="0" max="3650" id="price_days" name="price_days" value="{{ settings.price_days }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small mb-0" for="namespace">{{ _("Typ (Namensraum) neuer Wertpapiere in GnuCash") }}</label>
+            <input class="form-control form-control-sm" id="namespace" name="namespace" value="{{ settings.namespace }}">
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex gap-2 flex-wrap">
+        <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i> {{ _("Speichern") }}</button>
+      </div>
+    </form>
+
+    {% if settings.enabled %}
+    <div class="card mb-4">
+      <div class="card-body d-flex gap-2 flex-wrap align-items-center">
+        <form method="post" action="{{ url_for('pp.sync_now') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ url_for('pp.settings') }}">
+          <button class="btn btn-outline-primary" type="submit"><i class="bi bi-arrow-repeat"></i> {{ _("Jetzt übernehmen") }}</button>
+          <button class="btn btn-outline-secondary" type="submit" name="dry" value="1">{{ _("Probelauf") }}</button>
+        </form>
+        {% if status.busy %}<span class="small text-body-secondary">{{ _("Übernahme läuft …") }}</span>{% endif %}
+        {% if status.waiting %}<span class="small text-warning-emphasis">{{ status.waiting }}</span>{% endif %}
+        {% if status.error %}<span class="small text-danger">{{ status.error }}</span>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

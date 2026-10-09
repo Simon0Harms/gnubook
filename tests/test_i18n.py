@@ -10,7 +10,7 @@ from gnubook.translations_en import EN
 from gnubook.web import views
 
 PKG = Path(__file__).resolve().parent.parent / "gnubook"
-_TEMPLATE_RE = re.compile(r"""\b_\(\s*'((?:[^'\\]|\\.)*)'""")
+_TEMPLATE_RE = re.compile(r"""\b_\(\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")""")
 
 def _python_ids():
     ids = set()
@@ -24,7 +24,8 @@ def _python_ids():
 def message_ids():
     ids = _python_ids()
     for path in (PKG / "templates").rglob("*.html"):
-        ids.update(m.group(1) for m in _TEMPLATE_RE.finditer(path.read_text(encoding="utf-8")))
+        ids.update(m.group(1) if m.group(1) is not None else m.group(2)
+                   for m in _TEMPLATE_RE.finditer(path.read_text(encoding="utf-8")))
     # texts translated indirectly via _(variable)
     ids.update(book.TYPE_LABELS.values())
     ids.update(book.GROUP_LABELS.values())
@@ -37,6 +38,14 @@ def message_ids():
     ids.update(report_views.KIND_LABELS.values())
     ids.update(report_views.MONTHS)
     ids.update({ledger.MULTI, "Soll", "Haben", "Beschreibung", "Nummer", "Notizen"})
+    # Portfolio Performance pages
+    from gnubook.pp.plan import SKIP_REASONS
+    from gnubook.pp.settings import ROLE_LABELS
+    from gnubook.web import pp as pp_views
+
+    for labels in (pp_views.PERIOD_LABELS, pp_views.KIND_LABELS, pp_views.STATUS_LABELS, pp_views.IMPORT_STATUS,
+                   SKIP_REASONS, ROLE_LABELS):
+        ids.update(labels.values())
     return ids
 
 def test_every_text_has_an_english_translation():

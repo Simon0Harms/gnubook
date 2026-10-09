@@ -1,0 +1,18 @@
+[Unit]
+Description=gnubook – update prices in Portfolio Performance and book them into GnuCash
+After=network-online.target gnubook-ppcore.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=gnubook
+Group=gnubook
+Environment=GNUBOOK_CONFIG=/opt/gnubook/config.toml
+ExecStart=/opt/gnubook/venv/bin/gnubook pp-update
+# price downloads can take a while with many securities
+TimeoutStartSec=30min
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/gnubook/data

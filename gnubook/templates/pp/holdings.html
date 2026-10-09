@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% from "pp/_macros.html" import pct, money, shares %}
+{% block title %}{{ _("Vermögensaufstellung") }}{% endblock %}
+{% block header %}{{ _("Portfolio Performance") }}{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">{{ _("Vermögensaufstellung mit Einstandswerten nach FIFO (inkl. Gebühren und Steuern), berechnet von Portfolio Performance") }}</div>{% endblock %}
+{% block content %}
+{% include "pp/_nav.html" %}
+{% if not data %}
+<div class="alert alert-info">{{ _("Noch keine Portfolio-Performance-Datei.") }} <a href="{{ url_for('pp.settings') }}">{{ _("Zu den Einstellungen") }}</a></div>
+{% else %}
+{% set cur = data.currency %}
+<form class="card card-body py-2 mb-3" method="get" action="{{ url_for('pp.holdings') }}" data-autosubmit>
+  <div class="row g-2 align-items-end">
+    <div class="col-6 col-md-3">
+      <label class="form-label small mb-0" for="date">{{ _("Stichtag") }}</label>
+      <input class="form-control form-control-sm" type="date" id="date" name="date" value="{{ day.isoformat() }}">
+    </div>
+    <div class="col"><span class="small text-body-secondary">{{ _("Wertpapiere") }} {{ money(data.securitiesValue) }} · {{ _("Konten") }} {{ money(data.cash) }} · <strong>{{ _("Summe") }} {{ money(data.total) }}</strong></span></div>
+  </div>
+</form>
+
+<div class="card mb-4">
+  <div class="card-body p-0 table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-light"><tr>
+        <th>{{ _("Wertpapier") }}</th><th class="text-end">{{ _("Stück") }}</th><th class="text-end">{{ _("Kurs") }}</th>
+        <th class="text-end">{{ _("Marktwert") }}</th><th class="text-end">{{ _("Anteil") }}</th>
+        <th class="text-end">{{ _("Einstandswert") }}</th><th class="text-end">{{ _("Kursgewinn") }}</th>
+        <th class="text-end">{{ _("Realisiert") }}</th><th class="text-end">{{ _("Dividenden") }}</th>
+        <th class="text-end" title="{{ _("Interner Zinsfuß seit Kauf") }}">{{ _("IZF") }}</th>
+        <th class="text-end">{{ _("TTWROR") }}</th></tr></thead>
+      <tbody>
+      {% for p in data.positions %}
+        {% set value = (p.value.amount|float) if p.value else 0 %}
+        <tr>
+          <td><div class="fw-semibold">{{ p.name }}</div>
+            <div class="small text-body-secondary">{{ [p.isin, p.wkn, p.ticker]|select|join(' · ') }}</div>
+            <div class="small">{% if links.get(p.security) %}<a href="{{ url_for('reports.portfolio', sec=links[p.security]) }}">{{ _("im Buch") }}</a> · {% endif %}<a href="{{ url_for('pp.security', uuid=p.security) }}">{{ _("Kurse") }}</a></div></td>
+          <td class="text-end text-nowrap">{{ shares(p.shares) }}</td>
+          <td class="text-end text-nowrap">{{ p.price|money(p.currency, places=(4 if (p.price|float) < 1 else 2)) }}<div class="small text-body-secondary">{{ p.priceDate|de_date if p.priceDate else '' }}</div></td>
+          <td class="text-end text-nowrap">{{ money(p.value) }}</td>
+          <td class="text-end text-nowrap">{{ ('%.1f'|format(value / (total|float) * 100))|replace('.', ',') if (total|float) > 0 else '–' }} %</td>
+          <td class="text-end text-nowrap">{{ money(p.cost) }}</td>
+          <td class="text-end text-nowrap">{{ money(p.unrealizedGain, sign=True, colored=True) }}<div class="small">{{ pct(p.unrealizedGainPercent, places=1) }}</div></td>
+          <td class="text-end text-nowrap">{{ money(p.realizedGain, sign=True, colored=True) }}</td>
+          <td class="text-end text-nowrap">{{ money(p.dividends) }}</td>
+          <td class="text-end text-nowrap">{{ pct(p.irr, places=1) }}</td>
+          <td class="text-end text-nowrap">{{ pct(p.ttwror, places=1) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="11" class="text-body-secondary">{{ _("Keine Bestände am Stichtag.") }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title">{{ _("Konten in Portfolio Performance") }}</h3></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          {% for a in data.accounts %}
+          <tr><td>{{ a.name }}</td><td class="text-end">{{ money(a.balance) }}</td>
+            <td class="text-end text-body-secondary small">{% if a.balance.currency != cur %}{{ money(a.value) }}{% endif %}</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title">{{ _("Depots") }}</h3></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          {% for p in data.portfolios %}
+          <tr><td>{{ p.name }}</td><td class="text-end">{{ p.positions|length }} {{ _("Positionen") }}</td><td class="text-end">{{ money(p.value) }}</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

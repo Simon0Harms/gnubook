@@ -106,3 +106,8 @@ tr.future { opacity: .6; }
 .type-chip.active { border-color: var(--c); }
 .group-card { border-left: 3px solid var(--c); }
 .account-tree tr.match-ancestor > td { opacity: .65; }
+
+/* Portfolio Performance */
+.pp-tabs { scrollbar-width: thin; }
+.pp-tabs .nav-link { white-space: nowrap; }
+details > summary { cursor: pointer; }

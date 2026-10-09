@@ -84,6 +84,11 @@ systemctl daemon-reload
 systemctl enable -q gnubook
 systemctl enable -q --now gnubook-backup.timer
 
+if [ "${GNUBOOK_PP:-0}" = "1" ]; then
+  # optional: Portfolio Performance as service pp-core (Java, about 80 MB download)
+  bash "$APP_DIR/src/deploy/install-pp.sh"
+fi
+
 if gnubook check >/dev/null 2>&1; then
   systemctl restart gnubook
   echo ">> gnubook läuft: http://$(hostname -I | awk '{print $1}'):$PORT"
@@ -96,5 +101,6 @@ else
       (weitere Benutzer und Bücher später im Web unter Benutzer / Bücher)
    3. Prüfen und starten:   gnubook check && systemctl restart gnubook
    4. API-Token für den FinTS-Importer: im Web unter Einstellungen
+   5. Optional Portfolio Performance (Wertpapiere): bash $APP_DIR/src/deploy/install-pp.sh
 NEXT
 fi

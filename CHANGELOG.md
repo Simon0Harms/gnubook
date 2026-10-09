@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Portfolio Performance (optional, `deploy/install-pp.sh`, docs/PORTFOLIO-PERFORMANCE.md): PP runs on the server
+  without its desktop interface as service *pp-core* (PP's own bundles started by Equinox with a small extra
+  bundle and JSON API, one PP file per book). New pages *Portfolio Performance*: performance figures and charts
+  calculated by PP (TTWROR, IRR, drawdown, volatility), holdings on any date, all transactions with their state
+  in the book, PDF import with PP's importers, securities and price sources, settings. PP transactions are booked
+  into the GnuCash book and kept in step (stock/fund accounts and commodities, FIFO realised gains, dividends,
+  fees, taxes, transfers, deliveries, opening positions from a start date, prices into the price database);
+  bookings changed in GnuCash are not overwritten, conflicts are resolved in the web interface. The cash side
+  goes to a clearing account; the bank import books the lines of the chosen bank accounts against the same
+  account. `gnubook pp-status`, `pp-sync`, `pp-update` and the hourly timer `gnubook-pp.timer`; installer with
+  signature check of the PP release, rebuild on `gnubook-update`, `gnubook-pp-update` with rollback; CI builds
+  and starts pp-core with the tested PP release
+- Fixed: the PostgreSQL run of the net worth price test opened the book as SQLite file
 - Portfolio report (*Depot*): holdings with average-cost basis, unrealized/realized gain and 12-month price
   change, allocation donut, market value vs. cost basis over time, price history per security; the demo book
   has an ETF savings plan and a share that is partly sold; the shared demo book is rebuilt at once when the

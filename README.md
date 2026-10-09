@@ -41,6 +41,17 @@ German format in both languages.
     unrealized and realized gain, 12-month price change and share of the portfolio; per security or per account;
   - allocation donut, market value and cost basis at every month end as a line chart;
   - price history (chart and price database) per security. Dividends are not included.
+- **Portfolio Performance** (optional, [docs/PORTFOLIO-PERFORMANCE.md](docs/PORTFOLIO-PERFORMANCE.md)).
+  [Portfolio Performance](https://www.portfolio-performance.info/) runs on the server without its desktop
+  interface (*pp-core*), one PP file per book:
+  - PDF statements of the bank are read by PP's own importers, prices come from PP's price sources (Yahoo
+    and others), and TTWROR, IRR, drawdown, volatility and FIFO holdings are calculated by PP itself and shown
+    in gnubook;
+  - buys, sales (with realised FIFO gains), dividends, interest, fees, taxes, transfers and deliveries are
+    booked into the GnuCash book automatically, with stock accounts, commodities and prices. The cash side
+    goes to a clearing account that the FinTS bank import also uses, so nothing is booked twice;
+  - changes in PP are applied to the same GnuCash transactions; bookings changed in GnuCash are not
+    overwritten (conflicts are shown and resolved in the web interface).
 
 - **Accounts and registers.** The chart of accounts (inspired by [GnuDash](https://github.com/QuirkyTurtle94/GnuDash)) shows the hierarchical tree with balances in GnuCash's sign convention, expand/collapse (remembered per browser), coloured account-type badges, a filter by account class and totals per class. Each account has
   a register with running balance, text, amount and date filters, and paging. Placeholder accounts can be
@@ -167,6 +178,9 @@ Everything lives under `/opt/gnubook`: code, virtualenv, `config.toml`, `data/` 
 as the systemd service `gnubook` (gunicorn, port 8080). Create the first admin with `gnubook user-add NAME
 --admin`, then connect books in the web UI. Run `gnubook-update` to update.
 
+Portfolio Performance is optional: `bash /opt/gnubook/src/deploy/install-pp.sh` installs Java 21, the PP
+release and the service `gnubook-ppcore` (see [docs/PORTFOLIO-PERFORMANCE.md](docs/PORTFOLIO-PERFORMANCE.md)).
+
 ## Configuration
 
 `/opt/gnubook/config.toml` (TOML). Users and books are not part of the file; they are managed in the web UI
@@ -192,6 +206,8 @@ or on the command line. Every value can be overridden with an environment variab
 | `[nextcloud] allow_http` | Also accept `http://` Nextcloud addresses (default `false`) |
 | `[nextcloud] encryption_key` | Key for the stored Nextcloud passwords; empty = derived from `[app] secret_key`. Changing it means users connect again |
 | `[postgres] admin_url` | Role with `CREATEROLE` and `CREATEDB` (no superuser) that lets gnubook create a database per new book |
+| `[pp] url`, `token` | pp-core (Portfolio Performance) address and token; empty = off. Written by `deploy/install-pp.sh` |
+| `[pp] timeout`, `quotes_interval_hours` | Seconds per pp-core call (default 60); load prices at most every N hours in `gnubook pp-update` (default 12) |
 | `[[checkpoints.patterns]]` | Own balance-line patterns (`stand` regex, `keyword`), used with every bank profile |
 
 The `[import]` values are defaults. Each book can override them under *Bücher → Bankprofil und Import*.
@@ -208,6 +224,7 @@ The `[import]` values are defaults. Each book can override them under *Bücher �
 | `gnubook check-balances [--book B] [--account NAME] [--show-all] [--accept-open]` | Recompute all balance checkpoints. Exit code 1 means open differences |
 | `gnubook backup [--book B] [--dir DIR] [--keep N]` | Save the book now as a `.gnucash` file (SQLite) that GnuCash Desktop opens |
 | `gnubook demo-book PATH` | Create the synthetic demo book |
+| `gnubook pp-status`, `pp-sync [--dry-run]`, `pp-update` | Portfolio Performance: state, book changes now, update prices and book (hourly timer) |
 | `gnubook init-config PATH` | Create a configuration file with a random `secret_key` |
 | `gnubook serve` | Development server. In production use gunicorn, see `deploy/` |
 
@@ -223,7 +240,7 @@ The `[import]` values are defaults. Each book can override them under *Bücher �
 ## Limitations
 
 - Bookings that involve other currencies, securities, lots or GnuCash's business features are shown, but
-  they can only be changed in GnuCash Desktop.
+  they can only be changed in GnuCash Desktop. Securities transactions can come from Portfolio Performance.
 - Apart from the income and expenses report there are no reports. Budgets are only shown, not edited. There are
   no scheduled transactions or reconciliation workflow. Use GnuCash Desktop for those.
 - The import API covers what bnw/firefly-iii-fints-importer needs, not all of Firefly III's API.
@@ -235,7 +252,10 @@ pip install -e ".[dev]"
 pytest                                    # SQLite
 GNUBOOK_TEST_PG_URL=postgresql://user:pw@127.0.0.1:5432 pytest    # also PostgreSQL (user needs CREATEDB)
 GNUCASH_PYTHON=/usr/bin/python3 pytest tests/test_gnucash_compat.py  # read back with the real GnuCash engine (apt install python3-gnucash)
+ppcore/smoke-test.sh /path/to/portfolio   # pp-core against an unpacked PP release (JDK 21)
 ```
+
+The Python tests of the Portfolio Performance link use a fake pp-core; they need no Java.
 
 Every UI text needs an English translation in `gnubook/translations_en.py`; `tests/test_i18n.py` fails
 otherwise.
@@ -245,7 +265,9 @@ screenshots.
 
 ## License
 
-GPL-3.0-or-later, see [LICENSE](LICENSE). Bundled front-end libraries:
+GPL-3.0-or-later, see [LICENSE](LICENSE). pp-core (`ppcore/`) has an additional permission to be combined
+with Portfolio Performance (EPL-1.0), see [ppcore/README.md](ppcore/README.md); Portfolio Performance itself
+is downloaded from its official releases and not part of gnubook. Bundled front-end libraries:
 
 - [AdminLTE](https://adminlte.io/) (MIT)
 - [Bootstrap](https://getbootstrap.com/) (MIT)

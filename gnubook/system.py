@@ -96,6 +96,8 @@ class SystemDB:
             if "profile" not in cols:  # before 0.4.0
                 c.execute("ALTER TABLE books ADD COLUMN profile TEXT NOT NULL DEFAULT 'de'")
                 c.execute("ALTER TABLE books ADD COLUMN import_settings TEXT NOT NULL DEFAULT '{}'")
+            if "pp_settings" not in cols:  # Portfolio Performance link (0.5.0)
+                c.execute("ALTER TABLE books ADD COLUMN pp_settings TEXT NOT NULL DEFAULT '{}'")
             nc_cols = {r[1] for r in c.execute("PRAGMA table_info(nextcloud_accounts)")}
             if "kind" not in nc_cols:  # first Nextcloud version (account only)
                 c.execute("ALTER TABLE nextcloud_accounts ADD COLUMN kind TEXT NOT NULL DEFAULT 'account'")
@@ -238,6 +240,17 @@ class SystemDB:
         with self.conn() as c:
             c.execute("UPDATE books SET profile = ?, import_settings = ? WHERE id = ?",
                       (profile, json.dumps(settings, ensure_ascii=False, sort_keys=True), book_id))
+
+    def pp_settings(self, book_id: int):
+        """Portfolio Performance settings of a book (gnubook.pp.settings.PPSettings)."""
+        from .pp.settings import PPSettings
+
+        row = self.book(book_id)
+        return PPSettings.from_json(row["pp_settings"] if row is not None else "{}")
+
+    def set_pp_settings(self, book_id: int, settings):
+        with self.conn() as c:
+            c.execute("UPDATE books SET pp_settings = ? WHERE id = ?", (settings.to_json(), book_id))
 
     def update_book(self, book_id: int, name: str, url: str, timezone: str, backup_file: str):
         with self.conn() as c:
@@ -389,6 +402,7 @@ class BookContext:
     appdb: AppDB
     importer: Importer
     backup: object = None
+    pp: object = None  # gnubook.pp.service.PPService when [pp] url is configured
 
 
 class Registry:
@@ -435,18 +449,25 @@ class Registry:
         row = self.system.book(book_id)
         if row is None:
             return None
-        key = (row["name"], row["url"], row["timezone"], row["backup_file"], row["profile"], row["import_settings"])
+        key = (row["name"], row["url"], row["timezone"], row["backup_file"], row["profile"], row["import_settings"],
+               row["pp_settings"])
         with self._lock:
             cached = self._contexts.get(book_id)
             if cached and cached[0] == key:
                 return cached[1]
             if cached:  # settings changed
                 cached[1].book.dispose()
+                if cached[1].pp is not None:
+                    cached[1].pp.close()
             book = Book(row["url"], row["timezone"], self.cfg.book.account_separator)
             appdb = AppDB(self.data / "books" / f"{book_id}.sqlite")
             book.profile = get_profile(row["profile"] or "de", self.cfg.checkpoints.patterns)
+            from .pp.settings import PPSettings
+
+            pp_settings = PPSettings.from_json(row["pp_settings"])
             ctx = BookContext(book_id, row["name"], self.cfg, book, appdb,
-                              Importer(book, appdb, self.import_config(row)))
+                              Importer(book, appdb, self.import_config(row),
+                                       pp=pp_settings if pp_settings.enabled else None))
             from .backup import BackupWriter
 
             # always present: the local file is optional, Nextcloud targets can be added at any time
@@ -454,6 +475,10 @@ class Registry:
                                       remote=lambda bid=book_id: self.nextcloud_uploads(bid),
                                       work_dir=self.data / "backup" / "tmp")
             book.after_write.append(ctx.backup.request)
+            if self.cfg.pp.url:
+                from .pp.service import PPService
+
+                ctx.pp = PPService(ctx, self.cfg, self.system)
             self._contexts[book_id] = (key, ctx)
             return ctx
 
@@ -477,6 +502,8 @@ class Registry:
             cached = self._contexts.pop(book_id, None)
         if cached:
             cached[1].book.dispose()
+            if cached[1].pp is not None:
+                cached[1].pp.close()
 
     def create_book(self, name: str, content: str = "empty", upload_path: str | None = None,
                     users=(), backup: bool = True) -> tuple[int, dict]:
@@ -601,4 +628,6 @@ class Registry:
         with self._lock:
             for _key, ctx in self._contexts.values():
                 ctx.book.dispose()
+                if ctx.pp is not None:
+                    ctx.pp.close()
             self._contexts.clear()

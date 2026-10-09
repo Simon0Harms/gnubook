@@ -59,6 +59,12 @@ allow_http = false
 # Changing it makes them unreadable – users then connect their Nextcloud again.
 # encryption_key = ""
 
+# Portfolio Performance (securities): deploy/install-pp.sh installs pp-core and adds this section
+# [pp]
+# url = "http://127.0.0.1:8091"
+# token = "same as token in /opt/gnubook/ppcore.properties"
+# quotes_interval_hours = 12
+
 [import.iban_map]
 # "DE00123456780000000000" = "Aktiva:Barvermögen:Girokonto"
 """
@@ -394,6 +400,138 @@ def backup(ctx, book_ref, directory, keep, prefix):
     export_gnucash_file(bc.book, target)
     rotate(out_dir, prefix, keep)
     click.echo(f"Gesichert: {target}")
+
+
+def _pp_books(reg, book_ref):
+    """Book contexts with the Portfolio Performance link switched on (all, or the given one)."""
+    if not reg.cfg.pp.url:
+        raise click.ClickException("Portfolio Performance ist nicht eingerichtet: [pp] url fehlt in config.toml.")
+    if book_ref is not None:
+        ctxs = [_book_ctx(reg, book_ref)]
+    else:
+        ctxs = [reg.context(b["id"]) for b in reg.system.books()]
+    return [c for c in ctxs if c is not None and c.pp is not None and c.pp.enabled]
+
+
+@main.command("pp-sync")
+@book_option
+@click.option("--force", is_flag=True, help="auch ohne Änderung in PP alles prüfen")
+@click.option("--dry-run", is_flag=True, help="nur anzeigen, was sich ändern würde")
+@click.pass_context
+def pp_sync(ctx, book_ref, force, dry_run):
+    """Portfolio-Performance-Datei ins GnuCash-Buch übernehmen (Buchungen und Kurse)."""
+    from .book import WriteLockError
+    from .pp.client import PPCoreError
+    from .pp.sync import SyncError
+
+    reg = _registry(ctx)
+    failed = 0
+    for bc in _pp_books(reg, book_ref):
+        try:
+            if not force and not dry_run and not bc.pp.needs_sync():
+                click.echo(f"{bc.name}: unverändert")
+                continue
+            r = bc.pp.sync(actor="cli", dry_run=dry_run, wait=600)
+            click.echo(f"{bc.name}: {r.summary()}")
+            for e in r.errors:
+                click.echo(f"  Fehler: {e}")
+            if r.wrote:
+                bc.backup.flush()  # .gnucash copy / Nextcloud, as after a change in the web app
+        except WriteLockError as exc:
+            click.echo(f"{bc.name}: {exc}")
+            failed += 1
+        except (PPCoreError, SyncError) as exc:
+            click.echo(f"{bc.name}: {exc}", err=True)
+            failed += 1
+    reg.dispose()
+    sys.exit(1 if failed else 0)
+
+
+@main.command("pp-update")
+@book_option
+@click.option("--quotes/--no-quotes", default=None,
+              help="Kurse jetzt aktualisieren (Standard: wenn älter als [pp] quotes_interval_hours)")
+@click.pass_context
+def pp_update(ctx, book_ref, quotes):
+    """Kurse in Portfolio Performance aktualisieren und alles ins Buch übernehmen (für den Timer)."""
+    from datetime import datetime, timezone
+
+    from .book import WriteLockError
+    from .pp.client import PPCoreError
+    from .pp.service import SyncBusy
+    from .pp.sync import SyncError
+
+    reg = _registry(ctx)
+    failed = 0
+    for bc in _pp_books(reg, book_ref):
+        try:
+            due = quotes
+            if due is None:
+                last = (bc.pp.client.summary(bc.pp.cid) or {}).get("lastPriceUpdate")
+                age = None
+                if last:
+                    age = (datetime.now(timezone.utc) - datetime.fromisoformat(last.replace("Z", "+00:00")))
+                due = age is None or age.total_seconds() >= reg.cfg.pp.quotes_interval_hours * 3600
+            if due:
+                job = bc.pp.client.quotes_start(bc.pp.cid, wait=900)
+                n = len(job.get("securities") or [])
+                errors = [s for s in job.get("securities") or [] if s.get("status") == "error"]
+                click.echo(f"{bc.name}: Kurse für {n} Wertpapiere geprüft, {job.get('modified', 0)} aktualisiert"
+                           + (f", {len(errors)} Fehler" if errors else ""))
+                for s in errors:
+                    click.echo(f"  {s.get('name')}: {s.get('message')}")
+            if bc.pp.needs_sync():
+                r = bc.pp.sync(actor="timer", wait=600)
+                click.echo(f"{bc.name}: {r.summary()}")
+                if r.wrote:
+                    bc.backup.flush()
+            else:
+                click.echo(f"{bc.name}: Buch ist aktuell")
+        except (WriteLockError, SyncBusy) as exc:
+            click.echo(f"{bc.name}: {exc} – nächster Versuch beim nächsten Lauf")
+        except (PPCoreError, SyncError) as exc:
+            click.echo(f"{bc.name}: {exc}", err=True)
+            failed += 1
+    reg.dispose()
+    sys.exit(1 if failed else 0)
+
+
+@main.command("pp-status")
+@book_option
+@click.pass_context
+def pp_status(ctx, book_ref):
+    """Stand der Portfolio-Performance-Anbindung anzeigen."""
+    from .pp.client import PPCoreError
+
+    reg = _registry(ctx)
+    if not reg.cfg.pp.url:
+        raise click.ClickException("[pp] url fehlt in config.toml.")
+    from .pp.client import PPCoreClient
+
+    client = PPCoreClient(reg.cfg.pp.url, reg.cfg.pp.token, reg.cfg.pp.timeout)
+    try:
+        h = client.health()
+        click.echo(f"pp-core erreichbar: Portfolio Performance {h.get('ppVersion')}")
+    except PPCoreError as exc:
+        raise click.ClickException(str(exc))
+    books = [reg.context(b["id"]) for b in reg.system.books()] if book_ref is None else [_book_ctx(reg, book_ref)]
+    for bc in books:
+        st = bc.pp.settings()
+        try:
+            summary = client.summary(bc.pp.cid)
+        except PPCoreError as exc:
+            summary = {"error": str(exc)}
+        line = f"{bc.name}: Übernahme {'an' if st.enabled else 'aus'}"
+        if summary.get("exists"):
+            line += (f", PP-Datei {summary.get('originalName') or summary.get('file')} "
+                     f"({summary.get('transactions')} Buchungen, Kurse {summary.get('lastPriceUpdate') or '–'})")
+        else:
+            line += ", noch keine PP-Datei"
+        click.echo(line)
+        runs = bc.appdb.pp_runs(1)
+        if runs:
+            click.echo(f"  letzter Lauf {runs[0]['finished_at']}: {runs[0]['status']} – {runs[0]['summary']}")
+    reg.dispose()
 
 
 @main.command("demo-book")

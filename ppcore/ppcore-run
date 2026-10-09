@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Start pp-core (used by the systemd unit gnubook-ppcore.service).
+#
+# Environment (defaults for an installation with deploy/install-pp.sh below /opt/gnubook):
+#   PPCORE_PP_DIR     Portfolio Performance installation        /opt/gnubook/pp/current/portfolio
+#   PPCORE_CONF_DIR   OSGi configuration (configure.sh)          /opt/gnubook/pp/current/configuration
+#   PPCORE_CONFIG     settings (token, port, data_dir)           /opt/gnubook/ppcore.properties
+#   PPCORE_WORKSPACE  PP's workspace (exchange rates, logs)     /opt/gnubook/data/ppcore/workspace
+#   PPCORE_HOME       user.home of the JVM (PDFBox font cache)   /opt/gnubook/data/ppcore/home
+#   PPCORE_LANG       language of PP's messages                  de
+#   PPCORE_JAVA       java binary (Java 21 or newer)             java
+#   PPCORE_JAVA_OPTS  extra JVM options                          -Xmx768m
+set -euo pipefail
+
+PP_DIR=${PPCORE_PP_DIR:-/opt/gnubook/pp/current/portfolio}
+CONF=${PPCORE_CONF_DIR:-/opt/gnubook/pp/current/configuration}
+export PPCORE_CONFIG=${PPCORE_CONFIG:-/opt/gnubook/ppcore.properties}
+WORKSPACE=${PPCORE_WORKSPACE:-/opt/gnubook/data/ppcore/workspace}
+HOME_DIR=${PPCORE_HOME:-$(dirname "$WORKSPACE")/home}
+LANG_CODE=${PPCORE_LANG:-de}
+JAVA=${PPCORE_JAVA:-java}
+
+LAUNCHER=$(ls "$PP_DIR"/plugins/org.eclipse.equinox.launcher_*.jar 2>/dev/null | sort | tail -n 1)
+[ -n "$LAUNCHER" ] || { echo "ppcore-run: Equinox launcher not found in $PP_DIR/plugins" >&2; exit 1; }
+[ -f "$CONF/config.ini" ] || { echo "ppcore-run: $CONF/config.ini missing (ppcore/configure.sh)" >&2; exit 1; }
+mkdir -p "$WORKSPACE" "$HOME_DIR"
+
+# user.home: the service user's home (/opt/gnubook) is read-only under systemd's ProtectSystem=strict;
+# PDFBox (PDF import) keeps its font cache there.
+# shellcheck disable=SC2086
+exec "$JAVA" ${PPCORE_JAVA_OPTS:--Xmx768m} \
+  -Djava.awt.headless=true -Djdk.xml.elementAttributeLimit=0 --add-modules=ALL-SYSTEM \
+  -XX:+UseG1GC -XX:+UseStringDeduplication -Dosgi.requiredJavaVersion=21 \
+  -Duser.home="$HOME_DIR" -Dpdfbox.fontcache="$HOME_DIR" \
+  -Duser.language="$LANG_CODE" -Dosgi.nl="$LANG_CODE" -Dppcore.config="$PPCORE_CONFIG" \
+  -jar "$LAUNCHER" -install "$PP_DIR" -configuration "$CONF" -data "$WORKSPACE" \
+  -nosplash -consoleLog -application gnubook.ppcore.server

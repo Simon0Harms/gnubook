@@ -19,7 +19,11 @@ GIT="git -C $APP_DIR/src"
 
 echo ">> Sicherung nach $APP_DIR/backup/gnubook-$STAMP.tar.gz"
 mkdir -p "$APP_DIR/backup"
-tar -czf "$APP_DIR/backup/gnubook-$STAMP.tar.gz" -C "$APP_DIR" config.toml data $( [ -f "$APP_DIR/gunicorn.conf.py" ] && echo gunicorn.conf.py )
+EXTRA=""
+for f in gunicorn.conf.py ppcore.properties ppcore.env; do [ -f "$APP_DIR/$f" ] && EXTRA="$EXTRA $f"; done
+# shellcheck disable=SC2086
+tar -czf "$APP_DIR/backup/gnubook-$STAMP.tar.gz" -C "$APP_DIR" \
+  --exclude=data/ppcore/workspace --exclude=data/ppcore/home config.toml data $EXTRA
 ls -1t "$APP_DIR"/backup/gnubook-*.tar.gz | tail -n +11 | xargs -r rm --
 
 OLD=$($GIT rev-parse HEAD)
@@ -45,6 +49,16 @@ if install_and_start; then
   install -d -m 750 -o gnubook -g gnubook "$APP_DIR/backup/book"
   install -m 644 "$APP_DIR/src/deploy/gnubook-backup.service" "$APP_DIR/src/deploy/gnubook-backup.timer" /etc/systemd/system/
   systemctl daemon-reload && systemctl enable -q --now gnubook-backup.timer
+  if [ -L "$APP_DIR/pp/current" ]; then
+    # Portfolio Performance (pp-core) is installed: rebuild it when its code changed. A build that does not
+    # start is not activated; the previous one keeps running.
+    install -m 644 "$APP_DIR/src/deploy/gnubook-pp.service" "$APP_DIR/src/deploy/gnubook-pp.timer" /etc/systemd/system/
+    systemctl daemon-reload
+    if ! $GIT diff --quiet "$OLD" "$NEW" -- ppcore deploy/install-pp.sh deploy/gnubook-ppcore.service; then
+      bash "$APP_DIR/src/deploy/install-pp.sh" --rebuild ||
+        echo "!! pp-core: der neue Build startet nicht – der bisherige läuft weiter (journalctl -u gnubook-ppcore)" >&2
+    fi
+  fi
   echo ">> Aktualisiert auf $($GIT describe --always --tags)"
 else
   echo "!! Neue Version startet nicht – zurück auf $OLD" >&2

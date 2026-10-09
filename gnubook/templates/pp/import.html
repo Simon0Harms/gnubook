@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% from "pp/_macros.html" import money, shares %}
+{% block title %}{{ _("PDF-Import") }}{% endblock %}
+{% block header %}{{ _("Portfolio Performance") }}{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">{{ _("Abrechnungen, Dividendengutschriften und Steuerbelege als PDF – erkannt von den Importfiltern von Portfolio Performance") }}</div>{% endblock %}
+{% block content %}
+{% include "pp/_nav.html" %}
+{% if not summary.exists %}
+<div class="alert alert-info">{{ _("Zuerst eine Portfolio-Performance-Datei hochladen oder anlegen.") }} <a href="{{ url_for('pp.settings') }}">{{ _("Zu den Einstellungen") }}</a></div>
+{% else %}
+
+<div class="card mb-4">
+  <div class="card-header"><h3 class="card-title"><i class="bi bi-file-earmark-arrow-up"></i> {{ _("PDF-Dokumente hochladen") }}</h3></div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('pp.pdf_import') }}" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="row g-3 align-items-end">
+        <div class="col-12 col-lg-5">
+          <label class="form-label" for="files">{{ _("Dateien") }}</label>
+          <input class="form-control" type="file" id="files" name="files" accept=".pdf,application/pdf,.txt" multiple required>
+        </div>
+        <div class="col-6 col-lg-2">
+          <label class="form-label" for="portfolio">{{ _("Depot") }}</label>
+          <select class="form-select" id="portfolio" name="portfolio">
+            <option value="">{{ _("automatisch") }}</option>
+            {% for p in summary.portfolioList or [] if not p.retired %}<option value="{{ p.uuid }}">{{ p.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-lg-2">
+          <label class="form-label" for="account">{{ _("Verrechnungskonto") }}</label>
+          <select class="form-select" id="account" name="account">
+            <option value="">{{ _("automatisch") }}</option>
+            {% for a in summary.accountList or [] if not a.retired %}<option value="{{ a.uuid }}">{{ a.name }} ({{ a.currency }})</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-lg-3">
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="auto_feed" name="auto_feed" value="1" checked>
+            <label class="form-check-label small" for="auto_feed">{{ _("Kursquelle für neue Wertpapiere suchen (Yahoo Finance)") }}</label>
+          </div>
+          <button class="btn btn-primary w-100" type="submit"><i class="bi bi-upload"></i> {{ _("Importieren") }}</button>
+        </div>
+      </div>
+      <p class="small text-body-secondary mt-2 mb-0">{{ _("„automatisch“: das Depot und Konto, in das die Bank zuletzt importiert hat, sonst das einzige. Mögliche Duplikate werden nicht übernommen, solange du sie nicht ausdrücklich freigibst.") }}</p>
+    </form>
+  </div>
+</div>
+
+{% if result %}
+<div class="card mb-4">
+  <div class="card-header"><h3 class="card-title">{{ _("Ergebnis") }}</h3>
+    <div class="card-tools small">{{ _("{n} übernommen", n=result.imported) }}</div></div>
+  <div class="card-body">
+    {% for e in result.fileErrors %}
+      <div class="alert alert-warning py-1 small mb-2"><strong>{{ e.file }}</strong>: {{ e.message }}</div>
+    {% endfor %}
+
+    {% for t in result.targets if t.missing %}
+    <form class="border rounded p-2 mb-3" method="post" action="{{ url_for('pp.pdf_import_apply', sid=result.session) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="extractor" value="{{ t.extractor }}">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-4"><strong>{{ t.extractor }}</strong><div class="small text-body-secondary">{{ _("Wohin sollen die Buchungen dieser Bank?") }}</div></div>
+        <div class="col-6 col-md-3"><label class="form-label small mb-0">{{ _("Depot") }}</label>
+          <select class="form-select form-select-sm" name="portfolio" required>
+            {% for p in result.portfolios %}<option value="{{ p.uuid }}" {{ 'selected' if t.portfolio and t.portfolio.uuid == p.uuid }}>{{ p.name }}</option>{% endfor %}
+          </select></div>
+        <div class="col-6 col-md-3"><label class="form-label small mb-0">{{ _("Verrechnungskonto") }}</label>
+          <select class="form-select form-select-sm" name="account" required>
+            {% for a in result.accounts %}<option value="{{ a.uuid }}">{{ a.name }} ({{ a.currency }})</option>{% endfor %}
+          </select></div>
+        <div class="col-12 col-md-2"><button class="btn btn-sm btn-primary w-100" type="submit">{{ _("Übernehmen") }}</button></div>
+      </div>
+      <p class="small text-body-secondary mb-0 mt-1">{{ _("Die Wahl wird für diese Bank gemerkt.") }}</p>
+    </form>
+    {% endfor %}
+
+    {% set warnable = result['items']|selectattr('status', 'equalto', 'WARNING')|rejectattr('imported')|list %}
+    <form method="post" action="{{ url_for('pp.pdf_import_apply', sid=result.session) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="table-responsive">
+      <table class="table table-sm align-middle mb-2">
+        <thead class="table-light"><tr><th></th><th>{{ _("Datum") }}</th><th>{{ _("Art") }}</th><th>{{ _("Wertpapier") }}</th>
+          <th class="text-end">{{ _("Stück") }}</th><th class="text-end">{{ _("Betrag") }}</th><th class="text-end">{{ _("Gebühren/Steuern") }}</th>
+          <th>{{ _("Status") }}</th><th>{{ _("Datei") }}</th></tr></thead>
+        <tbody>
+        {% for i in result['items'] %}
+          <tr class="{{ 'table-success' if i.imported }}">
+            <td>{% if i.status == 'WARNING' and not i.imported %}<input class="form-check-input" type="checkbox" name="force" value="{{ i.index }}" title="{{ _("trotzdem übernehmen") }}">{% elif i.imported %}<i class="bi bi-check-lg text-success" title="{{ _("übernommen") }}"></i>{% endif %}</td>
+            <td class="text-nowrap">{{ i.date|de_date if i.date else '' }}</td>
+            <td>{{ i.type or i.kind }}</td>
+            <td>{% if i.security %}{{ i.security.name }}<div class="small text-body-secondary">{{ i.security.isin or i.security.wkn or '' }}</div>{% endif %}</td>
+            <td class="text-end">{{ shares(i.shares) if i.shares else '' }}</td>
+            <td class="text-end text-nowrap">{{ money(i.amount) if i.amount else '' }}</td>
+            <td class="text-end small text-nowrap">{% if i.fees and i.fees.amount != '0' %}{{ money(i.fees) }}{% endif %}{% if i.taxes and i.taxes.amount != '0' %} / {{ money(i.taxes) }}{% endif %}</td>
+            <td><span class="badge {{ {'OK': 'text-bg-success', 'WARNING': 'text-bg-warning', 'ERROR': 'text-bg-danger'}.get(i.status, 'text-bg-secondary') }}">{{ _(IMPORT_STATUS.get(i.status, i.status)) }}</span>
+              {% for m in i.messages %}<div class="small">{{ m.message }}</div>{% endfor %}
+              {% if i.error %}<div class="small text-danger">{{ i.error }}</div>{% endif %}</td>
+            <td class="small text-body-secondary">{{ i.extractor }}{% if i.file %}<div>{{ i.file }}</div>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% if warnable %}
+      <button class="btn btn-sm btn-outline-warning" type="submit"><i class="bi bi-check2-square"></i> {{ _("Markierte trotzdem übernehmen") }}</button>
+      {% endif %}
+    </form>
+    {% if result.newSecurities %}
+    <p class="small mt-3 mb-0"><i class="bi bi-info-circle"></i> {{ _("{n} neue Wertpapiere angelegt – Kursquellen unter „Wertpapiere und Kurse“ prüfen.", n=result.newSecurities|length) }}
+      <a href="{{ url_for('pp.securities') }}">{{ _("Wertpapiere") }}</a></p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

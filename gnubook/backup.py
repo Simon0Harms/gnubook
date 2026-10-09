@@ -130,6 +130,12 @@ class BackupWriter:
     def request(self):
         self._pending.set()
 
+    def flush(self):
+        """Write a requested copy now – for the command line, which ends before the background thread runs."""
+        if self._pending.is_set():
+            self._pending.clear()
+            self.run_now()
+
     def _rotate(self):
         if self.keep <= 1 or not self.path.exists():
             return

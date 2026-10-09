@@ -1,0 +1,34 @@
+[Unit]
+Description=gnubook pp-core – Portfolio Performance without user interface, for gnubook
+Documentation=file:/opt/gnubook/src/docs/PORTFOLIO-PERFORMANCE.md
+After=network-online.target
+Wants=network-online.target
+Before=gnubook.service
+
+[Service]
+Type=simple
+User=gnubook
+Group=gnubook
+WorkingDirectory=/opt/gnubook
+Environment=PPCORE_CONFIG=/opt/gnubook/ppcore.properties
+Environment=PPCORE_PP_DIR=/opt/gnubook/pp/current/portfolio
+Environment=PPCORE_CONF_DIR=/opt/gnubook/pp/current/configuration
+Environment=PPCORE_WORKSPACE=/opt/gnubook/data/ppcore/workspace
+# PPCORE_JAVA (Java 21 binary) and PPCORE_JAVA_OPTS (e.g. -Xmx512m) – written by install-pp.sh
+EnvironmentFile=-/opt/gnubook/ppcore.env
+ExecStart=/bin/bash /opt/gnubook/src/ppcore/ppcore-run
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+# the JVM ends with 143 on SIGTERM
+SuccessExitStatus=143
+# hardening: only its data directory and the OSGi configuration (cache) are writable
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ReadWritePaths=/opt/gnubook/data/ppcore /opt/gnubook/pp/builds
+
+[Install]
+WantedBy=multi-user.target

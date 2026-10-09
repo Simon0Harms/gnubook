@@ -48,11 +48,31 @@ jobs:
       - name: Compatibility test
         env:
           GNUCASH_PYTHON: /usr/bin/python3
-        run: .venv/bin/pytest -q -rs tests/test_gnucash_compat.py
+        run: .venv/bin/pytest -q -rs tests/test_gnucash_compat.py tests/test_pp_sync.py::test_gnucash_reads_the_pp_bookings
 
   installer:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Shell syntax
-        run: bash -n deploy/install.sh && bash -n deploy/update.sh
+        run: |
+          for f in deploy/install.sh deploy/update.sh deploy/install-pp.sh ppcore/build.sh ppcore/configure.sh \
+                   ppcore/ppcore-run ppcore/smoke-test.sh; do bash -n "$f"; done
+
+  ppcore:
+    # pp-core compiled against and started with the Portfolio Performance release install-pp.sh installs
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Download Portfolio Performance
+        run: |
+          V=$(sed -n 's/^TESTED_PP_VERSION=//p' deploy/install-pp.sh)
+          curl -fsSL --retry 3 -o pp.tar.gz \
+            "https://github.com/portfolio-performance/portfolio/releases/download/$V/PortfolioPerformance-$V-linux.gtk.x86_64.tar.gz"
+          mkdir pp && tar -xzf pp.tar.gz -C pp
+      - name: Build, start and call pp-core
+        run: bash ppcore/smoke-test.sh pp/portfolio

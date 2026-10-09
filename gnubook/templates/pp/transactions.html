@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% from "pp/_macros.html" import money, shares, sync_badge %}
+{% block title %}{{ _("Buchungen") }}{% endblock %}
+{% block header %}{{ _("Portfolio Performance") }}{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">{{ _("Alle Buchungen der PP-Datei und ihr Stand im GnuCash-Buch") }}</div>{% endblock %}
+{% block content %}
+{% include "pp/_nav.html" %}
+{% if not summary.exists %}
+<div class="alert alert-info">{{ _("Noch keine Portfolio-Performance-Datei.") }} <a href="{{ url_for('pp.settings') }}">{{ _("Zu den Einstellungen") }}</a></div>
+{% else %}
+<form class="card card-body py-2 mb-3" method="get" action="{{ url_for('pp.transactions') }}" data-autosubmit>
+  <div class="row g-2 align-items-end">
+    <div class="col-6 col-md-3">
+      <label class="form-label small mb-0" for="status">{{ _("Stand") }}</label>
+      <select class="form-select form-select-sm" id="status" name="status">
+        <option value="">{{ _("Alle") }}</option>
+        <option value="attention" {{ 'selected' if status_filter == 'attention' }}>{{ _("Zu prüfen (Konflikte, Hinweise)") }}</option>
+        {% for k in ('booked', 'pending', 'edited', 'conflict', 'gone', 'detached', 'skipped') %}<option value="{{ k }}" {{ 'selected' if status_filter == k }}>{{ _(STATUS_LABELS[k]) }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label small mb-0" for="year">{{ _("Jahr") }}</label>
+      <select class="form-select form-select-sm" id="year" name="year">
+        <option value="">{{ _("Alle") }}</option>
+        {% for y in years %}<option value="{{ y }}" {{ 'selected' if year == y|string }}>{{ y }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-md-4">
+      <label class="form-label small mb-0" for="q">{{ _("Suche (Text, ISIN, WKN)") }}</label>
+      <input class="form-control form-control-sm" type="search" id="q" name="q" value="{{ q }}">
+    </div>
+    <div class="col-auto"><button class="btn btn-sm btn-outline-primary" type="submit">{{ _("Filtern") }}</button></div>
+  </div>
+</form>
+
+{% if not settings.enabled %}
+<div class="alert alert-secondary small">{{ _("Die Übernahme ins GnuCash-Buch ist aus – die Spalte „Im Buch“ zeigt nur, was übernommen würde.") }} <a href="{{ url_for('pp.settings') }}">{{ _("Einstellungen") }}</a></div>
+{% endif %}
+
+<div class="card mb-4">
+  <div class="card-header"><h3 class="card-title">{{ total }} {{ _("Buchungen") }}{% if total > rows|length %} ({{ _("die neuesten {n}", n=rows|length) }}){% endif %}</h3></div>
+  <div class="card-body p-0 table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead class="table-light"><tr>
+        <th>{{ _("Datum") }}</th><th>{{ _("Art") }}</th><th>{{ _("Wertpapier / Text") }}</th>
+        <th class="text-end">{{ _("Stück") }}</th><th class="text-end">{{ _("Betrag") }}</th>
+        <th class="text-end">{{ _("Gebühren/Steuern") }}</th><th class="text-end">{{ _("Kursgewinn") }}</th>
+        <th>{{ _("Im Buch") }}</th><th></th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+        {% set b = r.b %}
+        <tr>
+          <td class="text-nowrap">{{ b.day|de_date }}</td>
+          <td class="text-nowrap">{{ _(KIND_LABELS.get(b.kind, b.kind)) }}</td>
+          <td>{% if r.security %}<div>{{ r.security.name }}</div><div class="small text-body-secondary">{{ [r.security.isin or r.security.wkn, r.where]|select|join(' · ') }}</div>
+              {% else %}<div>{{ b.description }}</div>{% if r.where %}<div class="small text-body-secondary">{{ r.where }}</div>{% endif %}{% endif %}
+              {% for w in b.warnings %}<div class="small text-warning-emphasis"><i class="bi bi-exclamation-circle"></i> {{ w }}</div>{% endfor %}</td>
+          <td class="text-end text-nowrap">{{ shares(b.shares|string if b.shares is not none else '') }}</td>
+          <td class="text-end text-nowrap">{{ b.amount|money(b.currency) }}</td>
+          <td class="text-end text-nowrap small">{% if b.fees %}{{ b.fees|money(b.currency) }}{% endif %}{% if b.fees and b.taxes %} / {% endif %}{% if b.taxes %}{{ b.taxes|money(b.currency) }}{% endif %}</td>
+          <td class="text-end text-nowrap">{% if b.gain is not none %}<span class="amount {{ b.gain|amount_class }}">{{ b.gain|money(b.currency, sign=True) }}</span>{% endif %}</td>
+          <td>{{ sync_badge(r.status, r.rec) }}
+            {% if r.status == 'skipped' and r.skip %}<div class="small text-body-secondary">{{ _(r.skip) }}</div>{% endif %}
+            {% if r.rec and r.rec.message and r.status in ('conflict', 'gone', 'edited', 'detached') %}<div class="small text-body-secondary">{{ r.rec.message }}</div>{% endif %}
+            {% if r.rec and r.rec.tx_guid and r.status not in ('gone',) %}<div class="small"><a href="{{ url_for('views.transaction', guid=r.rec.tx_guid) }}">{{ _("Buchung") }} #{{ ids.tx_id(r.rec.tx_guid) }}</a></div>{% endif %}
+          </td>
+          <td class="text-end text-nowrap">
+            {% if r.status in ('conflict', 'gone') %}
+            <form class="d-inline" method="post" action="{{ url_for('pp.resolve') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="key" value="{{ b.key }}">
+              <input type="hidden" name="next" value="{{ request.full_path }}">
+              <button class="btn btn-sm btn-outline-primary" name="action" value="force" type="submit" title="{{ _("Stand aus Portfolio Performance ins Buch schreiben") }}">{{ _("PP übernehmen") }}</button>
+              <button class="btn btn-sm btn-outline-secondary" name="action" value="detach" type="submit" title="{{ _("GnuCash-Stand behalten und nicht mehr abgleichen") }}">{{ _("Buch behalten") }}</button>
+            </form>
+            {% elif r.status == 'detached' %}
+            <form class="d-inline" method="post" action="{{ url_for('pp.resolve') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="key" value="{{ b.key }}">
+              <input type="hidden" name="next" value="{{ request.full_path }}">
+              <button class="btn btn-sm btn-outline-secondary" name="action" value="attach" type="submit">{{ _("wieder abgleichen") }}</button>
+            </form>
+            {% endif %}
+            {% if b.kind != 'OPENING' %}
+            <form class="d-inline" method="post" action="{{ url_for('pp.transaction_delete', uuid=b.uuids[0] if b.uuids else b.key) }}"
+                  data-confirm="{{ _("Diese Buchung in Portfolio Performance löschen? Im GnuCash-Buch wird sie danach ebenfalls entfernt (wenn dort unverändert).") }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path }}">
+              <button class="btn btn-sm btn-link text-danger p-0 ms-1" type="submit" title="{{ _("In Portfolio Performance löschen") }}"><i class="bi bi-trash"></i></button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9" class="text-body-secondary">{{ _("Keine Buchungen.") }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

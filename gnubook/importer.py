@@ -133,10 +133,11 @@ def _parse_date(value) -> date:
 
 
 class Importer:
-    def __init__(self, book: Book, appdb: AppDB, cfg: ImportConfig):
+    def __init__(self, book: Book, appdb: AppDB, cfg: ImportConfig, pp=None):
         self.book = book
         self.appdb = appdb
         self.cfg = cfg
+        self.pp = pp  # gnubook.pp.settings.PPSettings of the book when the Portfolio Performance link is on
         self._bayes_cache: dict[str, tuple[float, dict]] = {}
         self._lock = threading.Lock()
 
@@ -380,6 +381,9 @@ class Importer:
             if transit is not None and own.guid in between and other.guid in between:
                 return transit, "transit", False
             return other, "own", True
+        clearing = self.pp_clearing(index, own)
+        if clearing is not None:
+            return clearing, "pp", False
         acc = self.history_counter(conn, index, own, entry.cp_iban, entry.cp_name)
         if acc is not None and acc.guid != own.guid:
             return acc, "history", False
@@ -390,6 +394,22 @@ class Importer:
         if acc is None:
             raise ImportRejected("destination_name", _("Kein Auffangkonto gefunden – bitte [import] fallback_account in der gnubook-Konfiguration setzen."))
         return acc, "fallback", False
+
+    def pp_clearing(self, index: AccountIndex, own: Account) -> Account | None:
+        """Bank lines of a depot's cash account go to the clearing account of the Portfolio Performance link:
+        the securities side is booked from PP against the same account, so nothing is booked twice."""
+        if self.pp is None or not self.pp.bank_accounts:
+            return None
+        banks = {a.guid for a in (index.find(ref) for ref in self.pp.bank_accounts) if a is not None}
+        if own.guid not in banks:
+            return None
+        from .pp.settings import resolved
+
+        clearing = index.find(resolved(self.pp, index)["clearing"])
+        if clearing is None or clearing.placeholder or clearing.commodity_guid != own.commodity_guid \
+                or clearing.guid == own.guid:
+            return None
+        return clearing
 
     # ------------------------------------------------------------------ matching existing bookings
     def candidates(self, conn, entry: Entry, description: str, account: Account, signed: Decimal,
