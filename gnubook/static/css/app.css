@@ -30,6 +30,13 @@ tr.future { opacity: .6; }
 /* reconciled splits: disabled account select must stay readable */
 .split-table .form-select:disabled { color: var(--bs-body-color); opacity: 1; min-width: 16rem; }
 body > .ts-dropdown { z-index: 1060; }
+/* Tom Select hardcodes #343a40 text - follow Bootstrap theme instead (dark mode) */
+.ts-control, .ts-control input, .ts-dropdown, .ts-dropdown .option,
+.ts-wrapper.single .ts-control .item { color: var(--bs-body-color); }
+.ts-control input::placeholder { color: var(--bs-secondary-color); }
+.ts-dropdown { background-color: var(--bs-body-bg); border-color: var(--bs-border-color); }
+.ts-dropdown .optgroup-header, .ts-wrapper .dropdown-header-close { color: var(--bs-secondary-color); }
+.ts-wrapper.multi .ts-control > div { background: var(--bs-secondary-bg); color: var(--bs-body-color); }
 .split-table .amount-input { min-width: 7rem; }
 #imbalance-box.unbalanced #imbalance { color: var(--gb-expense); }
 #imbalance-box.balanced #imbalance { color: var(--gb-income); }
