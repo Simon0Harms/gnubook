@@ -228,6 +228,7 @@
       if (typeof TomSelect === 'undefined' || sel.disabled || sel.tomselect) { return; }
       new TomSelect(sel, {
         maxOptions: 400, allowEmptyOption: true, placeholder: t('Konto wählen …', 'Choose account …'),
+        dropdownParent: 'body',  /* escape .table-responsive overflow clipping */
         searchField: ['text'], sortField: [{ field: '$score' }, { field: '$order' }],
         onChange: function () { touched = true; },
       });

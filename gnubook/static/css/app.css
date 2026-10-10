@@ -27,6 +27,9 @@ tr.future { opacity: .6; }
 .register .amount { padding-left: .75rem; }
 .split-table td { vertical-align: top; }
 .split-table .ts-wrapper { min-width: 16rem; }
+/* reconciled splits: disabled account select must stay readable */
+.split-table .form-select:disabled { color: var(--bs-body-color); opacity: 1; min-width: 16rem; }
+body > .ts-dropdown { z-index: 1060; }
 .split-table .amount-input { min-width: 7rem; }
 #imbalance-box.unbalanced #imbalance { color: var(--gb-expense); }
 #imbalance-box.balanced #imbalance { color: var(--gb-income); }
