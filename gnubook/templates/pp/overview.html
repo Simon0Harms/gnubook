@@ -154,7 +154,7 @@
           {% if conflicts %}<div class="alert alert-danger py-1 mb-2"><a href="{{ url_for('pp.transactions', status='attention') }}">{{ _("{n} Konflikte prüfen", n=conflicts) }}</a></div>{% endif %}
           <form method="post" action="{{ url_for('pp.sync_now') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <input type="hidden" name="next" value="{{ request.script_root ~ request.full_path }}">
             <button class="btn btn-sm btn-outline-primary" type="submit"><i class="bi bi-arrow-repeat"></i> {{ _("Jetzt übernehmen") }}</button>
             <a class="btn btn-sm btn-link" href="{{ url_for('reports.portfolio') }}">{{ _("Depot im Buch") }}</a>
           </form>

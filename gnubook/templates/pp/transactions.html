@@ -69,21 +69,21 @@
             {% elif r.status in ('conflict', 'gone') %}
             <form class="d-inline" method="post" action="{{ url_for('pp.resolve') }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="key" value="{{ b.key }}">
-              <input type="hidden" name="next" value="{{ request.full_path }}">
+              <input type="hidden" name="next" value="{{ request.script_root ~ request.full_path }}">
               <button class="btn btn-sm btn-outline-primary" name="action" value="force" type="submit" title="{{ _("Stand aus Portfolio Performance ins Buch schreiben") }}">{{ _("PP übernehmen") }}</button>
               <button class="btn btn-sm btn-outline-secondary" name="action" value="detach" type="submit" title="{{ _("GnuCash-Stand behalten und nicht mehr abgleichen") }}">{{ _("Buch behalten") }}</button>
             </form>
             {% elif r.status == 'detached' %}
             <form class="d-inline" method="post" action="{{ url_for('pp.resolve') }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="key" value="{{ b.key }}">
-              <input type="hidden" name="next" value="{{ request.full_path }}">
+              <input type="hidden" name="next" value="{{ request.script_root ~ request.full_path }}">
               <button class="btn btn-sm btn-outline-secondary" name="action" value="attach" type="submit">{{ _("wieder abgleichen") }}</button>
             </form>
             {% endif %}
             {% if b.kind != 'OPENING' and not pp_readonly() %}
             <form class="d-inline" method="post" action="{{ url_for('pp.transaction_delete', uuid=b.uuids[0] if b.uuids else b.key) }}"
                   data-confirm="{{ _("Diese Buchung in Portfolio Performance löschen? Im GnuCash-Buch wird sie danach ebenfalls entfernt (wenn dort unverändert).") }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.script_root ~ request.full_path }}">
               <button class="btn btn-sm btn-link text-danger p-0 ms-1" type="submit" title="{{ _("In Portfolio Performance löschen") }}"><i class="bi bi-trash"></i></button>
             </form>
             {% endif %}

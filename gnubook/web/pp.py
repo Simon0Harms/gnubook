@@ -25,7 +25,7 @@ from ..pp.plan import SKIP_REASONS, build_plan
 from ..pp.settings import ROLE_LABELS, ROLE_TYPES, PPSettings, default_name, resolved
 from ..pp.sync import SyncError
 from . import registry, state
-from .auth import login_required
+from .auth import _safe_next, login_required
 from .views import _parse_date, index
 
 log = logging.getLogger("gnubook.web.pp")
@@ -299,6 +299,12 @@ def transactions():
                            settings=settings, ids=st.appdb)
 
 
+def _next(default: str) -> str:
+    """Local redirect target from the form's "next" field, else *default*."""
+    target = request.form.get("next")
+    return _safe_next(target) if target else default
+
+
 @bp.route("/transactions/<uuid>/delete", methods=["POST"])
 @login_required
 def transaction_delete(uuid):
@@ -309,7 +315,7 @@ def transaction_delete(uuid):
         svc.request_sync()
     except PPCoreError as exc:
         flash(str(exc), "danger")
-    return redirect(request.form.get("next") or url_for("pp.transactions"))
+    return redirect(_next(url_for("pp.transactions")))
 
 
 @bp.route("/sync", methods=["POST"])
@@ -332,7 +338,7 @@ def sync_now():
         flash(str(exc), "warning")
     except (PPCoreError, SyncError) as exc:
         flash(str(exc), "danger")
-    return redirect(request.form.get("next") or url_for("pp.overview"))
+    return redirect(_next(url_for("pp.overview")))
 
 
 @bp.route("/sync/resolve", methods=["POST"])
@@ -362,7 +368,7 @@ def resolve():
             flash(str(exc), "danger")
     else:
         abort(400)
-    return redirect(request.form.get("next") or url_for("pp.transactions", status="attention"))
+    return redirect(_next(url_for("pp.transactions", status="attention")))
 
 
 # ------------------------------------------------------------------------------------------ PDF import
@@ -627,7 +633,7 @@ def quotes():
         flash(msg, "info")
     except PPCoreError as exc:
         flash(str(exc), "danger")
-    return redirect(request.form.get("next") or url_for("pp.securities"))
+    return redirect(_next(url_for("pp.securities")))
 
 
 # ------------------------------------------------------------------------------------------ settings & file

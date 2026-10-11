@@ -149,6 +149,12 @@ def test_securities_quotes_and_delete(web, fake):
     assert r.status_code == 302 and ("quotes", (), 0) in fake.calls
     r = web.post("/pp/transactions/fee-1/delete", data={"csrf_token": web.csrf})
     assert r.status_code == 302 and fake.deleted == ["fee-1"]
+    # "next" must keep the mount prefix (SCRIPT_NAME) and must not leave the site
+    r = web.post("/pp/transactions/fee-1/delete", data={"csrf_token": web.csrf, "next": "/gnubook/pp/transactions?q="},
+                 environ_base={"SCRIPT_NAME": "/gnubook"})
+    assert r.headers["Location"].endswith("/gnubook/pp/transactions?q=")
+    r = web.post("/pp/transactions/fee-1/delete", data={"csrf_token": web.csrf, "next": "//evil.example/"})
+    assert "evil.example" not in r.headers["Location"]
 
 
 def test_file_upload_download_and_create(web, fake):
