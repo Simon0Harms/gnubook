@@ -93,6 +93,10 @@ class PPCoreClient:
         return self._request("POST", f"/clients/{cid}/create",
                              {"currency": currency, "portfolio": portfolio, "account": account})
 
+    def add_portfolio(self, cid: str, fields: dict) -> dict:
+        """New securities account with a new or existing cash account (POST /clients/{id}/portfolios)."""
+        return self._request("POST", f"/clients/{cid}/portfolios", fields)
+
     def demo(self, cid: str, start: date, months: int, seed: int = 7) -> dict:
         """Fictional demo file (replaces only an earlier demo file)."""
         return self._request("POST", f"/clients/{cid}/demo",

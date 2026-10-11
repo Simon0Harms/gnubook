@@ -725,7 +725,8 @@ def settings():
     return render_template(
         "pp/settings.html", summary=summary, health=health, settings=current, roles=roles,
         bank_choices=bank_choices, asset_choices=asset_choices, names=names, runs=st.appdb.pp_runs(15),
-        status=svc.status(), default_root=default_name(idx, "securities_root"))
+        status=svc.status(), default_root=default_name(idx, "securities_root"),
+        open_new_portfolio=request.args.get("new_portfolio") == "1")
 
 
 def _check_settings(s: PPSettings, idx) -> list[str]:
@@ -797,6 +798,49 @@ def pp_file_create():
     except PPCoreError as exc:
         flash(str(exc), "danger")
     return redirect(url_for("pp.settings"))
+
+
+@bp.route("/portfolios", methods=["POST"])
+@login_required
+def portfolio_create():
+    """New securities account (Depot) in the existing PP file, with a new or an existing cash account."""
+    svc = _svc()
+    name = (request.form.get("name") or "").strip()
+    account = request.form.get("account") or "new"
+    back = request.form.get("next") or ""
+    target = back if back.startswith("/pp/") else url_for("pp.settings")
+    if not name:
+        flash(_("Bitte einen Namen für das Depot angeben."), "warning")
+        return redirect(target)
+    fields = {"name": name}
+    if account != "new":
+        fields["account"] = account
+    else:
+        account_name = (request.form.get("account_name") or "").strip()
+        if not account_name:
+            flash(_("Bitte einen Namen für das neue Verrechnungskonto angeben."), "warning")
+            return redirect(target)
+        currency = (request.form.get("currency") or "").strip().upper()
+        if currency and not re.fullmatch(r"[A-Z]{3}", currency):
+            flash(_("Ungültige Währung: {a0}", a0=currency), "warning")
+            return redirect(target)
+        fields["accountName"] = account_name
+        if currency:
+            fields["currency"] = currency
+    try:
+        result = svc.client.add_portfolio(svc.cid, fields)
+        g.pop("pp_summary", None)
+        svc.request_copy()
+        if result.get("accountCreated"):
+            flash(_("Depot {a0} mit neuem Verrechnungskonto {a1} ({a2}) angelegt.", a0=result["name"],
+                    a1=result["accountName"], a2=result["currency"]), "success")
+        else:
+            flash(_("Depot {a0} angelegt (Verrechnungskonto {a1}).", a0=result["name"], a1=result["accountName"]),
+                  "success")
+    except PPCoreError as exc:
+        flash(_("Gibt es schon: {a0}", a0=str(exc)) if exc.code == "exists" else str(exc),
+              "warning" if exc.code == "exists" else "danger")
+    return redirect(target)
 
 
 @bp.route("/status.json")

@@ -154,6 +154,21 @@ assert out_t.get("note") == "Depotwechsel" and in_t["owner"] == PB, in_t
 call("DELETE", f"/clients/xfer/transactions/{tr['uuid']}")
 xt = {t["uuid"] for t in call("GET", "/clients/xfer/export?prices=none")["transactions"]}
 assert tr["uuid"] not in xt and tr["targetUuid"] not in xt, xt
+# new securities account with a new cash account, and one with an existing cash account
+np = call("POST", "/clients/xfer/portfolios", {"name": "Depot C", "accountName": "Konto C", "currency": "usd"},
+          expect=201)
+assert np["accountCreated"] and np["currency"] == "USD", np
+call("POST", "/clients/xfer/portfolios", {"name": "depot c", "account": np["account"]}, expect=409)
+call("POST", "/clients/xfer/portfolios", {"name": "Depot D", "accountName": "konto c"}, expect=409)
+call("POST", "/clients/xfer/portfolios", {"name": "Depot D", "accountName": "X", "currency": "XYZ"}, expect=400)
+call("POST", "/clients/xfer/portfolios", {"name": "Depot D"}, expect=400)
+nd = call("POST", "/clients/xfer/portfolios", {"name": "Depot D", "account": np["account"]}, expect=201)
+assert not nd["accountCreated"] and nd["account"] == np["account"], nd
+xs = call("GET", "/clients/xfer")
+assert {p["name"] for p in xs["portfolioList"]} == {"Depot A", "Depot B", "Depot C", "Depot D"}, xs
+assert {a["name"] for a in xs["accountList"]} == {"Konto", "Konto C"}, xs
+# a transfer to a portfolio in another currency is refused
+call("POST", "/clients/xfer/transactions", {**xfer, "target": np["portfolio"], "shares": "1"}, expect=400)
 raw = call("GET", "/clients/smoke/file")
 assert b"<client" in raw[:200], raw[:200]
 print("pp-core smoke test passed:", len(feeds), "price sources")

@@ -50,7 +50,7 @@
           <option value="">–</option>
           {% for p in summary.portfolioList or [] if not p.retired %}<option value="{{ p.uuid }}" {{ 'selected' if form.get('target') == p.uuid }}>{{ p.name }}</option>{% endfor %}
         </select>
-        <div class="form-text">{{ _("Wie „Depotwechsel“ in PP Desktop: im GnuCash-Buch wird zum FIFO-Einstandswert umgebucht, ohne Gewinn oder Verlust; die Kaufdaten bleiben erhalten.") }}</div>
+        <div class="form-text"><a href="{{ url_for('pp.settings', new_portfolio=1) }}#new-portfolio">{{ _("Depot fehlt? Hier anlegen") }}</a> · {{ _("Wie „Depotwechsel“ in PP Desktop: im GnuCash-Buch wird zum FIFO-Einstandswert umgebucht, ohne Gewinn oder Verlust; die Kaufdaten bleiben erhalten.") }}</div>
       </div>
       <div class="col-12" id="new-security" data-show-when="security=new">
         <div class="row g-2">

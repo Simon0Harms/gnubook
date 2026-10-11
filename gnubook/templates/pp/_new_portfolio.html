@@ -1,0 +1,29 @@
+{# new Depot with a new or existing Verrechnungskonto; needs summary, optional next (path to return to) #}
+<details class="mb-3" id="new-portfolio" {{ 'open' if open_new_portfolio }}>
+  <summary class="small fw-semibold">{{ _("Depot hinzufügen") }}</summary>
+  <form class="row g-2 mt-1" method="post" action="{{ url_for('pp.portfolio_create') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+    <div class="col-12 col-sm-6">
+      <label class="form-label small mb-0" for="np-name">{{ _("Name des Depots") }}</label>
+      <input class="form-control form-control-sm" id="np-name" name="name" required placeholder="{{ _("z. B. Depot Beispielbank") }}">
+    </div>
+    <div class="col-12 col-sm-6">
+      <label class="form-label small mb-0" for="np-account">{{ _("Verrechnungskonto") }}</label>
+      <select class="form-select form-select-sm" id="np-account" name="account">
+        <option value="new">{{ _("Neues Konto …") }}</option>
+        {% for a in summary.accountList or [] if not a.retired %}<option value="{{ a.uuid }}">{{ a.name }} ({{ a.currency }})</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-12" data-show-when="np-account=new">
+      <div class="row g-2">
+        <div class="col-8"><label class="form-label small mb-0" for="np-account-name">{{ _("Name des Kontos") }}</label>
+          <input class="form-control form-control-sm" id="np-account-name" name="account_name" data-required placeholder="{{ _("z. B. Verrechnungskonto Beispielbank") }}"></div>
+        <div class="col-4"><label class="form-label small mb-0" for="np-currency">{{ _("Währung") }}</label>
+          <input class="form-control form-control-sm" id="np-currency" name="currency" maxlength="3" placeholder="{{ summary.baseCurrency or 'EUR' }}"></div>
+      </div>
+    </div>
+    <div class="col-12"><button class="btn btn-sm btn-outline-primary" type="submit"><i class="bi bi-plus-lg"></i> {{ _("Depot anlegen") }}</button></div>
+    <div class="col-12 form-text">{{ _("Die Konten im GnuCash-Buch legt die Übernahme selbst an. Läuft das Verrechnungskonto über den Bankimport, das Bankkonto unter „Verrechnungskonten der Depots im Buch“ auswählen.") }}</div>
+  </form>
+</details>

@@ -21,6 +21,7 @@
           </dl>
           <a class="btn btn-sm btn-outline-secondary mb-3" href="{{ url_for('pp.pp_file') }}"><i class="bi bi-download"></i> {{ _("Herunterladen") }}</a>
           <p class="small text-body-secondary">{{ _("Zum Bearbeiten in Portfolio Performance am PC: herunterladen, bearbeiten, ohne Passwort speichern und hier wieder hochladen. In der Zwischenzeit hier nichts importieren – das Hochladen ersetzt die Datei.") }}</p>
+          {% include "pp/_new_portfolio.html" %}
         {% else %}
           <p class="small">{{ _("Noch keine Datei. Lade deine bestehende PP-Datei hoch oder lege eine leere an.") }}</p>
           <form class="row g-2 mb-3" method="post" action="{{ url_for('pp.pp_file_create') }}">

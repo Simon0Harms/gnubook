@@ -8,7 +8,7 @@ import pytest
 from gnubook.pp.client import PPCoreError
 
 from .conftest import PASSWORD, csrf_from
-from .pp_fixtures import ETF, P1, P2, SHARE, fake, find, make_export, pp_app  # noqa: F401 – fixtures
+from .pp_fixtures import A1, ETF, P1, P2, SHARE, fake, find, make_export, pp_app  # noqa: F401 – fixtures
 
 
 @pytest.fixture
@@ -352,3 +352,32 @@ def test_manual_transfer_more_than_held_asks(web, fake):
                                        "portfolio": P1, "target": P2, "date": "2024-02-06", "shares": "5000"})
     assert r.status_code == 200 and 'name="force"' in r.text and "Trotzdem umbuchen" in r.text
     assert f'value="{P2}" selected' in r.text
+
+
+def test_new_portfolio(web, fake):
+    page = web.get("/pp/settings?new_portfolio=1")
+    assert 'id="new-portfolio" open' in page.text and "Depot hinzufügen" in page.text
+    assert "Depot fehlt?" in web.get("/pp/delivery").text
+    # new cash account
+    r = web.post("/pp/portfolios", data={"csrf_token": web.csrf, "name": " Depot Neu ", "account": "new",
+                                         "account_name": "Konto Neu", "currency": "usd"}, follow_redirects=True)
+    assert "Depot Neu mit neuem Verrechnungskonto Konto Neu (USD) angelegt" in r.text
+    assert ("add_portfolio", {"name": "Depot Neu", "accountName": "Konto Neu", "currency": "USD"}) in fake.calls
+    # existing cash account, back to the delivery page
+    r = web.post("/pp/portfolios", data={"csrf_token": web.csrf, "name": "Depot Zwei", "account": A1,
+                                         "next": "/pp/delivery"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("/pp/delivery")
+    assert ("add_portfolio", {"name": "Depot Zwei", "account": A1}) in fake.calls
+    assert "Depot Zwei" in web.get("/pp/delivery").text
+    # validation and an existing name
+    n = len(fake.calls)
+    for data in ({"name": ""}, {"name": "X", "account": "new", "account_name": ""},
+                 {"name": "X", "account": "new", "account_name": "K", "currency": "EURO"}):
+        web.post("/pp/portfolios", data={"csrf_token": web.csrf, **data})
+    assert not [c for c in fake.calls[n:] if c[0] == "add_portfolio"]
+    r = web.post("/pp/portfolios", data={"csrf_token": web.csrf, "name": "depot musterbank", "account": A1},
+                 follow_redirects=True)
+    assert "Gibt es schon" in r.text
+    # no open redirect
+    r = web.post("/pp/portfolios", data={"csrf_token": web.csrf, "name": "", "next": "https://evil.example/"})
+    assert r.headers["Location"].endswith("/pp/settings")

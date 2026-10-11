@@ -290,6 +290,12 @@ final class HttpApi
                 require(method, "PATCH");
                 sendJson(ex, 200, updateSecurity(holder, seg[3], body(ex)));
             }
+            case "portfolios" -> {
+                if (seg.length != 3)
+                    throw ApiException.notFound("unknown path");
+                require(method, "POST");
+                sendJson(ex, 201, Portfolios.create(holder, body(ex)));
+            }
             case "transactions" -> {
                 if (seg.length == 3)
                 {

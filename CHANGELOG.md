@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Portfolio Performance: *Einstellungen* can add a securities account (*Depot hinzufügen*) to the existing PP
+  file, with a new cash account (name, currency) or an existing one as reference account – no detour through
+  PP Desktop. The Depotwechsel form links to it. pp-core: `POST /clients/{id}/portfolios`
 - Portfolio Performance: *Ein-/Auslieferung* can also enter a *Depotwechsel* (securities transfer between two
   securities accounts of the PP file, like PP Desktop's dialog): existing security, sending and receiving
   account in the same currency, shares, optional value (shares × price of that day), note; no fees or taxes;

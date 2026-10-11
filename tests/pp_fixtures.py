@@ -138,6 +138,26 @@ class FakePPCore:
                 "originalName": "Depot.xml", "lastPriceUpdate": "2026-10-01T09:00:00Z", "importTargets": {},
                 "demo": self.demo_marker}
 
+    def add_portfolio(self, cid, fields):
+        from gnubook.pp.client import PPCoreError
+
+        self.calls.append(("add_portfolio", dict(fields)))
+        if any(p["name"].casefold() == fields["name"].casefold() for p in self.export_data["portfolios"]):
+            raise PPCoreError(f"there is a portfolio {fields['name']} already", 409, "exists")
+        self.export_data = copy.deepcopy(self.export_data)
+        created = "account" not in fields
+        if created:
+            acc = {"uuid": f"acc-{len(self.calls)}", "name": fields["accountName"],
+                   "currency": fields.get("currency") or "EUR"}
+            self.export_data["accounts"].append(acc)
+        else:
+            acc = next(a for a in self.export_data["accounts"] if a["uuid"] == fields["account"])
+        uuid = f"port-{len(self.calls)}"
+        self.export_data["portfolios"].append({**self.export_data["portfolios"][0], "uuid": uuid,
+                                               "name": fields["name"], "referenceAccount": acc["uuid"]})
+        return {"portfolio": uuid, "name": fields["name"], "account": acc["uuid"], "accountName": acc["name"],
+                "currency": acc["currency"], "accountCreated": created}
+
     def demo(self, cid, start, months, seed=7):
         self.calls.append(("demo", cid, start, months, seed))
         self.demo_marker = f"{start.isoformat()}/{months}/{seed}"
