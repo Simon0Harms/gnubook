@@ -43,6 +43,16 @@ def exists(admin_url: str, dbname: str) -> bool:
         eng.dispose()
 
 
+def database_exists(admin_url: str, dbname: str) -> bool:
+    """True if the database itself exists (the role alone does not count)."""
+    eng = _admin_engine(admin_url)
+    try:
+        with eng.connect() as c:
+            return bool(c.execute(text("SELECT 1 FROM pg_database WHERE datname = :n"), {"n": dbname}).scalar())
+    finally:
+        eng.dispose()
+
+
 def create_role_and_db(admin_url: str, dbname: str) -> tuple[str, str]:
     """CREATE ROLE <dbname> LOGIN + CREATE DATABASE <dbname> OWNER <dbname>. Returns (user URL, password)."""
     if not NAME_RE.fullmatch(dbname):

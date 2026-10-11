@@ -437,6 +437,8 @@ EN = {
     "Buch konnte nicht angelegt werden: {a0}": "The book could not be created: {a0}",
     "Buch „{a0}“ und seine Datenbank gelöscht. Letzte Sicherung: {a1}":
         "Book “{a0}” and its database deleted. Last backup: {a1}",
+    "Buch „{a0}“ entfernt. Die Datenbank gab es schon nicht mehr – keine Sicherung erstellt.":
+        "Book “{a0}” removed. Its database no longer existed – no backup created.",
     "Buch „{a0}“ verbunden.": "Book “{a0}” connected.",
     "Buchung gespeichert.": "Transaction saved.",
     "Buchung „{a0}“ gelöscht.": "Transaction “{a0}” deleted.",

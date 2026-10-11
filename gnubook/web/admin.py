@@ -189,7 +189,10 @@ def book_update(book_id):
             flash(str(exc), "danger")
             return redirect(url_for("admin.books"))
         if drop:
-            flash(_("Buch „{a0}“ und seine Datenbank gelöscht. Letzte Sicherung: {a1}", a0=row['name'], a1=saved), "success")
+            if saved:
+                flash(_("Buch „{a0}“ und seine Datenbank gelöscht. Letzte Sicherung: {a1}", a0=row['name'], a1=saved), "success")
+            else:
+                flash(_("Buch „{a0}“ entfernt. Die Datenbank gab es schon nicht mehr – keine Sicherung erstellt.", a0=row['name']), "warning")
         else:
             flash(_("Verbindung zu „{a0}“ entfernt. Die GnuCash-Datenbank selbst ist unverändert.", a0=row['name']), "success")
         return redirect(url_for("admin.books"))

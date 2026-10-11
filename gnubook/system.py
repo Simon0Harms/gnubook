@@ -595,10 +595,13 @@ class Registry:
                 raise UserError(_("Nur von gnubook angelegte Datenbanken können hier gelöscht werden."))
             from datetime import datetime
 
-            ctx = self.context(book_id)
-            target = self.data / "backup" / "deleted" / f"{slug(row['name'])}-{datetime.now():%Y%m%d-%H%M%S}.gnucash"
-            export_gnucash_file(ctx.book, target)
-            saved = str(target)
+            # The database may already be gone (dropped by hand or via the role list):
+            # then there is nothing to back up, just remove the stale entry.
+            if provision.database_exists(self.cfg.postgres.admin_url, row["managed_db"]):
+                ctx = self.context(book_id)
+                target = self.data / "backup" / "deleted" / f"{slug(row['name'])}-{datetime.now():%Y%m%d-%H%M%S}.gnucash"
+                export_gnucash_file(ctx.book, target)
+                saved = str(target)
         self.drop_context(book_id)
         self.system.delete_book(book_id)
         if drop_database:
