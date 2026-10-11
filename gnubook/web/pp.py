@@ -442,16 +442,20 @@ def pdf_import_apply(sid):
 
 # ------------------------------------------------------------------------------------------ manual deliveries
 
-DELIVERY_TYPES = ("DELIVERY_OUTBOUND", "DELIVERY_INBOUND")
+DELIVERY_TYPES = ("DELIVERY_OUTBOUND", "DELIVERY_INBOUND", "TRANSFER")
 
 
 def _delivery_fields(form) -> dict:
-    """The form as pp-core's body for POST /clients/{id}/transactions (amounts as plain decimal strings)."""
+    """The form as pp-core's body for POST /clients/{id}/transactions (amounts as plain decimal strings).
+
+    TRANSFER is a Depotwechsel: an existing security from ``portfolio`` to ``target``, without fees or taxes.
+    """
     from ..money import AmountError, parse_amount, to_api_string
 
     kind = form.get("type", "")
     if kind not in DELIVERY_TYPES:
-        raise ValueError(_("Bitte Ein- oder Auslieferung wählen."))
+        raise ValueError(_("Bitte Einlieferung, Auslieferung oder Depotwechsel wählen."))
+    transfer = kind == "TRANSFER"
     day = _parse_date(form.get("date"))
     if day is None:
         raise ValueError(_("Bitte ein gültiges Datum angeben."))
@@ -473,13 +477,22 @@ def _delivery_fields(form) -> dict:
     fields = {"type": kind, "portfolio": form.get("portfolio") or None, "date": day.isoformat(),
               "shares": format(shares.normalize(), "f"), "note": (form.get("note") or "").strip() or None,
               "force": form.get("force") == "1"}
-    for name in ("amount", "fees", "taxes"):
+    if transfer:
+        target = form.get("target") or ""
+        if not target:
+            raise ValueError(_("Bitte das Zieldepot wählen."))
+        if target == fields["portfolio"]:
+            raise ValueError(_("Quell- und Zieldepot sind gleich."))
+        fields["target"] = target
+    for name in (("amount",) if transfer else ("amount", "fees", "taxes")):
         value = num(name)
         if value is not None:
             fields[name] = to_api_string(value)
     security = form.get("security") or ""
     if security and security != "new":
         fields["security"] = security
+    elif transfer:
+        raise ValueError(_("Für einen Depotwechsel ein Wertpapier aus der PP-Datei wählen."))
     else:
         isin = (form.get("isin") or "").strip().upper()
         if not re.fullmatch(r"[A-Z]{2}[A-Z0-9]{9}[0-9]", isin):
@@ -504,6 +517,7 @@ def delivery():
         return _pp_error(exc)
     form = request.form if request.method == "POST" else request.args
     confirm = None
+    confirm_label = _("Trotzdem ausliefern")
     if request.method == "POST" and export is not None:
         try:
             fields = _delivery_fields(request.form)
@@ -521,6 +535,8 @@ def delivery():
         except PPCoreError as exc:
             if exc.code == "not_enough_shares":
                 confirm = str(exc)
+                if request.form.get("type") == "TRANSFER":
+                    confirm_label = _("Trotzdem umbuchen")
             else:
                 flash(str(exc), "danger")
     securities = []
@@ -538,7 +554,8 @@ def delivery():
                                "currency": s.get("currency"), "held": held.get(s["uuid"], ZERO)})
         securities.sort(key=lambda s: (s["held"] <= 0, s["name"].casefold()))
     return render_template("pp/delivery.html", summary=summary, securities=securities, form=form,
-                           confirm=confirm, today=date.today(), KIND_LABELS=KIND_LABELS)
+                           confirm=confirm, confirm_label=confirm_label, today=date.today(),
+                           KIND_LABELS=KIND_LABELS, DELIVERY_TYPES=DELIVERY_TYPES)
 
 
 # ------------------------------------------------------------------------------------------ securities & prices

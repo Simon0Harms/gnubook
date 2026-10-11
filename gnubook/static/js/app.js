@@ -469,13 +469,27 @@
     });
   });
 
-  // <div data-show-when="select-id=value">: shown only while that select has that value
+  // <div data-show-when="select-id=value">: shown only while that select has that value; also a radio group
+  // by its name, and "!=" for "shown unless"
   document.querySelectorAll('[data-show-when]').forEach(function (el) {
-    var parts = el.getAttribute('data-show-when').split('=');
-    var sel = document.getElementById(parts[0]);
-    if (!sel) { return; }
-    var sync = function () { el.hidden = sel.value !== parts[1]; };
-    sel.addEventListener('change', sync);
+    var m = el.getAttribute('data-show-when').match(/^([^!=]+)(!?=)(.*)$/);
+    if (!m) { return; }
+    var sel = document.getElementById(m[1]);
+    var radios = sel ? [] : Array.prototype.slice.call(document.querySelectorAll('input[type=radio]'))
+      .filter(function (r) { return r.name === m[1]; });
+    if (!sel && !radios.length) { return; }
+    var value = function () {
+      if (sel) { return sel.value; }
+      var on = radios.filter(function (r) { return r.checked; })[0];
+      return on ? on.value : '';
+    };
+    var sync = function () {
+      var hit = value() === m[3];
+      el.hidden = m[2] === '=' ? !hit : hit;
+      // hidden fields are not required (e.g. the target portfolio of a Depotwechsel)
+      el.querySelectorAll('[data-required]').forEach(function (f) { f.required = !el.hidden; });
+    };
+    (sel ? [sel] : radios).forEach(function (f) { f.addEventListener('change', sync); });
     sync();
   });
 })();

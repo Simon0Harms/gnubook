@@ -209,13 +209,24 @@ class FakePPCore:
         from gnubook.pp.client import PPCoreError
 
         self.calls.append(("add_delivery", dict(fields)))
-        if (fields["type"] == "DELIVERY_OUTBOUND" and float(fields["shares"]) > 1000
+        if (fields["type"] in ("DELIVERY_OUTBOUND", "TRANSFER") and float(fields["shares"]) > 1000
                 and not fields.get("force")):
             raise PPCoreError("only 10 shares of Musterwelt Aktien ETF in Depot Musterbank", 409,
                               "not_enough_shares")
         uuid = f"manual-{len(self.calls)}"
         sec = fields.get("security") or ETF
         self.export_data = copy.deepcopy(self.export_data)
+        if fields["type"] == "TRANSFER":
+            src, dst = fields.get("portfolio") or P1, fields["target"]
+            self.export_data["transactions"] += [
+                _t(uuid, "portfolio", src, "TRANSFER_OUT", fields["date"], fields.get("amount") or "100",
+                   shares=fields["shares"], security=sec, note=fields.get("note"),
+                   cross={"type": "portfolio-transfer", "uuid": uuid + "-in", "owner": dst}),
+                _t(uuid + "-in", "portfolio", dst, "TRANSFER_IN", fields["date"], fields.get("amount") or "100",
+                   shares=fields["shares"], security=sec, note=fields.get("note"),
+                   cross={"type": "portfolio-transfer", "uuid": uuid, "owner": src})]
+            return {"uuid": uuid, "targetUuid": uuid + "-in", "type": "TRANSFER", "security": sec,
+                    "shares": fields["shares"], "portfolio": src, "target": dst}
         self.export_data["transactions"].append(
             _t(uuid, "portfolio", fields.get("portfolio") or P1, fields["type"], fields["date"],
                fields.get("amount") or "100", shares=fields["shares"], security=sec, note=fields.get("note")))

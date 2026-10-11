@@ -12,6 +12,7 @@ import com.google.gson.JsonObject;
 import name.abuchen.portfolio.model.Client;
 import name.abuchen.portfolio.model.Portfolio;
 import name.abuchen.portfolio.model.PortfolioTransaction;
+import name.abuchen.portfolio.model.PortfolioTransferEntry;
 import name.abuchen.portfolio.model.Security;
 import name.abuchen.portfolio.model.SecurityPrice;
 import name.abuchen.portfolio.model.Transaction.Unit;
@@ -32,6 +33,11 @@ import name.abuchen.portfolio.money.Values;
  *
  * <p>As in PP, the amount of an inbound delivery includes fees and taxes, the amount of an outbound delivery is
  * the value less fees and taxes.
+ *
+ * <p>{@code type} TRANSFER is a Depotwechsel (PP's "Wertpapiere umbuchen"): an existing security moves from
+ * {@code portfolio} to {@code target} (both in the same currency), with {@code shares}, optional {@code amount}
+ * (empty = shares × price on that day) and {@code note}; no fees or taxes. Without {@code force} at most the
+ * shares held in {@code portfolio} on that day.
  */
 final class ManualTransaction
 {
@@ -45,7 +51,9 @@ final class ManualTransaction
         try
         {
             Client client = holder.client();
-            PortfolioTransaction.Type type = type(Json.str(body, "type"));
+            String kind = Json.str(body, "type");
+            boolean transfer = "TRANSFER".equals(kind);
+            PortfolioTransaction.Type type = transfer ? PortfolioTransaction.Type.TRANSFER_OUT : type(kind);
             Portfolio portfolio = portfolio(client, Json.str(body, "portfolio"));
             String currency = portfolio.getReferenceAccount() != null
                             ? portfolio.getReferenceAccount().getCurrencyCode()
@@ -54,8 +62,26 @@ final class ManualTransaction
             if (day.isAfter(LocalDate.now()))
                 throw ApiException.badRequest("date is in the future");
             long shares = shares(body);
-            boolean outbound = type == PortfolioTransaction.Type.DELIVERY_OUTBOUND;
+            boolean outbound = type != PortfolioTransaction.Type.DELIVERY_INBOUND;
             Security security = existing(client, body);
+            Portfolio target = null;
+            if (transfer)
+            {
+                String t = Json.str(body, "target");
+                if (t == null || t.isBlank())
+                    throw ApiException.badRequest("target: choose the receiving portfolio");
+                target = portfolio(client, t);
+                if (target == portfolio)
+                    throw ApiException.badRequest("target: same portfolio as the source");
+                String targetCurrency = target.getReferenceAccount() != null
+                                ? target.getReferenceAccount().getCurrencyCode()
+                                : client.getBaseCurrency();
+                if (!currency.equals(targetCurrency))
+                    throw ApiException.badRequest("target: " + target.getName() + " is in " + targetCurrency
+                                    + ", " + portfolio.getName() + " in " + currency);
+                if (security == null)
+                    throw ApiException.badRequest("security: ISIN " + isin(body) + " is not in the file");
+            }
             String newName = security == null ? newName(body) : null;
 
             // checked before a new security is added, so that a refused request leaves the client untouched
@@ -74,8 +100,8 @@ final class ManualTransaction
                 created = true;
             }
 
-            long fees = money(body, "fees", 0L);
-            long taxes = money(body, "taxes", 0L);
+            long fees = transfer ? 0L : money(body, "fees", 0L);
+            long taxes = transfer ? 0L : money(body, "taxes", 0L);
             String secCurrency = security.getCurrencyCode() == null ? currency : security.getCurrencyCode();
             BigDecimal rate = BigDecimal.ONE;
             if (!secCurrency.equals(currency))
@@ -110,6 +136,29 @@ final class ManualTransaction
             if (gross < 0 || amount < 0)
                 throw ApiException.badRequest("fees and taxes are larger than the value");
 
+            String note = Json.str(body, "note");
+            if (transfer)
+            {
+                PortfolioTransferEntry entry = new PortfolioTransferEntry(portfolio, target);
+                entry.setDate(day.atTime(LocalTime.MIDNIGHT));
+                entry.setSecurity(security);
+                entry.setShares(shares);
+                entry.setCurrencyCode(currency);
+                entry.setAmount(amount);
+                if (note != null && !note.isBlank())
+                    entry.setNote(note.trim());
+                entry.insert();
+                client.markDirty();
+                holder.save();
+                return Json.obj().with("uuid", entry.getSourceTransaction().getUUID())
+                                .with("targetUuid", entry.getTargetTransaction().getUUID()).with("type", "TRANSFER")
+                                .with("portfolio", portfolio.getUUID()).with("target", target.getUUID())
+                                .with("security", security.getUUID()).with("date", day.toString())
+                                .with("shares", Json.shares(shares)).with("amount", Json.amount(amount))
+                                .with("currency", currency).with("held", Json.shares(held))
+                                .with("revision", holder.revision());
+            }
+
             PortfolioTransaction t = new PortfolioTransaction();
             t.setType(type);
             t.setDateTime(day.atTime(LocalTime.MIDNIGHT));
@@ -117,7 +166,6 @@ final class ManualTransaction
             t.setShares(shares);
             t.setCurrencyCode(currency);
             t.setAmount(amount);
-            String note = Json.str(body, "note");
             if (note != null && !note.isBlank())
                 t.setNote(note.trim());
             if (!secCurrency.equals(currency))
@@ -153,7 +201,7 @@ final class ManualTransaction
             return PortfolioTransaction.Type.DELIVERY_INBOUND;
         if ("DELIVERY_OUTBOUND".equals(v))
             return PortfolioTransaction.Type.DELIVERY_OUTBOUND;
-        throw ApiException.badRequest("type: expected DELIVERY_INBOUND or DELIVERY_OUTBOUND");
+        throw ApiException.badRequest("type: expected DELIVERY_INBOUND, DELIVERY_OUTBOUND or TRANSFER");
     }
 
     private static Portfolio portfolio(Client client, String uuid)

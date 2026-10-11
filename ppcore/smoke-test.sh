@@ -121,6 +121,39 @@ dport = dexp["portfolios"][0]["uuid"]
 priced = call("POST", "/clients/demo/transactions", {"type": "DELIVERY_OUTBOUND", "portfolio": dport,
               "security": dsec, "date": "2025-12-01", "shares": "1"}, expect=201)
 assert float(priced["amount"]) > 0, priced
+# Depotwechsel (TRANSFER) between two portfolios of a minimal hand-written file
+XFER = """<client><version>70</version><baseCurrency>EUR</baseCurrency><securities><security>
+<uuid>5ec00000-0000-4000-8000-000000000001</uuid><name>Xfer ETF</name><currencyCode>EUR</currencyCode>
+<isin>IE00B4L5Y983</isin><prices><price t="2024-01-02" v="10000000000"/></prices><isRetired>false</isRetired>
+</security></securities><accounts><account><uuid>acc00000-0000-4000-8000-000000000001</uuid><name>Konto</name>
+<currencyCode>EUR</currencyCode><isRetired>false</isRetired><transactions/></account></accounts><portfolios>
+<portfolio><uuid>p0000000-0000-4000-8000-000000000001</uuid><name>Depot A</name><isRetired>false</isRetired>
+<referenceAccount reference="../../../accounts/account"/><transactions/></portfolio>
+<portfolio><uuid>p0000000-0000-4000-8000-000000000002</uuid><name>Depot B</name><isRetired>false</isRetired>
+<referenceAccount reference="../../../accounts/account"/><transactions/></portfolio>
+</portfolios><plans/><watchlists/><properties/><settings/></client>"""
+req = urllib.request.Request(base + "/clients/xfer/file", data=XFER.encode(), method="PUT",
+                             headers={"Authorization": f"Bearer {token}", "X-Filename": "xfer.xml"})
+with opener.open(req, timeout=120) as r:
+    assert r.status == 200, r.status
+PA, PB = "p0000000-0000-4000-8000-000000000001", "p0000000-0000-4000-8000-000000000002"
+SEC = "5ec00000-0000-4000-8000-000000000001"
+call("POST", "/clients/xfer/transactions", {"type": "DELIVERY_INBOUND", "portfolio": PA, "security": SEC,
+     "date": "2024-01-02", "shares": "10", "amount": "1000"}, expect=201)
+xfer = {"type": "TRANSFER", "portfolio": PA, "target": PB, "security": SEC, "date": "2024-01-02"}
+call("POST", "/clients/xfer/transactions", {**xfer, "shares": "11"}, expect=409)
+call("POST", "/clients/xfer/transactions", {**xfer, "target": PA, "shares": "1"}, expect=400)
+call("POST", "/clients/xfer/transactions", {**xfer, "target": "", "shares": "1"}, expect=400)
+tr = call("POST", "/clients/xfer/transactions", {**xfer, "shares": "4", "note": "Depotwechsel"}, expect=201)
+assert tr["type"] == "TRANSFER" and float(tr["amount"]) == 400 and tr["target"] == PB, tr
+xt = {t["uuid"]: t for t in call("GET", "/clients/xfer/export?prices=none")["transactions"]}
+out_t, in_t = xt[tr["uuid"]], xt[tr["targetUuid"]]
+assert out_t["type"] == "TRANSFER_OUT" and in_t["type"] == "TRANSFER_IN", (out_t, in_t)
+assert out_t["cross"]["type"] == "portfolio-transfer" and out_t["cross"]["uuid"] == in_t["uuid"], out_t
+assert out_t.get("note") == "Depotwechsel" and in_t["owner"] == PB, in_t
+call("DELETE", f"/clients/xfer/transactions/{tr['uuid']}")
+xt = {t["uuid"] for t in call("GET", "/clients/xfer/export?prices=none")["transactions"]}
+assert tr["uuid"] not in xt and tr["targetUuid"] not in xt, xt
 raw = call("GET", "/clients/smoke/file")
 assert b"<client" in raw[:200], raw[:200]
 print("pp-core smoke test passed:", len(feeds), "price sources")

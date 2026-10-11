@@ -322,3 +322,33 @@ def test_securities_filter_by_portfolio(web):
     assert f"/pp/securities/{ETF}" in p1 and f"/pp/securities/{SHARE}" not in p1
     assert f"/pp/securities/{ETF}" in p2 and f"/pp/securities/{SHARE}" in p2
     assert f'value="{P1}" selected' in p1
+
+
+def test_manual_transfer(web, fake):
+    page = web.get("/pp/delivery")
+    assert "Depotwechsel" in page.text and 'name="target"' in page.text
+    base = {"csrf_token": web.csrf, "type": "TRANSFER", "security": ETF, "portfolio": P1, "date": "06.02.2024",
+            "shares": "3", "amount": "", "fees": "9", "taxes": "9", "note": "Depotwechsel"}
+    r = web.post("/pp/delivery", data={**base, "target": ""}, follow_redirects=True)
+    assert "Zieldepot" in r.text
+    r = web.post("/pp/delivery", data={**base, "target": P1}, follow_redirects=True)
+    assert "gleich" in r.text
+    r = web.post("/pp/delivery", data={**base, "target": P2, "security": "new", "isin": "IE00BKM4GZ66"},
+                 follow_redirects=True)
+    assert "Depotwechsel ein Wertpapier" in r.text
+    assert not [c for c in fake.calls if c[0] == "add_delivery"]
+    r = web.post("/pp/delivery", data={**base, "target": P2})
+    assert r.status_code == 302 and "/pp/transactions" in r.headers["Location"]
+    call = [c for c in fake.calls if c[0] == "add_delivery"][-1][1]
+    # no fees or taxes on a transfer; value empty = shares × price in pp-core
+    assert call == {"type": "TRANSFER", "portfolio": P1, "target": P2, "date": "2024-02-06", "shares": "3",
+                    "note": "Depotwechsel", "force": False, "security": ETF}
+    kinds = {t["type"] for t in fake.export_data["transactions"] if t.get("note") == "Depotwechsel"}
+    assert kinds == {"TRANSFER_OUT", "TRANSFER_IN"}
+
+
+def test_manual_transfer_more_than_held_asks(web, fake):
+    r = web.post("/pp/delivery", data={"csrf_token": web.csrf, "type": "TRANSFER", "security": ETF,
+                                       "portfolio": P1, "target": P2, "date": "2024-02-06", "shares": "5000"})
+    assert r.status_code == 200 and 'name="force"' in r.text and "Trotzdem umbuchen" in r.text
+    assert f'value="{P2}" selected' in r.text

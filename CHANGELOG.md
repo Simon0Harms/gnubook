@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Portfolio Performance: *Ein-/Auslieferung* can also enter a *Depotwechsel* (securities transfer between two
+  securities accounts of the PP file, like PP Desktop's dialog): existing security, sending and receiving
+  account in the same currency, shares, optional value (shares × price of that day), note; no fees or taxes;
+  more shares than held only after confirmation. Booked in GnuCash as before for PP transfers: one *Depotübertrag*
+  at FIFO cost, purchase dates kept. pp-core: `POST /clients/{id}/transactions` with `"type": "TRANSFER"` and
+  `"target"`
 - *Bücher*: new card *PostgreSQL-Rollen* lists the login roles gnubook's admin role may manage, with their
   databases and the books using them. Unused roles can be deleted (type the name to confirm), optionally together
   with the databases they own (no backup). Roles of connected books, superusers and roles without ADMIN
