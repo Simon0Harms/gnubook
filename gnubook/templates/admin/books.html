@@ -96,6 +96,47 @@
     {% endif %}
   </div>
 </div>
+{% if can_create %}
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">{{ _("PostgreSQL-Rollen") }}</h3></div>
+  <div class="card-body">
+    <p class="small text-body-secondary">{{ _("Login-Rollen, die gnubooks Admin-Rolle verwalten darf (ohne Superuser). Rollen, die ein verbundenes Buch benutzt, lassen sich hier nicht löschen – dafür das Buch löschen. Datenbanken einer Rolle werden ohne Sicherung gelöscht.") }}</p>
+    {% if pg_error %}<div class="alert alert-danger small">{{ pg_error }}</div>{% endif %}
+    {% if pg_roles %}
+    <div class="table-responsive"><table class="table table-sm align-middle">
+      <thead><tr><th>{{ _("Rolle") }}</th><th>{{ _("Eigene Datenbanken") }}</th><th>{{ _("Benutzt von Buch") }}</th><th></th></tr></thead>
+      <tbody>
+      {% for r in pg_roles %}
+      <tr>
+        <td class="font-monospace">{{ r.name }}</td>
+        <td class="font-monospace small">{{ r.databases|join(', ') or '–' }}</td>
+        <td class="small">{{ r.books|join(', ') or '–' }}</td>
+        <td class="text-end">
+          {% if r.books %}<span class="small text-body-secondary">{{ _("in Benutzung") }}</span>
+          {% elif not r.can_drop %}<span class="small text-body-secondary">{{ _("keine ADMIN-Berechtigung") }}</span>
+          {% else %}<button class="btn btn-outline-danger btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#role-{{ loop.index }}">{{ _("Löschen …") }}</button>{% endif %}
+        </td>
+      </tr>
+      {% if not r.books and r.can_drop %}
+      <tr class="collapse" id="role-{{ loop.index }}"><td colspan="4">
+        <form method="post" action="{{ url_for('admin.pg_role_drop') }}" class="border border-danger rounded p-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="role" value="{{ r.name }}">
+          {% if r.databases %}<div class="form-check small mb-2"><input class="form-check-input" type="checkbox" name="with_databases" value="1" id="rdb-{{ loop.index }}"><label class="form-check-label" for="rdb-{{ loop.index }}">{{ _("Datenbanken mitlöschen:") }} <code>{{ r.databases|join(', ') }}</code></label></div>{% endif %}
+          <div class="input-group input-group-sm" style="max-width: 28rem">
+            <input class="form-control" name="confirm_name" placeholder="{{ r.name }}" autocomplete="off" aria-label="{{ _("Zum Bestätigen den Rollennamen eintippen") }}">
+            <button class="btn btn-danger">{{ _("Endgültig löschen") }}</button>
+          </div>
+        </form>
+      </td></tr>
+      {% endif %}
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% elif not pg_error %}<p class="small mb-0">{{ _("Keine Rollen.") }}</p>{% endif %}
+  </div>
+</div>
+{% endif %}
 <div class="card">
   <div class="card-header"><h3 class="card-title">{{ _("Vorhandenes Buch verbinden") }}</h3></div>
   <div class="card-body">

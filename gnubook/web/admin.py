@@ -138,6 +138,12 @@ def books():
     from ..banks import profile_names
 
     rows = [(b, mask_url(b["url"]), system.book_users(b["id"])) for b in system.books()]
+    pg_roles, pg_error = [], None
+    if reg.cfg.postgres.admin_url:
+        try:
+            pg_roles = reg.pg_roles()
+        except UserError as exc:
+            pg_error = str(exc)
     import_settings = {}
     for b in system.books():
         try:
@@ -147,6 +153,7 @@ def books():
     return render_template("admin/books.html", rows=rows, users=system.users(), form=form,
                            can_create=bool(reg.cfg.postgres.admin_url), profiles=profile_names(),
                            import_settings=import_settings, defaults=reg.cfg.importer,
+                           pg_roles=pg_roles, pg_error=pg_error,
                            credentials=session.pop("new_book_credentials", None))
 
 
@@ -229,4 +236,23 @@ def book_import(book_id):
         flash(str(exc), "danger")
         return redirect(url_for("admin.books"))
     flash(_("Gespeichert."), "success")
+    return redirect(url_for("admin.books"))
+
+
+@bp.route("/pg-roles", methods=["POST"])
+@login_required(book=False, admin=True)
+def pg_role_drop():
+    role = request.form.get("role", "")
+    if request.form.get("confirm_name", "").strip() != role:
+        flash(_("Zum Löschen der Rolle bitte ihren Namen genau eintippen."), "danger")
+        return redirect(url_for("admin.books"))
+    try:
+        dbs = registry().drop_pg_role(role, request.form.get("with_databases") == "1")
+    except UserError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("admin.books"))
+    if dbs:
+        flash(_("PostgreSQL-Rolle „{a0}“ und Datenbanken {a1} gelöscht.", a0=role, a1=", ".join(dbs)), "success")
+    else:
+        flash(_("PostgreSQL-Rolle „{a0}“ gelöscht.", a0=role), "success")
     return redirect(url_for("admin.books"))

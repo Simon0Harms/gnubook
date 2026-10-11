@@ -81,6 +81,64 @@ def drop_role_and_db(admin_url: str, dbname: str):
         eng.dispose()
 
 
+def list_roles(admin_url: str) -> list[dict]:
+    """Login roles the admin role may manage: no superuser, not itself, no pg_* system roles.
+
+    Each entry: name, databases (owned by the role), can_drop (admin role has ADMIN OPTION, PG16+; older
+    PostgreSQL: any non-superuser role, since CREATEROLE could drop those).
+    """
+    eng = _admin_engine(admin_url)
+    try:
+        with eng.connect() as c:
+            new_pg = c.execute(text("SELECT current_setting('server_version_num')::int >= 160000")).scalar()
+            rows = c.execute(text(
+                "SELECT r.rolname, "
+                "  COALESCE((SELECT array_agg(d.datname ORDER BY d.datname) FROM pg_database d "
+                "            WHERE d.datdba = r.oid), '{}') AS dbs, "
+                "  pg_has_role(current_user, r.oid, 'USAGE') AS member, "
+                "  EXISTS (SELECT 1 FROM pg_auth_members m JOIN pg_roles a ON a.oid = m.member "
+                "          WHERE m.roleid = r.oid AND a.rolname = current_user AND m.admin_option) AS admin "
+                "FROM pg_roles r "
+                "WHERE r.rolcanlogin AND NOT r.rolsuper AND r.rolname <> current_user "
+                "  AND r.rolname NOT LIKE 'pg\\_%' "
+                "ORDER BY r.rolname")).all()
+    finally:
+        eng.dispose()
+    return [{"name": n, "databases": list(dbs or []), "can_drop": bool(adm) if new_pg else True,
+             "member": bool(mem)} for n, dbs, mem, adm in rows]
+
+
+def drop_role(admin_url: str, role: str, with_databases: bool = False) -> list[str]:
+    """DROP ROLE, optionally DROP DATABASE for every database the role owns first. Returns dropped databases."""
+    roles = {r["name"]: r for r in list_roles(admin_url)}
+    if role not in roles:
+        raise ProvisionError(_("Rolle „{a0}“ gibt es nicht oder gnubook darf sie nicht verwalten.", a0=role))
+    info = roles[role]
+    if not info["can_drop"]:
+        raise ProvisionError(_("gnubooks Admin-Rolle hat keine ADMIN-Berechtigung für „{a0}“.", a0=role))
+    if info["databases"] and not with_databases:
+        raise ProvisionError(_("„{a0}“ besitzt noch Datenbanken ({a1}). Zum Löschen „Datenbanken mitlöschen“ ankreuzen.", a0=role, a1=", ".join(info["databases"])))
+    eng = _admin_engine(admin_url)
+    try:
+        with eng.connect() as c:
+            def q(name):  # quote_ident: role/database names here come from pg_catalog, not from the form
+                return c.execute(text("SELECT quote_ident(:n)"), {"n": name}).scalar()
+            if info["databases"] and not info["member"]:
+                c.execute(text(f"GRANT {q(role)} TO CURRENT_USER"))  # DROP DATABASE needs ownership (via membership)
+            for db in info["databases"]:
+                c.execute(text("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :n"), {"n": db})
+                c.execute(text(f"DROP DATABASE IF EXISTS {q(db)}"))
+            c.execute(text("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = :n"), {"n": role})
+            c.execute(text(f"DROP ROLE {q(role)}"))
+    except ProvisionError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise ProvisionError(_("Rolle konnte nicht gelöscht werden: {a0}", a0=getattr(exc, "orig", exc)))
+    finally:
+        eng.dispose()
+    return info["databases"]
+
+
 def create_empty_book(url: str, currency: str = "EUR", template: str = "none"):
     """GnuCash schema + root accounts in an existing, empty database (as the owner role)."""
     import piecash

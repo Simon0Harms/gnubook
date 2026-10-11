@@ -86,3 +86,33 @@ def test_upload_sqlite_book(papp, tmp_path):
             "file": (io.BytesIO(b"<?xml version='1.0'?><gnc-v2/>"), "x.gnucash")}
     r = admin.post("/admin/books/new", data=data, content_type="multipart/form-data", follow_redirects=True)
     assert "SQLite-Format" in r.text and not _exists("gnucash_kaputt")
+
+
+def test_drop_orphan_pg_role(papp):
+    reg = papp.extensions["gnubook"]
+    admin = _login(papp, "tester", PASSWORD)
+    eng = create_engine(ADMIN, isolation_level="AUTOCOMMIT")
+    with eng.connect() as c:
+        c.execute(text("CREATE ROLE gnucash_orphan LOGIN PASSWORD 'x'"))
+        c.execute(text("GRANT gnucash_orphan TO CURRENT_USER"))
+        c.execute(text("CREATE DATABASE gnucash_orphan OWNER gnucash_orphan"))
+    eng.dispose()
+    bid, _creds = reg.create_book("inuse", "empty")
+    try:
+        page = admin.get("/admin/books").text
+        assert "PostgreSQL-Rollen" in page and "gnucash_orphan" in page
+        roles = {r["name"]: r for r in reg.pg_roles()}
+        assert roles["gnucash_orphan"]["databases"] == ["gnucash_orphan"] and not roles["gnucash_orphan"]["books"]
+        assert roles["gnucash_inuse"]["books"] == ["inuse"]
+        post = lambda **d: admin.post("/admin/pg-roles", data={"csrf_token": admin.csrf, **d})
+        # wrong confirmation, owned database without the checkbox, role of a connected book: refused
+        post(role="gnucash_orphan", confirm_name="x")
+        post(role="gnucash_orphan", confirm_name="gnucash_orphan")
+        post(role="gnucash_inuse", confirm_name="gnucash_inuse", with_databases="1")
+        roles = {r["name"] for r in reg.pg_roles()}
+        assert {"gnucash_orphan", "gnucash_inuse"} <= roles and _exists("gnucash_orphan")
+        r = post(role="gnucash_orphan", confirm_name="gnucash_orphan", with_databases="1")
+        assert r.status_code == 302
+        assert "gnucash_orphan" not in {r["name"] for r in reg.pg_roles()} and not _exists("gnucash_orphan")
+    finally:
+        reg.remove_book(bid, drop_database=True)

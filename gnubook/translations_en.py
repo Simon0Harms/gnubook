@@ -340,6 +340,31 @@ EN = {
     "data/backup/deleted/": "data/backup/deleted/",
     ". Zum Bestätigen den Buchnamen eintippen:": ". Type the book name to confirm:",
     "Endgültig löschen": "Delete permanently",
+    "PostgreSQL-Rollen": "PostgreSQL roles",
+    "Login-Rollen, die gnubooks Admin-Rolle verwalten darf (ohne Superuser). Rollen, die ein verbundenes Buch benutzt, lassen sich hier nicht löschen – dafür das Buch löschen. Datenbanken einer Rolle werden ohne Sicherung gelöscht.":
+        "Login roles gnubook's admin role may manage (no superusers). Roles used by a connected book cannot be "
+        "deleted here – delete the book instead. Databases of a role are deleted without a backup.",
+    "Rolle": "Role",
+    "Eigene Datenbanken": "Owned databases",
+    "Benutzt von Buch": "Used by book",
+    "in Benutzung": "in use",
+    "keine ADMIN-Berechtigung": "no ADMIN privilege",
+    "Löschen …": "Delete …",
+    "Datenbanken mitlöschen:": "Also delete databases:",
+    "Zum Bestätigen den Rollennamen eintippen": "Type the role name to confirm",
+    "Keine Rollen.": "No roles.",
+    "Zum Löschen der Rolle bitte ihren Namen genau eintippen.": "To delete the role, type its name exactly.",
+    "PostgreSQL-Rolle „{a0}“ und Datenbanken {a1} gelöscht.": "PostgreSQL role “{a0}” and databases {a1} deleted.",
+    "PostgreSQL-Rolle „{a0}“ gelöscht.": "PostgreSQL role “{a0}” deleted.",
+    "PostgreSQL-Rollen nicht lesbar: {a0}": "Cannot read PostgreSQL roles: {a0}",
+    "Rolle „{a0}“ gibt es nicht oder gnubook darf sie nicht verwalten.":
+        "Role “{a0}” does not exist or gnubook may not manage it.",
+    "gnubooks Admin-Rolle hat keine ADMIN-Berechtigung für „{a0}“.": "gnubook's admin role has no ADMIN privilege on “{a0}”.",
+    "„{a0}“ besitzt noch Datenbanken ({a1}). Zum Löschen „Datenbanken mitlöschen“ ankreuzen.":
+        "“{a0}” still owns databases ({a1}). Tick “Also delete databases” to delete them.",
+    "Rolle konnte nicht gelöscht werden: {a0}": "Role could not be deleted: {a0}",
+    "„{a0}“ wird noch von Buch {a1} benutzt – erst das Buch löschen oder die Verbindung entfernen.":
+        "“{a0}” is still used by book {a1} – delete the book or disconnect it first.",
     "Neues Buch anlegen": "Create new book",
     "gnubook legt in PostgreSQL eine eigene Rolle und Datenbank an (":
         "gnubook creates its own role and database in PostgreSQL (",

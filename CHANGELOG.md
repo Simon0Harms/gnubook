@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- *Bücher*: new card *PostgreSQL-Rollen* lists the login roles gnubook's admin role may manage, with their
+  databases and the books using them. Unused roles can be deleted (type the name to confirm), optionally together
+  with the databases they own (no backup). Roles of connected books, superusers and roles without ADMIN
+  privilege (PG16+) are not offered
 - Portfolio Performance: *Wertpapiere und Kurse* can be filtered by portfolio (Depot); shows the securities
   with transactions in that portfolio. The filter is kept when toggling *auch aufgelöste …*
 - Portfolio Performance: new page *Ein-/Auslieferung* to enter inbound and outbound deliveries by hand, for

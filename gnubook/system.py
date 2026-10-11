@@ -367,6 +367,46 @@ class SystemDB:
         with self.conn() as c:
             c.execute("DELETE FROM nextcloud_targets WHERE user_id = ? AND book_id = ?", (user_id, book_id))
 
+    def pg_roles(self) -> list[dict]:
+        """PostgreSQL login roles manageable with [postgres] admin_url, with the books that use them."""
+        from sqlalchemy.engine import make_url
+
+        from . import provision
+
+        if not self.cfg.postgres.admin_url:
+            return []
+        used: dict[str, list[str]] = {}
+        for b in self.system.books():
+            try:
+                user = make_url(b["url"]).username
+            except Exception:  # noqa: BLE001
+                continue
+            if user:
+                used.setdefault(user, []).append(b["name"])
+        try:
+            roles = provision.list_roles(self.cfg.postgres.admin_url)
+        except Exception as exc:  # noqa: BLE001
+            raise UserError(_("PostgreSQL-Rollen nicht lesbar: {a0}", a0=exc))
+        for r in roles:
+            r["books"] = used.get(r["name"], [])
+        return roles
+
+    def drop_pg_role(self, role: str, with_databases: bool = False) -> list[str]:
+        """Drop a PostgreSQL role that no connected book uses. Returns the dropped databases."""
+        from . import provision
+
+        if not self.cfg.postgres.admin_url:
+            raise UserError(_("Neue Datenbanken anlegen ist aus: [postgres] admin_url fehlt in config.toml."))
+        r = next((x for x in self.pg_roles() if x["name"] == role), None)
+        if r is None:
+            raise UserError(_("Rolle „{a0}“ gibt es nicht oder gnubook darf sie nicht verwalten.", a0=role))
+        if r["books"]:
+            raise UserError(_("„{a0}“ wird noch von Buch {a1} benutzt – erst das Buch löschen oder die Verbindung entfernen.", a0=role, a1=", ".join(r["books"])))
+        try:
+            return provision.drop_role(self.cfg.postgres.admin_url, role, with_databases)
+        except provision.ProvisionError as exc:
+            raise UserError(str(exc))
+
     def nextcloud_uploads(self, book_id: int):
         """Active targets of a book whose user still may use it, joined with the user's account."""
         with self.conn() as c:
@@ -564,6 +604,46 @@ class Registry:
         if drop_database:
             provision.drop_role_and_db(self.cfg.postgres.admin_url, row["managed_db"])
         return saved
+
+    def pg_roles(self) -> list[dict]:
+        """PostgreSQL login roles manageable with [postgres] admin_url, with the books that use them."""
+        from sqlalchemy.engine import make_url
+
+        from . import provision
+
+        if not self.cfg.postgres.admin_url:
+            return []
+        used: dict[str, list[str]] = {}
+        for b in self.system.books():
+            try:
+                user = make_url(b["url"]).username
+            except Exception:  # noqa: BLE001
+                continue
+            if user:
+                used.setdefault(user, []).append(b["name"])
+        try:
+            roles = provision.list_roles(self.cfg.postgres.admin_url)
+        except Exception as exc:  # noqa: BLE001
+            raise UserError(_("PostgreSQL-Rollen nicht lesbar: {a0}", a0=exc))
+        for r in roles:
+            r["books"] = used.get(r["name"], [])
+        return roles
+
+    def drop_pg_role(self, role: str, with_databases: bool = False) -> list[str]:
+        """Drop a PostgreSQL role that no connected book uses. Returns the dropped databases."""
+        from . import provision
+
+        if not self.cfg.postgres.admin_url:
+            raise UserError(_("Neue Datenbanken anlegen ist aus: [postgres] admin_url fehlt in config.toml."))
+        r = next((x for x in self.pg_roles() if x["name"] == role), None)
+        if r is None:
+            raise UserError(_("Rolle „{a0}“ gibt es nicht oder gnubook darf sie nicht verwalten.", a0=role))
+        if r["books"]:
+            raise UserError(_("„{a0}“ wird noch von Buch {a1} benutzt – erst das Buch löschen oder die Verbindung entfernen.", a0=role, a1=", ".join(r["books"])))
+        try:
+            return provision.drop_role(self.cfg.postgres.admin_url, role, with_databases)
+        except provision.ProvisionError as exc:
+            raise UserError(str(exc))
 
     def nextcloud_uploads(self, book_id: int) -> list[dict]:
         """Upload targets of a book with decrypted passwords (only ever held in memory)."""
