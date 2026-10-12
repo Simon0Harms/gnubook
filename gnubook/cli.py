@@ -572,7 +572,7 @@ def _postbox_jobs(reg, book_ref, source, scheduled, from_requests, mode):
     return out
 
 
-REQUEST_WAIT = 2 * 3600  # seconds; gnubook-postbox-request.service allows 3 hours
+REQUEST_WAIT = 11 * 3600  # seconds; gnubook-postbox-request.service allows 12 hours (a first run may be long)
 
 
 @main.command("postbox-fetch")

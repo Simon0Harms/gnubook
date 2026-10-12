@@ -59,7 +59,7 @@ The script
 
 1. *Belegeingang*: enter user name and password of finanzen.net zero.
 2. *Belege ab*: documents posted before this day are never fetched. Empty: every document down to the oldest one
-   in the postbox (the first run clicks *Mehr anzeigen* to the end of the list; mind `max_clicks`). For the first run choose the day after the
+   in the postbox (the first run clicks *Mehr anzeigen* to the end of the list). For the first run choose the day after the
    last document you imported into PP by hand – otherwise PP finds possible duplicates for every older document
    (it does not import them, but they wait for a decision).
 3. *Nextcloud-Ordner*: the folder in your Nextcloud (connected under *Einstellungen → Nextcloud*), e.g.
@@ -87,7 +87,7 @@ known yet:
     stop day = max(Belege ab, newest completely listed day − overlap)        (Belege ab before the first run)
 
 The overlap (default 3 days) catches documents that are posted late for an earlier day. A run that hit the click
-limit (`[postbox] max_clicks`, 500 = 5000 documents) or whose *Mehr anzeigen* stopped loading does not move the
+limit (`[postbox] max_clicks`, if set) or whose *Mehr anzeigen* stopped loading does not move the
 "completely listed" day, and a document whose download failed holds it back – the next run lists that range again.
 *Einmalig erneut prüfen ab* makes the next complete run list back to an earlier day once.
 
@@ -176,8 +176,7 @@ When a run fails, the browser keeps a screenshot and the HTML of the page (passw
 - *nicht installiert*: Playwright or its browser is missing – run `deploy/install-postbox.sh` (again).
 - The browser does not start in the container (`journalctl -u gnubook-postbox-request`): try the other browser,
   `install-postbox.sh chromium`.
-- *Klickgrenze erreicht*: the first run had more documents than `[postbox] max_clicks` × 10 – raise it, or choose a
-  later *Belege ab*.
+- *Klickgrenze erreicht*: only when `[postbox] max_clicks` is set – raise it or set it to 0 (no limit).
 - `data/postbox/debug/api-paths.txt` lists the web app's own API calls of the last run (method, path and query
   keys; downloads left out, long numbers such as the customer number replaced by `{n}`). They show how the postbox
   could be read without a browser later.
@@ -205,12 +204,17 @@ enabled = true
 browser = "firefox"                       # or "chromium"
 browsers_path = "/opt/gnubook/pw-browsers"
 timeout = 45                              # seconds per step
-max_clicks = 500                          # "Mehr anzeigen" per run (10 documents each)
+max_clicks = 0                            # "Mehr anzeigen" per run (10 documents each); 0 = no limit
 download_pause_ms = 400                   # pause between two downloads
 debug_keep = 10                           # failed runs kept with screenshot and HTML
 ```
 
 ## Limitations
+
+- A first run over a large postbox takes long: about 1–2 s per *Mehr anzeigen* (10 documents) and about 1 s per
+  download – for 14,000 documents roughly 4–8 hours (estimate, not measured). Documents are stored as they arrive;
+  a run that is stopped (12 hours at most) keeps them, and the next run lists the postbox again and fetches the
+  rest.
 
 - Only finanzen.net zero, and only its *Eingang* (inbox). Documents that are archived before a run fetched them
   are not seen; neither is the *MiFID* tab (cost information).

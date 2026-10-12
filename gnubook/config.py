@@ -128,7 +128,7 @@ class PostboxConfig:
     # seconds to wait for one step (page load, login, "Mehr anzeigen", download)
     timeout: int = 45
     # at most this many clicks on "Mehr anzeigen" per run (10 documents each)
-    max_clicks: int = 500
+    max_clicks: int = 0  # 0 = no limit: until the end of the list
     # pause between two downloads in milliseconds
     download_pause_ms: int = 400
     # screenshots and HTML of failed runs kept in data_dir/postbox/debug (number of runs)

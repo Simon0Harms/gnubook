@@ -10,7 +10,7 @@ Group=gnubook
 Environment=GNUBOOK_CONFIG=/opt/gnubook/config.toml
 ExecStart=/opt/gnubook/venv/bin/gnubook postbox-fetch --scheduled
 # a first run with a long backlog lists and downloads hundreds of documents
-TimeoutStartSec=3h
+TimeoutStartSec=12h
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true

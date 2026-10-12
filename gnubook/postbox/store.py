@@ -23,7 +23,7 @@ from .plan import Listed
 PP_RETRY = ("pending", "needs_target")          # imported again by every run
 PP_ATTENTION = ("review", "needs_target", "error", "partial")
 NC_RETRY = ("pending", "error")
-RUNNING_STALE = timedelta(hours=2)               # a "running" run older than this died without finishing
+RUNNING_STALE = timedelta(hours=13)              # a "running" run older than this died without finishing
 
 
 class PostboxStore:

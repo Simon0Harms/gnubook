@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Belegeingang: no click limit by default (`[postbox] max_clicks = 0`), runs may take up to 12 hours; after a click
+  only the new entries are read
 - Belegeingang: *Belege ab* may stay empty – then every document down to the oldest one is fetched
 - Belegeingang: an own Nextcloud share link for the documents (instead of the Nextcloud of the GnuCash copy),
   and sub folders per year, week or day

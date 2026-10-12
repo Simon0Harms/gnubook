@@ -181,7 +181,7 @@ JS_IN_CONSENT = """(el) => {
   return false;
 }"""
 
-JS_ITEMS = """(sel) => Array.from(document.querySelectorAll(sel)).map(el => {
+JS_ITEMS = """([sel, start]) => Array.from(document.querySelectorAll(sel)).slice(start).map(el => {
   const clean = (s) => (s || '').replace(/\\s+/g, ' ').trim();
   const a = el.querySelector('a[href]');
   const label = el.querySelector('[data-zid="zero-navigation-action-list-item-label"]');
@@ -424,10 +424,12 @@ class FinanzenZeroFetcher:
             pass
 
     # ------------------------------------------------------------------ list
-    def _read(self, page) -> list[Listed]:
+    def _read(self, page, start: int = 0) -> list[Listed]:
+        """Entries of the list from position `start` on (after a click only the new ones: the list may hold
+        many thousand entries)."""
         today = datetime.now(TZ).date()
         out = []
-        for raw in page.evaluate(JS_ITEMS, ITEM):
+        for raw in page.evaluate(JS_ITEMS, [ITEM, start]):
             out.append(Listed(external_id=str(raw.get("id") or "").strip(), title=raw.get("title") or "",
                               day=parse_day(raw.get("day"), today), href=raw.get("href") or "",
                               raw_day=raw.get("day") or ""))
@@ -450,14 +452,14 @@ class FinanzenZeroFetcher:
             more = page.locator(MORE)
             if more.count() == 0 or not more.first.is_visible():
                 return listed, clicks, "end"
-            if clicks >= self.cfg.max_clicks:
+            if self.cfg.max_clicks and clicks >= self.cfg.max_clicks:
                 return listed, clicks, "limit"
             before = page.locator(ITEM).count()
             self._click(more.first)
             clicks += 1
             if not self._wait_growth(page, before):
                 return listed, clicks, "stalled"
-            batch = [d for d in self._read(page) if d.external_id not in seen]
+            batch = [d for d in self._read(page, before) if d.external_id not in seen]
             seen.update(d.external_id for d in batch)
             listed.extend(batch)
 

@@ -217,7 +217,7 @@ or on the command line. Every value can be overridden with an environment variab
 | `[pp] url`, `token` | pp-core (Portfolio Performance) address and token; empty = off. Written by `deploy/install-pp.sh` |
 | `[pp] timeout`, `quotes_interval_hours` | Seconds per pp-core call (default 60); load prices at most every N hours in `gnubook pp-update` (default 12) |
 | `[postbox] enabled`, `browser`, `browsers_path` | Belegeingang on, Playwright browser (`firefox`/`chromium`) and where it is installed. Written by `deploy/install-postbox.sh` |
-| `[postbox] timeout`, `max_clicks`, `download_pause_ms`, `debug_keep` | Seconds per step (45); *Mehr anzeigen* clicks per run (500); pause between downloads (400 ms); failed runs kept with screenshot (10) |
+| `[postbox] timeout`, `max_clicks`, `download_pause_ms`, `debug_keep` | Seconds per step (45); *Mehr anzeigen* clicks per run (0 = no limit); pause between downloads (400 ms); failed runs kept with screenshot (10) |
 | `[postbox] login_user_selector`, `login_password_selector`, `login_submit_selector` | CSS selectors for the login form, only if the automatic recognition fails |
 | `[[checkpoints.patterns]]` | Own balance-line patterns (`stand` regex, `keyword`), used with every bank profile |
 
