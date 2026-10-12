@@ -1089,7 +1089,7 @@ EN = {
     'Für die Kopie in die Nextcloud zuerst unter Einstellungen eine Nextcloud verbinden.': 'For the copy into Nextcloud, connect a Nextcloud under Settings first.',
     'Für dieses Buch ist kein Postfach eingerichtet.': 'No postbox is set up for this book.',
     'Für dieses Buch läuft gerade schon ein Abruf.': 'A retrieval for this book is already running.',
-    'Gelesen wird, bis ein ganzer Block der Liste älter ist als der zuletzt vollständig gelesene Tag minus Überlappung; geladen wird jeder Beleg mit unbekannter Nummer. Ein Lauf dauert etwa eine Minute.': 'The list is read until a whole block is older than the last completely read day minus the overlap; every document with an unknown number is downloaded. A run takes about a minute.',
+    'Gelesen wird, bis ein ganzer Block der Liste älter ist als der zuletzt vollständig gelesene Tag minus Überlappung; geladen wird jeder Beleg mit unbekannter Nummer. Ein Lauf dauert meist eine Minute, der erste über ein großes Postfach auch Stunden.': 'The list is read until a whole block is older than the last completely read day minus the overlap; every document with an unknown number is downloaded. A run usually takes a minute, the first one over a large postbox even hours.',
     'Gespeichertes Passwort nicht lesbar: {a0}': 'Stored password not readable: {a0}',
     'Im Posteingang wurden keine Einträge gefunden.': 'No entries were found in the postbox.',
     'In Portfolio Performance importieren': 'Import into Portfolio Performance',
