@@ -38,7 +38,7 @@ TARGET_MISSING = "target account missing"
 PAUSING = ("login_failed", "approval_required")
 TZ = ZoneInfo("Europe/Berlin")
 STOP_TEXTS = {
-    "date": "bis zum bekannten Stand gelesen",
+    "date": "bis zum Stopptag gelesen („Belege ab“ bzw. zuletzt vollständig gelesener Tag minus Überlappung)",
     "end": "Ende der Liste erreicht",
     "limit": "Klickgrenze erreicht ([postbox] max_clicks) – ältere Belege fehlen noch",
     "stalled": "„Mehr anzeigen“ lud nichts nach – ältere Belege fehlen evtl. noch",

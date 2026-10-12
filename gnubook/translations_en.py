@@ -1139,7 +1139,7 @@ EN = {
     'alle zeigen': 'show all',
     'an': 'on',
     'aus': 'off',
-    'bis zum bekannten Stand gelesen': 'read down to the known state',
+    'bis zum Stopptag gelesen („Belege ab“ bzw. zuletzt vollständig gelesener Tag minus Überlappung)': 'read down to the stop day (“Belege ab” or the last completely read day minus the overlap)',
     'erledigt': 'done',
     'finanzen.net zero verlangt eine Freigabe (Secure TAN) – der Abruf funktioniert nur mit einer Anmeldung, die keine verlangt.': 'finanzen.net zero asks for an approval (Secure TAN) – retrieval only works with a login that does not need one.',
     'gespeichert – leer lassen, um es zu behalten': 'stored – leave empty to keep it',
