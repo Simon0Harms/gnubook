@@ -449,13 +449,12 @@ class PostboxService:
         except Exception as exc:  # noqa: BLE001 – key changed
             return None, str(exc)
 
-    def nc_folder(self, st: SourceSettings, day: str | None, title: str | None = None) -> str:
+    def nc_folder(self, st: SourceSettings, day: str | None) -> str:
         from ..nextcloud import clean_folder
 
-        folder = clean_folder(st.nc_base_folder(title))
-        if st.nc_year_folders:
-            folder = folder.rstrip("/") + "/" + ((day or "")[:4] or "ohne-Datum")
-        return folder
+        folder = clean_folder(st.nc_folder)
+        sub = st.nc_subfolder(SourceSettings._day(day or ""))
+        return folder.rstrip("/") + "/" + sub if sub else folder
 
     def _process_nc(self, kind: str, row, st: SourceSettings, done: dict, only=None):
         rows = only if only is not None else self.store.for_nc(kind)
@@ -481,7 +480,7 @@ class PostboxService:
                 self.store.set_nc(r["id"], "error", message=_("PDF fehlt: {a0}", a0=exc))
                 continue
             try:
-                folder = self.nc_folder(st, r["day"], r["title"])
+                folder = self.nc_folder(st, r["day"])
                 if folder not in ensured:
                     client.ensure_folder(folder)
                     ensured.add(folder)

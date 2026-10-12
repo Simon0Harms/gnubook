@@ -62,15 +62,14 @@ The script
    last document you imported into PP by hand – otherwise PP finds possible duplicates for every older document
    (it does not import them, but they wait for a decision).
 3. *Nextcloud-Ordner*: the folder in your Nextcloud (connected under *Einstellungen → Nextcloud*), e.g.
-   `/Finanzen/finanzen.net zero`; with *Unterordner je Jahr* the PDFs go to `…/2026/`. With a share link the folder
+   `/Finanzen/finanzen.net zero`; *Unterordner*: none, per year (`…/2026/`), per week (`…/2026/KW41/`, ISO week) or per day
+   (`…/2026/2026-10-09/` or `…/2026/10/09/`), by posting date, directly below the folder. With a share link the folder
    is inside the shared folder. Empty: no copy.
 
    Optional: *Eigener Freigabelink für die Belege* – a share link of a folder with edit permission (and its
    password). The documents then go there instead of the Nextcloud of *Einstellungen → Nextcloud* (where the
-   GnuCash copy goes); the folders are inside the shared folder, an empty *Nextcloud-Ordner* is its top. The link is
-   checked when it is saved; the password is stored encrypted. *Ordner für tägliche/wöchentliche Kontoauszüge*:
-   documents whose title contains *Tageskontoauszug* (or *Wochenkontoauszug*/*wöchentlich*) go to their own folder;
-   empty = *Nextcloud-Ordner*. The year sub folders apply to them as well.
+   GnuCash copy goes); the folder is inside the shared folder, an empty *Nextcloud-Ordner* is its top. The link is
+   checked when it is saved; the password is stored encrypted.
 4. Save and run a *Probelauf*. It logs in and reads the list down to *Belege ab* without downloading anything. The
    result appears under *Letzte Läufe* after a few seconds (reload the page).
 5. *Jetzt abrufen*, check the documents, then switch on *Automatisch abrufen*.

@@ -117,21 +117,13 @@
                 {% if owner and owner['id'] != current_user['id'] %}<br>{{ _("Zurzeit wird die Nextcloud von {a0} benutzt; beim Speichern wird es deine.", a0=owner['username']) }}{% endif %}
               </div>
             </div>
-            <div class="col-md-4 d-flex align-items-center">
-              <div class="form-check mt-md-3">
-                <input class="form-check-input" type="checkbox" id="nc_year_folders" name="nc_year_folders" value="1" {{ 'checked' if st.nc_year_folders }}>
-                <label class="form-check-label" for="nc_year_folders">{{ _("Unterordner je Jahr") }}</label>
-              </div>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label" for="nc_daily_folder">{{ _("Ordner für tägliche Kontoauszüge") }}</label>
-              <input class="form-control" id="nc_daily_folder" name="nc_daily_folder" value="{{ st.nc_daily_folder }}" placeholder="/Finanzen/finanzen.net zero/Täglich" {{ 'disabled' if not nc_enabled }}>
-              <div class="form-text">{{ _("Belege mit „Tageskontoauszug“ im Titel; leer = Nextcloud-Ordner.") }}</div>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label" for="nc_weekly_folder">{{ _("Ordner für wöchentliche Kontoauszüge") }}</label>
-              <input class="form-control" id="nc_weekly_folder" name="nc_weekly_folder" value="{{ st.nc_weekly_folder }}" placeholder="/Finanzen/finanzen.net zero/Wöchentlich" {{ 'disabled' if not nc_enabled }}>
-              <div class="form-text">{{ _("Belege mit „Wochenkontoauszug“ oder „wöchentlich“ im Titel; leer = Nextcloud-Ordner.") }}</div>
+            <div class="col-md-4">
+              <label class="form-label" for="nc_subfolders">{{ _("Unterordner") }}</label>
+              <select class="form-select" id="nc_subfolders" name="nc_subfolders" {{ 'disabled' if not nc_enabled }}>
+                {% for value, text in [('', _("keine")), ('year', _("je Jahr (2026)")), ('week', _("je Woche (2026/KW41)")), ('day', _("je Tag (2026/2026-10-09)")), ('ymd', _("je Tag (2026/10/09)"))] %}
+                <option value="{{ value }}" {{ 'selected' if st.nc_subfolders == value }}>{{ text }}</option>
+                {% endfor %}
+              </select>
             </div>
             <div class="col-md-8">
               <label class="form-label" for="nc_share_url">{{ _("Eigener Freigabelink für die Belege") }}</label>

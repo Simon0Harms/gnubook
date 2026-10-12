@@ -431,7 +431,7 @@ def test_web_settings_run_request_and_documents(web, cfg, nc):
     r = web.post("/postbox/source", data={"csrf_token": web.csrf, "login": "simon@example.org",
                                           "password": "geheim-123", "since": "01.10.2026", "overlap_days": "2",
                                           "enabled": "1", "import_pp": "1", "nc_folder": "Finanzen//zero/",
-                                          "nc_year_folders": "1"}, follow_redirects=True)
+                                          "nc_subfolders": "year"}, follow_redirects=True)
     assert "Gespeichert" in r.text
     row = reg.system.postbox_source(1, KIND)
     assert row["secret"].startswith("enc:v1:") and "geheim-123" not in row["secret"]
@@ -639,22 +639,12 @@ def test_documents_failing_in_nextcloud_do_not_hold_back_new_ones(reg, book, fet
     assert "PDF fehlt" in svc.store.doc(old[0]["id"])["nc_message"]
 
 
-def test_statement_kind():
-    from gnubook.postbox.settings import statement_kind
-
-    assert statement_kind("Tageskontoauszug: EUR-Konto LU0908500753, DE0008430026") == "daily"
-    assert statement_kind("Wochenkontoauszug: EUR-Konto") == "weekly"
-    assert statement_kind("Kontoauszug wöchentlich") == "weekly"
-    assert statement_kind("Steuerausgleichsrechnung") is None and statement_kind(None) is None
-
-
-def test_own_share_link_and_statement_folders(reg, book, web, fetcher, pp_import, nc):
+def test_own_share_link_and_week_folders(reg, book, web, fetcher, pp_import, nc):
     from .test_nextcloud import SHARE, SHARE_PW
 
     reg.cfg.nextcloud.allow_http = True
     form = {"csrf_token": web.csrf, "login": "simon@example.org", "password": "geheim-123", "since": "2026-10-08",
-            "import_pp": "1", "nc_folder": "/Belege", "nc_year_folders": "1", "nc_daily_folder": "Belege/Täglich",
-            "nc_weekly_folder": "/Belege/Wöchentlich", "nc_share_url": f"{nc.url}/s/{SHARE}",
+            "import_pp": "1", "nc_folder": "/Belege", "nc_subfolders": "week", "nc_share_url": f"{nc.url}/s/{SHARE}",
             "nc_share_password": "falsch"}
     r = web.post("/postbox/source", data=form, follow_redirects=True)
     assert "Freigabelink:" in r.text and reg.system.postbox_source(book.id, KIND) is None
@@ -662,7 +652,7 @@ def test_own_share_link_and_statement_folders(reg, book, web, fetcher, pp_import
     assert "Gespeichert" in r.text
     st = SourceSettings.from_json(reg.system.postbox_source(book.id, KIND)["settings"])
     assert st.nc_share_url.endswith(SHARE) and st.nc_share_secret.startswith("enc:v1:") and SHARE_PW not in r.text
-    assert (st.nc_daily_folder, st.nc_weekly_folder) == ("/Belege/Täglich", "/Belege/Wöchentlich")
+    assert st.nc_subfolders == "week"
     # saving again without the password keeps the share
     web.post("/postbox/source", data=dict(form, password="", nc_share_password=""))
     assert SourceSettings.from_json(reg.system.postbox_source(book.id, KIND)["settings"]).nc_share_secret
@@ -674,8 +664,7 @@ def test_own_share_link_and_statement_folders(reg, book, web, fetcher, pp_import
     out = svc.run(KIND, "test")
     assert out.status == "ok", out.message
     paths = {d["title"][:4]: d["nc_path"] for d in svc.store.docs(KIND)}
-    assert paths["Tage"].startswith("/Belege/Täglich/2026/") and paths["Woch"].startswith("/Belege/Wöchentlich/2026/")
-    assert paths["Steu"].startswith("/Belege/2026/")
+    assert all(p.startswith("/Belege/2026/KW41/") for p in paths.values())  # 09.10.2026: ISO week 41
     # in the shared folder (/Share in the fake), not in the Nextcloud of the settings
     assert all(f"/Share{p}" in nc.files for p in paths.values())
     assert not any(k.startswith("/Belege") for k in nc.files)
@@ -684,3 +673,16 @@ def test_own_share_link_and_statement_folders(reg, book, web, fetcher, pp_import
     web.post("/postbox/source", data=dict(form, password="", nc_share_url="", nc_share_password=""))
     st = SourceSettings.from_json(reg.system.postbox_source(book.id, KIND)["settings"])
     assert (st.nc_share_url, st.nc_share_secret) == ("", "")
+
+
+def test_subfolders():
+    st = SourceSettings.from_json('{"nc_year_folders": false}')
+    assert st.nc_subfolders == "" and st.nc_subfolder(D(2026, 10, 9)) == ""
+    st = SourceSettings.from_json('{"nc_year_folders": true}')  # settings saved before the choice existed
+    assert st.nc_subfolder(D(2026, 10, 9)) == "2026"
+    st.nc_subfolders = "week"
+    assert st.nc_subfolder(D(2026, 10, 9)) == "2026/KW41" and st.nc_subfolder(D(2027, 1, 1)) == "2026/KW53"
+    st.nc_subfolders = "day"
+    assert st.nc_subfolder(D(2026, 10, 9)) == "2026/2026-10-09" and st.nc_subfolder(None) == "ohne-Datum"
+    st.nc_subfolders = "ymd"
+    assert st.nc_subfolder(D(2026, 10, 9)) == "2026/10/09"

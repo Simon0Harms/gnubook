@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Belegeingang: an own Nextcloud share link for the documents (instead of the Nextcloud of the GnuCash copy),
-  and own folders for daily and weekly account statements
+  and sub folders per year, week or day
 - Belegeingang (optional, `deploy/install-postbox.sh`, docs/POSTBOX.md): documents of a finanzen.net zero account are
   fetched from its online postbox by a headless browser (Playwright, Firefox or Chromium; no X server or VNC). It logs
   in with the stored user name and password (encrypted like the Nextcloud passwords; generic recognition of the login

@@ -14,6 +14,7 @@ from flask import Blueprint, abort, flash, g, redirect, render_template, request
 from ..i18n import gettext as _
 from ..postbox import DEFAULT_SOURCE, SOURCES, jobs
 from ..postbox.service import PostboxService
+from ..postbox.settings import SUBFOLDERS
 from ..postbox.store import PP_ATTENTION
 from . import registry, state
 from .auth import is_demo_user, login_required
@@ -122,7 +123,7 @@ def save_source():
     except ValueError:
         overlap = 3
     folders = {}
-    for key in ("nc_folder", "nc_daily_folder", "nc_weekly_folder"):
+    for key in ("nc_folder",):
         folders[key] = (f.get(key) or "").strip()
         if folders[key]:
             try:
@@ -157,11 +158,10 @@ def save_source():
     st.rescan_from = rescan.isoformat() if rescan else ""
     st.import_pp = f.get("import_pp") == "1"
     st.nc_folder = nc_folder
-    st.nc_daily_folder = folders["nc_daily_folder"]
-    st.nc_weekly_folder = folders["nc_weekly_folder"]
     if share is not None:
         st.nc_share_url, st.nc_share_secret, st.nc_share_legacy = share
-    st.nc_year_folders = f.get("nc_year_folders") == "1"
+    st.nc_subfolders = f.get("nc_subfolders") if f.get("nc_subfolders") in SUBFOLDERS else ""
+    st.nc_year_folders = st.nc_subfolders == "year"
     reg.system.set_postbox_source(ctx.id, kind, g.user["id"], login, password or None, st.to_json())
     ctx.appdb.audit(session.get("user", "?"), "postbox-source", None,
                     f"{SOURCES[kind]}: {login}, ab {st.since}" + (" (Passwort geändert)" if password else ""))
