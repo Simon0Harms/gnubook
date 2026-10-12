@@ -105,3 +105,33 @@ def clear_cancel(data_dir, book_id: int, source: str):
         _cancel_file(data_dir, book_id, source).unlink()
     except FileNotFoundError:
         pass
+
+
+# ---------------------------------------------------------------------------------------------- progress
+def _progress_file(data_dir, book_id: int, source: str) -> Path:
+    return request_dir(data_dir).parent / "progress" / f"{int(book_id)}-{source}.json"
+
+
+def set_progress(data_dir, book_id: int, source: str, text: str):
+    """What the run in progress is doing right now (shown on the page next to "läuft")."""
+    p = _progress_file(data_dir, book_id, source)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps({"text": text, "at": time.time()}, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, p)
+
+
+def progress(data_dir, book_id: int, source: str) -> dict | None:
+    """{'text': …, 'age': seconds since it was written} or None."""
+    try:
+        data = json.loads(_progress_file(data_dir, book_id, source).read_text(encoding="utf-8"))
+        return {"text": str(data.get("text") or ""), "age": max(0, int(time.time() - float(data.get("at") or 0)))}
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def clear_progress(data_dir, book_id: int, source: str):
+    try:
+        _progress_file(data_dir, book_id, source).unlink()
+    except FileNotFoundError:
+        pass

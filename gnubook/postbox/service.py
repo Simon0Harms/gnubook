@@ -15,6 +15,7 @@ import fcntl
 import hashlib
 import logging
 import os
+import sys
 import time
 from collections import defaultdict
 from contextlib import contextmanager
@@ -178,6 +179,11 @@ class PostboxService:
         except Busy:
             return RunOutcome("busy", _("Für dieses Buch läuft gerade schon ein Abruf."))
 
+    def progress(self, kind: str, text: str):
+        """What the run is doing: for the page and, as a line on stderr, for the journal."""
+        jobs.set_progress(self.cfg.app.data_dir, self.ctx.id, kind, text)
+        print(f"Belegeingang (Buch {self.ctx.id}): {text}", file=sys.stderr, flush=True)
+
     def cancelled(self, kind: str) -> bool:
         return jobs.cancel_requested(self.cfg.app.data_dir, self.ctx.id, kind)
 
@@ -187,6 +193,7 @@ class PostboxService:
             return self._run_source(kind, actor, mode, sync_now, scheduled)
         finally:
             jobs.clear_cancel(self.cfg.app.data_dir, self.ctx.id, kind)
+            jobs.clear_progress(self.cfg.app.data_dir, self.ctx.id, kind)
 
     def _run_source(self, kind: str, actor: str, mode: str, sync_now: bool, scheduled: bool) -> RunOutcome:
         row = self.source(kind)
@@ -227,6 +234,7 @@ class PostboxService:
         known = self.store.known_ids(kind)
         fetcher = make_fetcher(kind, self.cfg, row["login"], password, self.root)
         fetcher.cancelled = lambda: self.cancelled(kind)
+        fetcher.progress = lambda text: self.progress(kind, text)
         try:
             result = fetcher.fetch(stop, lambda listed: plan.select(listed, known, st.since_day),
                                    lambda doc, data: self._save(kind, row, st, doc, data), dry_run=dry_run)
@@ -352,6 +360,8 @@ class PostboxService:
             return
         imported = 0
         for i in range(0, len(rows), PP_CHUNK):
+            self.progress(kind, _("Portfolio Performance: Belege {a0}–{a1} von {a2}", a0=i + 1,
+                                  a1=min(i + PP_CHUNK, len(rows)), a2=len(rows)))
             if self.cancelled(kind):
                 done["errors"].append(_("abgebrochen"))
                 break
@@ -517,7 +527,8 @@ class PostboxService:
         from ..nextcloud import NextcloudError
 
         ensured, in_a_row = set(), 0
-        for r in rows:  # pending ones first, so documents that keep failing do not hold back new ones
+        for n, r in enumerate(rows, 1):  # pending ones first, so documents that keep failing do not hold back new ones
+            self.progress(kind, _("Nextcloud: Beleg {a0} von {a1}", a0=n, a1=len(rows)))
             if self.cancelled(kind):
                 done["errors"].append(_("abgebrochen"))
                 break

@@ -224,6 +224,7 @@ class FinanzenZeroFetcher:
     kind = KIND
 
     cancelled = None  # callable -> True when the run is to stop (set by the service)
+    progress = None  # callable(text): what the run is doing right now (set by the service)
 
     def __init__(self, cfg, login: str, password: str, debug_dir: Path | None = None, home_dir: Path | None = None):
         """cfg: gnubook.config.PostboxConfig. home_dir: HOME of the browser (the service user's own home is
@@ -249,6 +250,7 @@ class FinanzenZeroFetcher:
         if self.cfg.browsers_path:
             os.environ["PLAYWRIGHT_BROWSERS_PATH"] = self.cfg.browsers_path
         result = FetchResult()
+        self._say(_("Browser startet …"))
         with sync_playwright() as pw:
             browser = self._launch(pw, PWError)
             try:
@@ -259,9 +261,13 @@ class FinanzenZeroFetcher:
                 page.set_default_navigation_timeout(self.timeout * 1000)
                 page.on("request", self._note_request)
                 try:
+                    self._say(_("Anmeldung und Posteingang öffnen …"))
                     self._open_inbox(page)
+                    self._say(_("Posteingang geöffnet, Liste wird gelesen …"))
                     result.listed, result.clicks, result.stopped = self._collect(page, stop)
                     result.selected = list(choose(result.listed))
+                    self._say(_("Liste gelesen: {a0} Einträge, {a1} neu.", a0=len(result.listed),
+                                a1=len(result.selected)))
                     if not dry_run:
                         self._download_all(page, result, sink)
                 except FetchError as exc:
@@ -471,6 +477,10 @@ class FinanzenZeroFetcher:
             batch = [d for d in self._read(page, before) if d.external_id not in seen]
             seen.update(d.external_id for d in batch)
             listed.extend(batch)
+            oldest = min((d.day for d in batch if d.day), default=None)
+            self._say(_("„Mehr anzeigen“ {a0}×: {a1} Einträge gelesen, zurück bis {a2}{a3}.", a0=clicks,
+                        a1=len(listed), a2=oldest.strftime("%d.%m.%Y") if oldest else "?",
+                        a3=_(", Stopptag {a0}", a0=stop.strftime("%d.%m.%Y")) if stop else ""))
 
     def _click(self, locator):
         try:
@@ -501,6 +511,13 @@ class FinanzenZeroFetcher:
                 return
 
     # ------------------------------------------------------------------ download
+    def _say(self, text: str):
+        if self.progress is not None:
+            try:
+                self.progress(text)
+            except Exception:  # noqa: BLE001 – progress is only for display
+                pass
+
     def _check_cancel(self):
         if self.cancelled is not None and self.cancelled():
             raise Cancelled(_("Abgebrochen."))
@@ -509,6 +526,8 @@ class FinanzenZeroFetcher:
         in_a_row = 0
         for i, doc in enumerate(result.selected):
             self._check_cancel()
+            self._say(_("Download {a0} von {a1}: {a2} ({a3})", a0=i + 1, a1=len(result.selected), a2=doc.title,
+                        a3=doc.day.strftime("%d.%m.%Y") if doc.day else "?"))
             try:
                 data = self._download(page, doc)
             except FetchError as exc:

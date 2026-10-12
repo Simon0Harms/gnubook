@@ -25,6 +25,9 @@ A menu entry *Belegeingang* with
 - the login (user name and password for finanzen.net zero, stored encrypted like the Nextcloud passwords) and the
   settings: *Belege ab*, overlap, automatic retrieval, import into PP, Nextcloud folder;
 - *Jetzt abrufen* and *Probelauf* (log in and read the list only), and the last runs with their result;
+- while a run is in progress, what it is doing right now (login, *Mehr anzeigen* with the number of entries read
+  and the oldest day reached, download n of m, PP, Nextcloud); the page reloads itself every 10 seconds. The same
+  lines go to the journal (`journalctl -u gnubook-postbox-request -f`);
 - *Abbrechen* next to a running run: it stops at its next step (before the next click or download); documents
   fetched so far are kept and imported and copied by the next run;
 - every fetched document with its state in Portfolio Performance and in Nextcloud, the PDF itself, and the

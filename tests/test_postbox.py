@@ -751,3 +751,23 @@ def test_dead_run_is_closed_when_the_page_is_shown(reg, book, web, cfg):
     with svc._lock(KIND):
         svc.store.start_run(KIND, "simon")
         assert svc.alive(KIND) is True and not svc.close_dead_run(KIND)
+
+
+def test_progress_is_shown_while_running(reg, book, web, fetcher, pp_import, cfg, capsys):
+    _source(reg, book, nc_folder="")
+    svc = PostboxService(reg, book)
+    original = fetcher.fetch
+    seen = {}
+
+    def fetch_with_progress(stop, choose, sink, dry_run=False):
+        fetcher.progress("„Mehr anzeigen“ 3×: 40 Einträge gelesen")
+        seen["page"] = web.get("/postbox/").text
+        return original(stop, choose, sink, dry_run)
+
+    fetcher.fetch = fetch_with_progress
+    assert svc.run(KIND, "test").status == "ok"
+    assert "40 Einträge gelesen" in seen["page"] and "data-autoreload" in seen["page"]
+    assert "Belegeingang (Buch" in capsys.readouterr().err  # also in the journal
+    assert jobs.progress(cfg.app.data_dir, book.id, KIND) is None  # cleared after the run
+    page = web.get("/postbox/").text
+    assert "data-autoreload" not in page

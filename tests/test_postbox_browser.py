@@ -237,3 +237,15 @@ def test_cancel_stops_between_downloads_and_logs_out(site, tmp_path):
                       lambda doc, data: got.__setitem__(doc.external_id, data))
     assert len(got) == 3
     assert not list((tmp_path / "debug").glob("*.png"))  # no screenshot for a cancel
+
+
+def test_progress_reports_clicks_and_downloads(site, tmp_path):
+    handler, url = site
+    lines = []
+    fetcher = FinanzenZeroFetcher(_browser_cfg(url), mock.USER, mock.PASSWORD, tmp_path / "debug", tmp_path / "home")
+    fetcher.progress = lines.append
+    since = date(2026, 10, 1)
+    fetcher.fetch(since, lambda listed: plan.select(listed, set(), since), lambda doc, data: None)
+    assert lines[0].startswith("Browser startet")
+    assert any("„Mehr anzeigen“ 2×: 30 Einträge gelesen" in t for t in lines)
+    assert any(t.startswith("Download 20 von 20:") for t in lines)

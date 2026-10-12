@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Belegeingang: progress of a running run on the page (reloading itself) and in the journal
 - Belegeingang: *Abbrechen* stops a running run from the web interface
 - Belegeingang: no click limit by default (`[postbox] max_clicks = 0`), runs may take up to 12 hours; after a click
   only the new entries are read

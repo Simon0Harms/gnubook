@@ -28,6 +28,14 @@
     if (window.getSelection && String(window.getSelection()).length > 0) { return; }
     window.location.href = row.getAttribute('data-href');
   });
+  // pages that show something in progress reload themselves (not while a form field is being edited)
+  var reload = document.querySelector('[data-autoreload]');
+  if (reload) {
+    setInterval(function () {
+      var el = document.activeElement;
+      if (!el || !el.form) { window.location.reload(); }
+    }, (parseInt(reload.getAttribute('data-autoreload'), 10) || 10) * 1000);
+  }
   document.querySelectorAll('form[data-confirm]').forEach(function (form) {
     form.addEventListener('submit', function (ev) {
       if (!window.confirm(form.getAttribute('data-confirm'))) { ev.preventDefault(); }

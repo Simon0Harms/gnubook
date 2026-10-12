@@ -91,6 +91,7 @@ def index():
         docs=docs[:PAGE], more=len(docs) > PAGE, offset=offset, page=PAGE, attention=attention,
         counts=svc.store.counts(kind), runs=svc.store.runs(kind, 8), running=svc.store.running(kind),
         cancel_requested=jobs.cancel_requested(reg.cfg.app.data_dir, state().id, kind),
+        progress=jobs.progress(reg.cfg.app.data_dir, state().id, kind),
         requests=[r for r in jobs.pending(reg.cfg.app.data_dir, state().id) if r.get("source") in (kind, "", None)],
         complete_day=svc.store.complete_day(kind), playwright=importlib.util.find_spec("playwright") is not None,
         paused=svc.paused(kind, row) if row is not None else None,
