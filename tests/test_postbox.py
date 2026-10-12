@@ -705,3 +705,34 @@ def test_without_since_fetches_down_to_the_oldest(reg, book, web, fetcher, pp_im
     assert svc.store.complete_day(KIND) is None
     r = web.post("/postbox/source", data=dict(form, since="31.02.2026"), follow_redirects=True)
     assert "kein gültiges Datum" in r.text
+
+
+def test_cancel_from_the_web_interface(reg, book, web, fetcher, pp_import, cfg):
+    from gnubook.postbox.fzero import Cancelled
+
+    _source(reg, book, nc_folder="")
+    svc = PostboxService(reg, book)
+    original = fetcher.fetch
+
+    def fetch_and_cancel(stop, choose, sink, dry_run=False):
+        listed = [d for d in fetcher.listing if d.day >= stop]
+        sink(listed[0], b"%PDF-1.4 eins")
+        # meanwhile: "Abbrechen" on the page (the run shows as running)
+        page = web.get("/postbox/").text
+        assert "Abbrechen" in page
+        r = web.post("/postbox/cancel", data={"csrf_token": web.csrf}, follow_redirects=True)
+        assert "Abbruch angefordert" in r.text
+        if fetcher.cancelled():
+            raise Cancelled("Abgebrochen.")
+        return original(stop, choose, sink, dry_run)
+
+    fetcher.fetch = fetch_and_cancel
+    jobs.add_request(cfg.app.data_dir, book.id, KIND, "fetch", "simon")  # a waiting request is dropped as well
+    out = svc.run(KIND, "test")
+    assert out.status == "cancelled" and "bleiben erhalten" in out.message
+    assert svc.store.runs(KIND, 1)[0]["status"] == "cancelled"
+    docs = svc.store.docs(KIND)
+    assert len(docs) == 1 and docs[0]["pp_status"] == "pending"  # imported by the next run
+    assert not jobs.cancel_requested(cfg.app.data_dir, book.id, KIND)  # cleared after the run
+    assert jobs.pending(cfg.app.data_dir, book.id) == []
+    assert "abgebrochen" in web.get("/postbox/").text

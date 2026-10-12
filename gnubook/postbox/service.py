@@ -24,8 +24,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from ..i18n import gettext as _
-from . import plan
-from .fzero import FetchError, FinanzenZeroFetcher, _first_line
+from . import jobs, plan
+from .fzero import Cancelled, FetchError, FinanzenZeroFetcher, _first_line
 from .settings import SourceSettings
 from .store import PP_ATTENTION, PostboxStore
 
@@ -149,7 +149,17 @@ class PostboxService:
         except Busy:
             return RunOutcome("busy", _("Für dieses Buch läuft gerade schon ein Abruf."))
 
+    def cancelled(self, kind: str) -> bool:
+        return jobs.cancel_requested(self.cfg.app.data_dir, self.ctx.id, kind)
+
     def _run(self, kind: str, actor: str, mode: str, sync_now: bool, scheduled: bool) -> RunOutcome:
+        jobs.clear_cancel(self.cfg.app.data_dir, self.ctx.id, kind)  # a cancel meant for an earlier run
+        try:
+            return self._run_source(kind, actor, mode, sync_now, scheduled)
+        finally:
+            jobs.clear_cancel(self.cfg.app.data_dir, self.ctx.id, kind)
+
+    def _run_source(self, kind: str, actor: str, mode: str, sync_now: bool, scheduled: bool) -> RunOutcome:
         row = self.source(kind)
         if row is None:
             return RunOutcome("error", _("Für dieses Buch ist kein Postfach eingerichtet."))
@@ -187,6 +197,7 @@ class PostboxService:
         stop = plan.stop_day(st.since_day, complete, st.overlap_days, st.rescan_day)
         known = self.store.known_ids(kind)
         fetcher = make_fetcher(kind, self.cfg, row["login"], password, self.root)
+        fetcher.cancelled = lambda: self.cancelled(kind)
         try:
             result = fetcher.fetch(stop, lambda listed: plan.select(listed, known, st.since_day),
                                    lambda doc, data: self._save(kind, row, st, doc, data), dry_run=dry_run)
@@ -195,6 +206,9 @@ class PostboxService:
             if exc.debug:
                 message += " " + _("(Screenshot: {a0}.png)", a0=exc.debug)
             log.warning("Postfach %s (Buch %s): %s", kind, self.ctx.id, message)
+            if isinstance(exc, Cancelled):
+                msg = _("Abgebrochen – bis dahin geladene Belege bleiben erhalten und werden beim nächsten Lauf übernommen und kopiert.")
+                return RunOutcome(exc.code, msg)
             if not dry_run:
                 try:
                     self.process(kind, row, st, sync_now)  # earlier documents still get imported and copied
@@ -309,6 +323,9 @@ class PostboxService:
             return
         imported = 0
         for i in range(0, len(rows), PP_CHUNK):
+            if self.cancelled(kind):
+                done["errors"].append(_("abgebrochen"))
+                break
             chunk, files = [], []
             for r in rows[i:i + PP_CHUNK]:
                 try:
@@ -472,6 +489,9 @@ class PostboxService:
 
         ensured, in_a_row = set(), 0
         for r in rows:  # pending ones first, so documents that keep failing do not hold back new ones
+            if self.cancelled(kind):
+                done["errors"].append(_("abgebrochen"))
+                break
             try:
                 data = self.doc_path(r).read_bytes()
             except OSError as exc:

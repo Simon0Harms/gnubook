@@ -1193,4 +1193,9 @@ EN = {
     '„Belege ab“ ist kein gültiges Datum.': '“Belege ab” is not a valid date.',
     'alle (ältester Beleg)': 'all (oldest document)',
     'Leer = alle Belege bis zum ältesten im Postfach.': 'Empty = all documents down to the oldest in the postbox.',
+    'Abgebrochen.': 'Cancelled.',
+    'Abgebrochen – bis dahin geladene Belege bleiben erhalten und werden beim nächsten Lauf übernommen und kopiert.': 'Cancelled – documents fetched so far are kept and imported and copied by the next run.',
+    'Abbruch angefordert – der Lauf hält beim nächsten Schritt an (meist nach wenigen Sekunden).': 'Cancel requested – the run stops at its next step (usually within seconds).',
+    'Abbruch angefordert …': 'Cancel requested …',
+    'Laufenden Abruf abbrechen? Bis dahin geladene Belege bleiben erhalten.': 'Cancel the running fetch? Documents fetched so far are kept.',
 }

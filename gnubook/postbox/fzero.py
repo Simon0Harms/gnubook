@@ -78,6 +78,11 @@ class NotInstalled(FetchError):
     code = "not_installed"
 
 
+class Cancelled(FetchError):
+    """The run was cancelled in the web interface."""
+    code = "cancelled"
+
+
 class SessionLost(FetchError):
     """A download failed in a way that affects every further one (no session, no connection, page gone)."""
 
@@ -218,6 +223,8 @@ def _first_line(exc) -> str:
 class FinanzenZeroFetcher:
     kind = KIND
 
+    cancelled = None  # callable -> True when the run is to stop (set by the service)
+
     def __init__(self, cfg, login: str, password: str, debug_dir: Path | None = None, home_dir: Path | None = None):
         """cfg: gnubook.config.PostboxConfig. home_dir: HOME of the browser (the service user's own home is
         usually not writable; the browser keeps caches there)."""
@@ -258,7 +265,8 @@ class FinanzenZeroFetcher:
                     if not dry_run:
                         self._download_all(page, result, sink)
                 except FetchError as exc:
-                    exc.debug = self._capture(page, exc.code)
+                    if not isinstance(exc, Cancelled):
+                        exc.debug = self._capture(page, exc.code)
                     raise
                 except PWError as exc:
                     err = FetchError(_("Fehler im Browser: {a0}", a0=_first_line(exc)))
@@ -447,6 +455,7 @@ class FinanzenZeroFetcher:
         seen = {d.external_id for d in listed}
         batch, clicks = listed, 0
         while True:
+            self._check_cancel()
             if batch_done(batch, stop):
                 return listed, clicks, "date"
             more = page.locator(MORE)
@@ -492,9 +501,14 @@ class FinanzenZeroFetcher:
                 return
 
     # ------------------------------------------------------------------ download
+    def _check_cancel(self):
+        if self.cancelled is not None and self.cancelled():
+            raise Cancelled(_("Abgebrochen."))
+
     def _download_all(self, page, result: FetchResult, sink):
         in_a_row = 0
         for i, doc in enumerate(result.selected):
+            self._check_cancel()
             try:
                 data = self._download(page, doc)
             except FetchError as exc:

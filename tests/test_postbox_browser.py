@@ -221,3 +221,19 @@ def test_redaction_of_escaped_forms(tmp_path):
     f = FinanzenZeroFetcher(_browser_cfg("http://127.0.0.1"), mock.USER, "o'k\"7&", None)
     text = 'a value="o\'k&quot;7&amp;" b {"pw": "o\'k\\"7&"} c o%27k%227%26 d'
     assert f._redact(text) == 'a value="********" b {"pw": "********"} c ******** d'
+
+
+def test_cancel_stops_between_downloads_and_logs_out(site, tmp_path):
+    from gnubook.postbox.fzero import Cancelled
+
+    handler, url = site
+    cfg = _browser_cfg(url)
+    got = {}
+    fetcher = FinanzenZeroFetcher(cfg, mock.USER, mock.PASSWORD, tmp_path / "debug", tmp_path / "home")
+    fetcher.cancelled = lambda: len(got) >= 3  # cancelled in the web interface after three downloads
+    since = date(2026, 10, 1)
+    with pytest.raises(Cancelled):
+        fetcher.fetch(since, lambda listed: plan.select(listed, set(), since),
+                      lambda doc, data: got.__setitem__(doc.external_id, data))
+    assert len(got) == 3
+    assert not list((tmp_path / "debug").glob("*.png"))  # no screenshot for a cancel

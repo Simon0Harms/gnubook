@@ -25,6 +25,8 @@ A menu entry *Belegeingang* with
 - the login (user name and password for finanzen.net zero, stored encrypted like the Nextcloud passwords) and the
   settings: *Belege ab*, overlap, automatic retrieval, import into PP, Nextcloud folder;
 - *Jetzt abrufen* and *Probelauf* (log in and read the list only), and the last runs with their result;
+- *Abbrechen* next to a running run: it stops at its next step (before the next click or download); documents
+  fetched so far are kept and imported and copied by the next run;
 - every fetched document with its state in Portfolio Performance and in Nextcloud, the PDF itself, and the
   actions *Prüfen* (decide on PP's import page) and *erledigt*.
 

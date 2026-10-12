@@ -76,3 +76,32 @@ def merge(requests: list[dict]) -> dict[tuple[int, str], list[str]]:
         wanted.setdefault((int(r["book"]), str(r.get("source") or "")), set()).add(r["mode"])
     return {key: ["fetch"] if "fetch" in modes else [m for m in ("process", "dry-run") if m in modes]
             for key, modes in wanted.items()}
+
+
+# ---------------------------------------------------------------------------------------------- cancel
+def _cancel_file(data_dir, book_id: int, source: str) -> Path:
+    return request_dir(data_dir).parent / "cancel" / f"{int(book_id)}-{source}"
+
+
+def request_cancel(data_dir, book_id: int, source: str, actor: str) -> Path:
+    """Asks the run in progress to stop (it checks between two steps); also drops waiting requests of the book."""
+    p = _cancel_file(data_dir, book_id, source)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({"actor": actor, "at": time.time()}), encoding="utf-8")
+    for r in sorted(request_dir(data_dir).glob(f"{int(book_id)}-*.json")):
+        try:
+            r.unlink()
+        except OSError:
+            pass
+    return p
+
+
+def cancel_requested(data_dir, book_id: int, source: str) -> bool:
+    return _cancel_file(data_dir, book_id, source).exists()
+
+
+def clear_cancel(data_dir, book_id: int, source: str):
+    try:
+        _cancel_file(data_dir, book_id, source).unlink()
+    except FileNotFoundError:
+        pass

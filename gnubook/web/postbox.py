@@ -28,7 +28,7 @@ PP_LABELS = {"pending": "offen", "imported": "übernommen", "partial": "teilweis
 NC_LABELS = {"pending": "offen", "done": "kopiert", "error": "Fehler", "off": "aus"}
 RUN_LABELS = {"running": "läuft", "ok": "ok", "warning": "Hinweis", "dry_run": "Probelauf", "error": "Fehler",
               "login_failed": "Anmeldung fehlgeschlagen", "approval_required": "Freigabe verlangt",
-              "not_installed": "nicht installiert", "busy": "läuft schon"}
+              "not_installed": "nicht installiert", "busy": "läuft schon", "cancelled": "abgebrochen"}
 MODE_LABELS = {"fetch": "Abruf", "dry-run": "Probelauf", "process": "Nachholen"}
 PAGE = 100
 
@@ -86,6 +86,7 @@ def index():
         nc_enabled=reg.cfg.nextcloud.enabled, pp_on=state().pp is not None,
         docs=docs[:PAGE], more=len(docs) > PAGE, offset=offset, page=PAGE, attention=attention,
         counts=svc.store.counts(kind), runs=svc.store.runs(kind, 8), running=svc.store.running(kind),
+        cancel_requested=jobs.cancel_requested(reg.cfg.app.data_dir, state().id, kind),
         requests=[r for r in jobs.pending(reg.cfg.app.data_dir, state().id) if r.get("source") in (kind, "", None)],
         complete_day=svc.store.complete_day(kind), playwright=importlib.util.find_spec("playwright") is not None,
         paused=svc.paused(kind, row) if row is not None else None,
@@ -173,6 +174,18 @@ def save_source():
             and reg.system.nextcloud_account(g.user["id"]) is None):
         msg += " " + _("Für die Kopie in die Nextcloud zuerst unter Einstellungen eine Nextcloud verbinden.")
     flash(msg, "success")
+    return _back(kind)
+
+
+@bp.route("/cancel", methods=["POST"])
+@login_required(demo_never=True)
+def cancel():
+    """Asks the run in progress to stop; the background service checks between two steps (a few seconds)."""
+    kind = _kind()
+    reg, ctx = registry(), state()
+    jobs.request_cancel(reg.cfg.app.data_dir, ctx.id, kind, session.get("user", "?"))
+    ctx.appdb.audit(session.get("user", "?"), "postbox-cancel", None, SOURCES[kind])
+    flash(_("Abbruch angefordert – der Lauf hält beim nächsten Schritt an (meist nach wenigen Sekunden)."), "success")
     return _back(kind)
 
 
