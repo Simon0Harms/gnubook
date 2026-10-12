@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- Belegeingang (optional, `deploy/install-postbox.sh`, docs/POSTBOX.md): documents of a finanzen.net zero account are
+  fetched from its online postbox by a headless browser (Playwright, Firefox or Chromium; no X server or VNC). It logs
+  in with the stored user name and password (encrypted like the Nextcloud passwords; generic recognition of the login
+  form, cookie banner, two-step login; optional CSS selectors), clicks *Mehr anzeigen* until a whole block of the list
+  is older than the newest completely listed day minus an overlap, and downloads every document with an unknown
+  number inside the page. Every PDF is kept in `data/postbox/`, imported into Portfolio Performance with PP's
+  importers (OK items at once; possible duplicates and a missing securities account wait for a decision on the PDF
+  import page, which the documents page links to) and copied into a Nextcloud folder of the user (optionally one
+  folder per year). Runs: `gnubook-postbox.timer` (Mon–Fri 23:20) and *Jetzt abrufen*/*Probelauf* on the new page
+  *Belegeingang* (a request file picked up by `gnubook-postbox-request.path` – the web app never starts a browser);
+  `gnubook postbox-fetch`, `postbox-status`. Failed runs keep a screenshot and the page's HTML (password removed); a
+  run that does not reach the stop day, and a failed download, keep the list position so the next run lists that
+  range again. After a failed login the timer pauses until the settings are saved again. A cookie banner is only
+  answered before the login and inside a consent container; dialogs of the app are never clicked.
+  Browser tests against a stand-in of the web app (CI with Firefox and Chromium)
+- Nextcloud: `Client.upload_bytes` can skip creating the folder and set the content type
+- Fixed (pp-core): `GET /clients/{id}/import/{session}` imported the remaining OK items and failed with 409
+  `target_missing` while a bank's securities account was still to be chosen – so the PDF import page showed an
+  error instead of the choice. The GET now only checks and shows the session; importing is `…/apply` alone. The smoke
+  test covers choosing the securities account and the duplicate warning on a second import
+
 - Portfolio Performance: *Einstellungen* can add a securities account (*Depot hinzufügen*) to the existing PP
   file, with a new cash account (name, currency) or an existing one as reference account – no detour through
   PP Desktop. The Depotwechsel form links to it. pp-core: `POST /clients/{id}/portfolios`

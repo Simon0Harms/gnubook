@@ -211,8 +211,9 @@ final class HttpApi
                 }
                 else if (seg.length == 4 && "GET".equals(method))
                 {
+                    // only shows the session: a GET must not import (and must not fail while a target is missing)
                     var session = importer.session(holder.id, seg[3]);
-                    sendJson(ex, 200, importer.applyLater(holder, session, new JsonObject()));
+                    sendJson(ex, 200, importer.view(holder, session));
                 }
                 else if (seg.length == 5 && "apply".equals(seg[4]))
                 {

@@ -1,0 +1,17 @@
+[Unit]
+Description=gnubook – run the postbox retrievals requested in the web interface
+After=network-online.target gnubook-ppcore.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=gnubook
+Group=gnubook
+Environment=GNUBOOK_CONFIG=/opt/gnubook/config.toml
+ExecStart=/opt/gnubook/venv/bin/gnubook postbox-fetch --requests
+TimeoutStartSec=3h
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/gnubook/data

@@ -66,6 +66,20 @@ CREATE TABLE IF NOT EXISTS pp_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL, finished_at TEXT, actor TEXT, revision TEXT,
     status TEXT NOT NULL, summary TEXT, details TEXT
 );
+CREATE TABLE IF NOT EXISTS postbox_docs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, external_id TEXT NOT NULL, title TEXT NOT NULL,
+    day TEXT, filename TEXT NOT NULL, sha256 TEXT, size INTEGER, fetched_at TEXT NOT NULL,
+    pp_status TEXT NOT NULL DEFAULT 'pending', pp_message TEXT, pp_items INTEGER, pp_imported INTEGER,
+    pp_session TEXT, pp_at TEXT,
+    nc_status TEXT NOT NULL DEFAULT 'pending', nc_path TEXT, nc_message TEXT, nc_at TEXT,
+    UNIQUE (source, external_id)
+);
+CREATE INDEX IF NOT EXISTS postbox_docs_day ON postbox_docs (source, day);
+CREATE TABLE IF NOT EXISTS postbox_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, started_at TEXT NOT NULL, finished_at TEXT,
+    actor TEXT, dry_run INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, listed INTEGER, new INTEGER,
+    downloaded INTEGER, clicks INTEGER, message TEXT
+);
 """
 
 

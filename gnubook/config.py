@@ -115,6 +115,33 @@ class PPConfig:
 
 
 @dataclass
+class PostboxConfig:
+    # fetch documents from the broker's postbox with a headless browser (docs/POSTBOX.md); written by
+    # deploy/install-postbox.sh. Needs the extra "postbox" (Playwright) and a browser installed by Playwright.
+    enabled: bool = False
+    # Playwright browser: "firefox" or "chromium"
+    browser: str = "firefox"
+    # PLAYWRIGHT_BROWSERS_PATH (where `playwright install` put the browser); empty = Playwright's default
+    browsers_path: str = ""
+    # a browser binary to use instead of Playwright's own build (normally empty)
+    executable_path: str = ""
+    # seconds to wait for one step (page load, login, "Mehr anzeigen", download)
+    timeout: int = 45
+    # at most this many clicks on "Mehr anzeigen" per run (10 documents each)
+    max_clicks: int = 500
+    # pause between two downloads in milliseconds
+    download_pause_ms: int = 400
+    # screenshots and HTML of failed runs kept in data_dir/postbox/debug (number of runs)
+    debug_keep: int = 10
+    # address of the finanzen.net zero web app
+    finanzen_zero_url: str = "https://mein.finanzen-zero.net"
+    # CSS selectors for the login form, only needed when the automatic recognition fails
+    login_user_selector: str = ""
+    login_password_selector: str = ""
+    login_submit_selector: str = ""
+
+
+@dataclass
 class Config:
     book: BookConfig = field(default_factory=BookConfig)
     app: AppConfig = field(default_factory=AppConfig)
@@ -125,6 +152,7 @@ class Config:
     checkpoints: CheckpointsConfig = field(default_factory=CheckpointsConfig)
     nextcloud: NextcloudConfig = field(default_factory=NextcloudConfig)
     pp: PPConfig = field(default_factory=PPConfig)
+    postbox: PostboxConfig = field(default_factory=PostboxConfig)
     source: str = ""
 
     @property
@@ -159,7 +187,7 @@ def load_config(path: str | os.PathLike | None = None, env: dict | None = None) 
                 data = tomllib.load(fh)
             sections = {"book": cfg.book, "app": cfg.app, "api": cfg.api, "import": cfg.importer, "backup": cfg.backup,
                         "postgres": cfg.postgres, "checkpoints": cfg.checkpoints,
-                        "nextcloud": cfg.nextcloud, "pp": cfg.pp}
+                        "nextcloud": cfg.nextcloud, "pp": cfg.pp, "postbox": cfg.postbox}
             for name, values in data.items():
                 if name not in sections:
                     raise ConfigError(f"Unbekannter Konfigurationsabschnitt [{name}] in {cand}")
@@ -171,7 +199,8 @@ def load_config(path: str | os.PathLike | None = None, env: dict | None = None) 
         raise ConfigError(f"Konfigurationsdatei {explicit} nicht gefunden")
 
     for section_name, obj in (("BOOK", cfg.book), ("APP", cfg.app), ("API", cfg.api), ("IMPORT", cfg.importer), ("BACKUP", cfg.backup),
-                              ("POSTGRES", cfg.postgres), ("NEXTCLOUD", cfg.nextcloud), ("PP", cfg.pp)):
+                              ("POSTGRES", cfg.postgres), ("NEXTCLOUD", cfg.nextcloud), ("PP", cfg.pp),
+                              ("POSTBOX", cfg.postbox)):
         for key in vars(obj):
             env_key = f"GNUBOOK_{section_name}_{key.upper()}"
             if env_key in env:

@@ -1,4 +1,4 @@
-"""Encryption of stored secrets (Nextcloud app passwords / share passwords) at rest.
+"""Encryption of stored secrets (Nextcloud app passwords / share passwords, postbox logins) at rest.
 
 The key is derived (HKDF-SHA256) from [nextcloud] encryption_key or, if that is empty, from [app] secret_key.
 Both live in config.toml / the environment, not in data_dir, so a copied or leaked system.sqlite alone does

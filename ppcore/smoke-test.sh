@@ -169,6 +169,39 @@ assert {p["name"] for p in xs["portfolioList"]} == {"Depot A", "Depot B", "Depot
 assert {a["name"] for a in xs["accountList"]} == {"Konto", "Konto C"}, xs
 # a transfer to a portfolio in another currency is refused
 call("POST", "/clients/xfer/transactions", {**xfer, "target": np["portfolio"], "shares": "1"}, expect=400)
+# PDF import (statement as text, as PP's importers see it) into a file with several securities accounts: the
+# securities account is asked for; a GET of the session only shows it – it imports nothing and does not fail
+STATEMENT = """Baader Bank AG Weihenstephaner Straße 4 85716 Unterschleißheim
+www.finanzen.net/zero
+Seite 1/1
+06.04.2022
+Vorgangs-Nr.: 12345678
+Wertpapierabrechnung: Kauf
+Auftragsdatum: 05.04.2022 Ausführungsplatz: GETTEX - MM Munich
+Auftragszeit: 16:54:28:84
+Nominale ISIN: DE0008430026 WKN: 843002 Kurs
+STK 2 Muster Rück AG EUR 300,00
+Namens-Aktien o.N.
+Kurswert EUR 600,00
+Zu Lasten Konto 1111111111 Valuta: 07.04.2022 EUR 600,00
+Handels- Handels-
+Nominale Kurs Ausführungsplatz datum uhrzeit
+STK 2 EUR 300,00 GETTEX - MM Munich 05.04.2022 16:54:29:17
+"""
+doc = base64.b64encode(STATEMENT.encode()).decode()
+imp = call("POST", "/clients/xfer/import", {"files": [{"name": "2022-04-06_1_Kauf.txt", "data": doc}], "apply": True})
+assert imp["needsTarget"] and imp["imported"] == 0, imp
+assert any("target account missing" in m["message"] for i in imp["items"] for m in i["messages"]), imp["items"]
+assert {i["file"] for i in imp["items"] if i["kind"] != "SecurityItem"} == {"2022-04-06_1_Kauf.txt"}, imp["items"]
+view = call("GET", f"/clients/xfer/import/{imp['session']}")
+assert view["needsTarget"] and view["imported"] == 0, view
+assert call("GET", "/clients/xfer")["transactions"] == xs["transactions"]  # nothing imported by the GET
+done = call("POST", f"/clients/xfer/import/{imp['session']}/apply",
+            {"portfolio": PA, "account": "acc00000-0000-4000-8000-000000000001", "force": []})
+assert done["imported"] >= 1 and not done["needsTarget"], done
+again = call("POST", "/clients/xfer/import", {"files": [{"name": "again.txt", "data": doc}], "apply": True})
+assert not again["needsTarget"] and again["imported"] == 0, again  # the bank's target is remembered
+assert [i["status"] for i in again["items"]] == ["WARNING"], again["items"]  # possible duplicate
 raw = call("GET", "/clients/smoke/file")
 assert b"<client" in raw[:200], raw[:200]
 print("pp-core smoke test passed:", len(feeds), "price sources")

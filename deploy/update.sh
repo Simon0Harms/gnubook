@@ -23,7 +23,8 @@ EXTRA=""
 for f in gunicorn.conf.py ppcore.properties ppcore.env; do [ -f "$APP_DIR/$f" ] && EXTRA="$EXTRA $f"; done
 # shellcheck disable=SC2086
 tar -czf "$APP_DIR/backup/gnubook-$STAMP.tar.gz" -C "$APP_DIR" \
-  --exclude=data/ppcore/workspace --exclude=data/ppcore/home config.toml data $EXTRA
+  --exclude=data/ppcore/workspace --exclude=data/ppcore/home \
+  --exclude=data/postbox/home --exclude=data/postbox/debug config.toml data $EXTRA
 ls -1t "$APP_DIR"/backup/gnubook-*.tar.gz | tail -n +11 | xargs -r rm --
 
 OLD=$($GIT rev-parse HEAD)
@@ -58,6 +59,11 @@ if install_and_start; then
       bash "$APP_DIR/src/deploy/install-pp.sh" --rebuild ||
         echo "!! pp-core: der neue Build startet nicht – der bisherige läuft weiter (journalctl -u gnubook-ppcore)" >&2
     fi
+  fi
+  if [ -d "$APP_DIR/pw-browsers" ]; then
+    # Belegeingang is installed: Playwright, its browser build and the units in step with the new version
+    bash "$APP_DIR/src/deploy/install-postbox.sh" --update ||
+      echo "!! Belegeingang: Aktualisierung fehlgeschlagen – bitte deploy/install-postbox.sh ausführen" >&2
   fi
   echo ">> Aktualisiert auf $($GIT describe --always --tags)"
 else

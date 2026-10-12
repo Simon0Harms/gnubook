@@ -1,0 +1,10 @@
+[Unit]
+Description=gnubook – postbox runs requested in the web interface (Belegeingang → Jetzt abrufen)
+
+[Path]
+# the web app writes one JSON file per request; the service deletes them when it takes them
+PathExistsGlob=/opt/gnubook/data/postbox/requests/*.json
+Unit=gnubook-postbox-request.service
+
+[Install]
+WantedBy=paths.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=gnubook – fetch postbox documents (Belegeingang) once a day on weekdays
+
+[Timer]
+# A second login does not end a web session that is open at the same time, so the time is free to choose.
+# Change it with: systemctl edit gnubook-postbox.timer
+OnCalendar=Mon..Fri *-*-* 23:20:00
+RandomizedDelaySec=5min
+# catch up a run missed while the container was down
+Persistent=true
+
+[Install]
+WantedBy=timers.target

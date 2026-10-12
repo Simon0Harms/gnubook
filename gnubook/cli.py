@@ -65,6 +65,12 @@ allow_http = false
 # token = "same as token in /opt/gnubook/ppcore.properties"
 # quotes_interval_hours = 12
 
+# Belegeingang (documents from the finanzen.net zero postbox): deploy/install-postbox.sh adds this section
+# [postbox]
+# enabled = true
+# browser = "firefox"
+# browsers_path = "/opt/gnubook/pw-browsers"
+
 [import.iban_map]
 # "DE00123456780000000000" = "Aktiva:Barvermögen:Girokonto"
 """
@@ -532,6 +538,113 @@ def pp_status(ctx, book_ref):
         runs = bc.appdb.pp_runs(1)
         if runs:
             click.echo(f"  letzter Lauf {runs[0]['finished_at']}: {runs[0]['status']} – {runs[0]['summary']}")
+    reg.dispose()
+
+
+def _postbox_jobs(reg, book_ref, source, scheduled, from_requests, mode):
+    """[(book id, source kind, mode, actor)] for postbox-fetch."""
+    from .postbox import SOURCES
+    from .postbox import jobs as pjobs
+    from .postbox.settings import SourceSettings
+
+    if from_requests:
+        reqs = pjobs.take(reg.cfg.app.data_dir)
+        actors = {}
+        for r in reqs:
+            actors.setdefault((int(r["book"]), r.get("source") or ""), r.get("actor") or "web")
+        out = []
+        for (book_id, kind), modes in pjobs.merge(reqs).items():
+            kinds = [kind] if kind else [s["kind"] for s in reg.system.postbox_sources(book_id)]
+            out += [(book_id, k, m, actors[(book_id, kind)]) for m in modes for k in kinds if k in SOURCES]
+        return out
+    book_ids = None
+    if book_ref is not None:
+        book_ids = {_book_ctx(reg, book_ref).id}
+    out = []
+    for s in reg.system.postbox_sources():
+        if book_ids is not None and s["book_id"] not in book_ids:
+            continue
+        if source and s["kind"] != source:
+            continue
+        if scheduled and not SourceSettings.from_json(s["settings"]).enabled:
+            continue
+        out.append((s["book_id"], s["kind"], mode, "timer" if scheduled else "cli"))
+    return out
+
+
+REQUEST_WAIT = 2 * 3600  # seconds; gnubook-postbox-request.service allows 3 hours
+
+
+@main.command("postbox-fetch")
+@book_option
+@click.option("--source", default=None, help="nur diese Quelle (finanzen-zero)")
+@click.option("--scheduled", is_flag=True, help="alle Postfächer mit „automatisch abrufen“ (für den Timer)")
+@click.option("--requests", "from_requests", is_flag=True,
+              help="die in der Weboberfläche angeforderten Läufe ausführen (für gnubook-postbox-request.path)")
+@click.option("--dry-run", is_flag=True, help="nur anmelden und die Liste lesen, nichts herunterladen")
+@click.option("--process-only", is_flag=True, help="nichts abrufen, nur PP-Import und Nextcloud-Kopie nachholen")
+@click.pass_context
+def postbox_fetch(ctx, book_ref, source, scheduled, from_requests, dry_run, process_only):
+    """Belege aus dem Postfach holen, in Portfolio Performance importieren und in die Nextcloud kopieren."""
+    from .postbox.service import PostboxService
+
+    reg = _registry(ctx)
+    if not reg.cfg.postbox.enabled:
+        if from_requests:
+            from .postbox import jobs as pjobs
+
+            pjobs.take(reg.cfg.app.data_dir)  # nobody would run them – do not trigger the path unit forever
+        reg.dispose()
+        raise click.ClickException("Belegeingang ist aus: [postbox] enabled = true fehlt in config.toml "
+                                   "(deploy/install-postbox.sh).")
+    import signal
+    import time as _time
+
+    # systemd stops a run with SIGTERM: end it like an error, so the run is recorded and the browser closed
+    signal.signal(signal.SIGTERM, lambda *_a: sys.exit(143))
+    mode = "dry-run" if dry_run else ("process" if process_only else "fetch")
+    todo = _postbox_jobs(reg, book_ref, source, scheduled, from_requests, mode)
+    deadline = _time.monotonic() + REQUEST_WAIT  # one waiting budget for all requested runs
+    if not todo and not from_requests and not scheduled:
+        click.echo("Kein Postfach eingerichtet (Weboberfläche → Belegeingang).")
+    failed = 0
+    for book_id, kind, job_mode, actor in todo:
+        bc = reg.context(book_id)
+        if bc is None:
+            continue
+        # a requested run waits for a run of the same postbox that is in progress (instead of being dropped)
+        wait = max(0.0, deadline - _time.monotonic()) if from_requests else 0
+        out = PostboxService(reg, bc).run(kind, actor, job_mode, sync_now=True, scheduled=scheduled, wait=wait)
+        click.echo(f"{bc.name} ({kind}): {out.status} – {out.message}")
+        failed += 1 if out.failed else 0
+    reg.dispose()
+    sys.exit(1 if failed else 0)
+
+
+@main.command("postbox-status")
+@book_option
+@click.pass_context
+def postbox_status(ctx, book_ref):
+    """Stand des Belegeingangs anzeigen."""
+    from .postbox import SOURCES
+    from .postbox.service import PostboxService
+
+    reg = _registry(ctx)
+    books = [reg.context(b["id"]) for b in reg.system.books()] if book_ref is None else [_book_ctx(reg, book_ref)]
+    for bc in books:
+        if bc is None:
+            continue
+        svc = PostboxService(reg, bc)
+        for row in reg.system.postbox_sources(bc.id):
+            st = svc.settings_of(row)
+            counts = svc.store.counts(row["kind"])
+            done = svc.store.complete_day(row["kind"])
+            click.echo(f"{bc.name}: {SOURCES.get(row['kind'], row['kind'])} als {row['login']}, "
+                       f"automatisch {'an' if st.enabled else 'aus'}, Belege ab {st.since or '–'}, "
+                       f"vollständig gelesen bis {done.isoformat() if done else '–'}, "
+                       f"{counts['total']} Belege, {counts['attention']} zu prüfen")
+            for r in svc.store.runs(row["kind"], 3):
+                click.echo(f"  {r['started_at']} {r['actor']}: {r['status']} – {r['message'] or ''}")
     reg.dispose()
 
 

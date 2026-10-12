@@ -230,6 +230,18 @@ It needs about 80 MB of disk and a few hundred MB of memory more (plan for 1–1
 booking rules and the clearing account for the bank import are described in
 [PORTFOLIO-PERFORMANCE.md](PORTFOLIO-PERFORMANCE.md).
 
+### Optional: Belegeingang (documents from the finanzen.net zero postbox)
+
+To fetch the PDFs of a finanzen.net zero account automatically, import them into Portfolio Performance and copy
+them into Nextcloud, install the headless browser in the gnubook container:
+
+```bash
+bash /opt/gnubook/src/deploy/install-postbox.sh
+```
+
+It needs about 250–400 MB of disk and, only during a run, 300–500 MB of memory. Setup and how a run works are
+described in [POSTBOX.md](POSTBOX.md).
+
 ## 4. Updates
 
 ```bash
@@ -243,6 +255,7 @@ The update does the following:
 - installs the new version and restarts the service;
 - returns to the previous version if gnubook does not come up again;
 - rebuilds pp-core (if installed) when its code changed; a build that does not start is not activated.
+- keeps Playwright and its browser build current (if the Belegeingang is installed).
 
 Portfolio Performance itself is updated with `gnubook-pp-update` (newest release) or
 `gnubook-pp-update 0.88.0`.
@@ -269,3 +282,5 @@ The GnuCash book itself is not touched by updates. Its backups are the PostgreSQ
 | `/opt/gnubook/ppcore.properties`, `/opt/gnubook/pp/` | pp-core settings and builds, if Portfolio Performance is installed |
 | `/opt/gnubook/data/ppcore/` | the Portfolio Performance files of the books |
 | `gnubook-ppcore.service`, `gnubook-pp.timer` | pp-core and its hourly price update (`journalctl -u gnubook-ppcore`) |
+| `/opt/gnubook/pw-browsers/`, `/opt/gnubook/data/postbox/` | browser and fetched documents, if the Belegeingang is installed |
+| `gnubook-postbox.timer`, `gnubook-postbox-request.path` | scheduled and requested postbox runs (`journalctl -u gnubook-postbox -u gnubook-postbox-request`) |

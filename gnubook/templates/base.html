@@ -103,6 +103,10 @@
           <li class="nav-item"><a href="{{ url_for('pp.overview') }}" class="nav-link {{ 'active' if ep.startswith('pp.') }}">
             <i class="nav-icon bi bi-briefcase"></i><p>{{ _("Portfolio Performance") }}</p></a></li>
           {% endif %}
+          {% if postbox_available() %}
+          <li class="nav-item"><a href="{{ url_for('postbox.index') }}" class="nav-link {{ 'active' if ep.startswith('postbox.') }}">
+            <i class="nav-icon bi bi-inbox"></i><p>{{ _("Belegeingang") }}</p></a></li>
+          {% endif %}
           <li class="nav-item"><a href="{{ url_for('views.transaction_new') }}" class="nav-link {{ 'active' if ep == 'views.transaction_new' }}">
             <i class="nav-icon bi bi-plus-circle"></i><p>{{ _("Neue Buchung") }}</p></a></li>
           <li class="nav-item"><a href="{{ url_for('views.search') }}" class="nav-link {{ 'active' if ep == 'views.search' }}">

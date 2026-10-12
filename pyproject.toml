@@ -20,6 +20,8 @@ dependencies = [
 
 [project.optional-dependencies]
 postgres = ["psycopg2-binary>=2.9"]
+# Belegeingang: headless browser for the broker's postbox (deploy/install-postbox.sh installs the browser)
+postbox = ["playwright>=1.49,<2"]
 dev = ["pytest>=8", "psycopg2-binary>=2.9"]
 
 [project.scripts]

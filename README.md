@@ -52,6 +52,12 @@ German format in both languages.
     goes to a clearing account that the FinTS bank import also uses, so nothing is booked twice;
   - changes in PP are applied to the same GnuCash transactions; bookings changed in GnuCash are not
     overwritten (conflicts are shown and resolved in the web interface).
+- **Belegeingang** (optional, [docs/POSTBOX.md](docs/POSTBOX.md)). gnubook fetches the documents of a
+  finanzen.net zero account from its online postbox by itself – a headless browser logs in, clicks *Mehr anzeigen*
+  until it reaches known documents and downloads the new ones (no desktop or VNC; scheduled and on request):
+  - every PDF is kept, imported into Portfolio Performance with PP's own importers (possible duplicates wait for a
+    decision, as on the PDF import page) and copied into a Nextcloud folder;
+  - the state of every document in PP and Nextcloud is shown; failed imports and uploads are repeated.
 
 - **Accounts and registers.** The chart of accounts (inspired by [GnuDash](https://github.com/QuirkyTurtle94/GnuDash)) shows the hierarchical tree with balances in GnuCash's sign convention, expand/collapse (remembered per browser), coloured account-type badges, a filter by account class and totals per class. Each account has
   a register with running balance, text, amount and date filters, and paging. Placeholder accounts can be
@@ -180,6 +186,8 @@ as the systemd service `gnubook` (gunicorn, port 8080). Create the first admin w
 
 Portfolio Performance is optional: `bash /opt/gnubook/src/deploy/install-pp.sh` installs Java 21, the PP
 release and the service `gnubook-ppcore` (see [docs/PORTFOLIO-PERFORMANCE.md](docs/PORTFOLIO-PERFORMANCE.md)).
+The Belegeingang is optional as well: `bash /opt/gnubook/src/deploy/install-postbox.sh` installs Playwright with a
+headless Firefox and the timer `gnubook-postbox.timer` (see [docs/POSTBOX.md](docs/POSTBOX.md)).
 
 ## Configuration
 
@@ -208,6 +216,9 @@ or on the command line. Every value can be overridden with an environment variab
 | `[postgres] admin_url` | Role with `CREATEROLE` and `CREATEDB` (no superuser) that lets gnubook create a database per new book |
 | `[pp] url`, `token` | pp-core (Portfolio Performance) address and token; empty = off. Written by `deploy/install-pp.sh` |
 | `[pp] timeout`, `quotes_interval_hours` | Seconds per pp-core call (default 60); load prices at most every N hours in `gnubook pp-update` (default 12) |
+| `[postbox] enabled`, `browser`, `browsers_path` | Belegeingang on, Playwright browser (`firefox`/`chromium`) and where it is installed. Written by `deploy/install-postbox.sh` |
+| `[postbox] timeout`, `max_clicks`, `download_pause_ms`, `debug_keep` | Seconds per step (45); *Mehr anzeigen* clicks per run (500); pause between downloads (400 ms); failed runs kept with screenshot (10) |
+| `[postbox] login_user_selector`, `login_password_selector`, `login_submit_selector` | CSS selectors for the login form, only if the automatic recognition fails |
 | `[[checkpoints.patterns]]` | Own balance-line patterns (`stand` regex, `keyword`), used with every bank profile |
 
 The `[import]` values are defaults. Each book can override them under *Bücher → Bankprofil und Import*.
@@ -225,6 +236,7 @@ The `[import]` values are defaults. Each book can override them under *Bücher �
 | `gnubook backup [--book B] [--dir DIR] [--keep N]` | Save the book now as a `.gnucash` file (SQLite) that GnuCash Desktop opens |
 | `gnubook demo-book PATH` | Create the synthetic demo book |
 | `gnubook pp-status`, `pp-sync [--dry-run]`, `pp-update` | Portfolio Performance: state, book changes now, update prices and book (hourly timer) |
+| `gnubook postbox-fetch [--book B] [--dry-run] [--process-only]`, `postbox-status` | Belegeingang: fetch new documents now (`--scheduled`: the timer's run, `--requests`: runs requested in the web interface), state |
 | `gnubook init-config PATH` | Create a configuration file with a random `secret_key` |
 | `gnubook serve` | Development server. In production use gunicorn, see `deploy/` |
 

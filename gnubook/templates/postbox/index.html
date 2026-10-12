@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Belegeingang") }}{% endblock %}
+{% block header %}{{ _("Belegeingang") }}{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">{{ _("{a0}: Belege aus dem Postfach holen – nach Portfolio Performance und in die Nextcloud", a0=label) }}</div>{% endblock %}
+{% macro pp_badge(status) -%}
+<span class="badge {{ {'imported': 'text-bg-success', 'pending': 'text-bg-info', 'review': 'text-bg-warning', 'needs_target': 'text-bg-warning', 'partial': 'text-bg-warning', 'error': 'text-bg-danger'}.get(status, 'text-bg-secondary') }}">{{ _(PP_LABELS.get(status, status)) }}</span>
+{%- endmacro %}
+{% macro nc_badge(status) -%}
+<span class="badge {{ {'done': 'text-bg-success', 'pending': 'text-bg-info', 'error': 'text-bg-danger'}.get(status, 'text-bg-secondary') }}">{{ _(NC_LABELS.get(status, status)) }}</span>
+{%- endmacro %}
+{% block content %}
+{% if not playwright %}
+<div class="alert alert-warning small"><i class="bi bi-exclamation-triangle"></i> {{ _("Playwright ist auf diesem Server nicht installiert – der Abruf läuft erst nach deploy/install-postbox.sh.") }}</div>
+{% endif %}
+<div class="row">
+  <div class="col-xl-5">
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title"><i class="bi bi-inbox"></i> {{ _("Abruf") }}</h3></div>
+      <div class="card-body">
+        {% if row is none %}
+          <p class="small mb-0">{{ _("Noch nicht eingerichtet: rechts Zugangsdaten und „Belege ab“ eintragen und speichern.") }}</p>
+        {% else %}
+          <dl class="row small mb-3">
+            <dt class="col-6">{{ _("Belege ab") }}</dt><dd class="col-6">{{ st.since|de_date }}</dd>
+            <dt class="col-6">{{ _("Vollständig gelesen bis") }}</dt><dd class="col-6">{{ complete_day|de_date if complete_day else _("noch nie") }}</dd>
+            <dt class="col-6">{{ _("Automatischer Abruf") }}</dt><dd class="col-6">{{ _("an") if st.enabled else _("aus") }}</dd>
+            <dt class="col-6">{{ _("Belege gesamt") }}</dt><dd class="col-6">{{ counts.total }}{% if counts.attention %} · <a href="{{ url_for('postbox.index', source=kind, filter='attention') }}#docs" class="text-warning-emphasis">{{ _("{n} zu prüfen", n=counts.attention) }}</a>{% endif %}</dd>
+          </dl>
+          {% if paused and st.enabled %}
+            <div class="alert alert-warning py-2 small"><i class="bi bi-pause-circle"></i> {{ _("Automatischer Abruf pausiert: die Anmeldung am {a0} schlug fehl. Zugangsdaten prüfen und speichern – oder „Jetzt abrufen“.", a0=paused['started_at']|de_datetime) }}</div>
+          {% endif %}
+          {% if running %}
+            <div class="alert alert-info py-2 small"><span class="spinner-border spinner-border-sm"></span> {{ _("Läuft seit {a0} ({a1}).", a0=running['started_at']|de_datetime, a1=running['actor']) }}</div>
+          {% endif %}
+          {% for r in requests %}
+            <div class="alert alert-secondary py-1 small mb-2"><i class="bi bi-hourglass-split"></i> {{ _("Angefordert: {a0} von {a1} – wartet auf den Hintergrunddienst.", a0=_(MODE_LABELS.get(r.mode, r.mode)), a1=r.actor) }}</div>
+          {% endfor %}
+          <div class="d-flex flex-wrap gap-2">
+            <form method="post" action="{{ url_for('postbox.run', source=kind) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="mode" value="fetch">
+              <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-cloud-download"></i> {{ _("Jetzt abrufen") }}</button>
+            </form>
+            <form method="post" action="{{ url_for('postbox.run', source=kind) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="mode" value="dry-run">
+              <button class="btn btn-outline-secondary btn-sm" type="submit" title="{{ _("Nur anmelden und die Liste lesen, nichts herunterladen") }}"><i class="bi bi-eye"></i> {{ _("Probelauf") }}</button>
+            </form>
+          </div>
+          <p class="small text-body-secondary mt-3 mb-0">{{ _("Gelesen wird, bis ein ganzer Block der Liste älter ist als der zuletzt vollständig gelesene Tag minus Überlappung; geladen wird jeder Beleg mit unbekannter Nummer. Ein Lauf dauert etwa eine Minute.") }}</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><h3 class="card-title"><i class="bi bi-clock-history"></i> {{ _("Letzte Läufe") }}</h3></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0 small">
+          {% for r in runs %}
+          <tr><td class="text-nowrap">{{ r['started_at']|de_datetime }}<div class="text-body-secondary">{{ r['actor'] }}</div></td>
+            <td>{% if r['status'] in ('ok', 'dry_run') %}<i class="bi bi-check-lg text-success"></i>{% elif r['status'] in ('warning', 'running') %}<i class="bi bi-exclamation-circle text-warning"></i>{% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}
+              <strong>{{ _(RUN_LABELS.get(r['status'], r['status'])) }}</strong>
+              {% if r['listed'] is not none %}<span class="text-body-secondary">· {{ _("{a0} gelesen, {a1} neu", a0=r['listed'], a1=r['new'] or 0) }}</span>{% endif %}
+              {% if r['message'] %}<div>{{ r['message'] }}</div>{% endif %}</td></tr>
+          {% else %}<tr><td class="text-body-secondary">{{ _("Noch keine.") }}</td></tr>{% endfor %}
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-7">
+    <div class="card mb-4" id="source">
+      <div class="card-header"><h3 class="card-title"><i class="bi bi-key"></i> {{ _("Zugang und Einstellungen") }}</h3></div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('postbox.save_source', source=kind) }}" autocomplete="off">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label" for="login">{{ _("Benutzername bei {a0}", a0=label) }}</label>
+              <input class="form-control" id="login" name="login" value="{{ row['login'] if row else '' }}" autocomplete="off" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="password">{{ _("Passwort") }}</label>
+              <input class="form-control" type="password" id="password" name="password" autocomplete="new-password"
+                     placeholder="{{ _("gespeichert – leer lassen, um es zu behalten") if row and row['secret'] else '' }}" {{ 'required' if not (row and row['secret']) }}>
+            </div>
+            <div class="col-12"><div class="form-text mt-0">{{ _("Nur für den Posteingang – ohne Secure-TAN-Freigabe kann damit nicht gehandelt werden. Das Passwort wird verschlüsselt gespeichert (Schlüssel aus config.toml).") }}</div></div>
+            <div class="col-sm-6 col-lg-4">
+              <label class="form-label" for="since">{{ _("Belege ab") }}</label>
+              <input class="form-control" type="date" id="since" name="since" value="{{ st.since }}" required>
+            </div>
+            <div class="col-sm-6 col-lg-4">
+              <label class="form-label" for="overlap_days">{{ _("Überlappung (Tage)") }}</label>
+              <input class="form-control" type="number" min="0" max="60" id="overlap_days" name="overlap_days" value="{{ st.overlap_days }}">
+            </div>
+            <div class="col-sm-6 col-lg-4">
+              <label class="form-label" for="rescan_from">{{ _("Einmalig erneut prüfen ab") }}</label>
+              <input class="form-control" type="date" id="rescan_from" name="rescan_from" value="{{ st.rescan_from }}">
+            </div>
+            <div class="col-12"><div class="form-text mt-0">{{ _("„Belege ab“: ältere Belege werden nie geholt – beim ersten Lauf z. B. den Tag nach deinem letzten Import in Portfolio Performance. „Einmalig erneut prüfen ab“ liest die Liste beim nächsten vollständigen Lauf bis zu diesem Tag zurück.") }}</div></div>
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="enabled" name="enabled" value="1" {{ 'checked' if st.enabled }}>
+                <label class="form-check-label" for="enabled">{{ _("Automatisch abrufen (Timer, standardmäßig Mo–Fr um 23:20 Uhr)") }}</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="import_pp" name="import_pp" value="1" {{ 'checked' if st.import_pp }} {{ 'disabled' if not pp_on }}>
+                <label class="form-check-label" for="import_pp">{{ _("In Portfolio Performance importieren") }}{% if not pp_on %} <span class="text-body-secondary">({{ _("Portfolio Performance ist nicht eingerichtet") }})</span>{% endif %}</label>
+              </div>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label" for="nc_folder">{{ _("Nextcloud-Ordner") }}</label>
+              <input class="form-control" id="nc_folder" name="nc_folder" value="{{ st.nc_folder }}" placeholder="/Finanzen/finanzen.net zero" {{ 'disabled' if not nc_enabled }}>
+              <div class="form-text">
+                {% if not nc_enabled %}{{ _("Nextcloud ist in config.toml ausgeschaltet.") }}
+                {% elif nc_account %}{{ _("In deiner Nextcloud ({a0}); leer = keine Kopie.", a0=nc_account['server']) }}{% if nc_account['kind'] == 'share' %} {{ _("Bei einem Freigabelink innerhalb des freigegebenen Ordners.") }}{% endif %}
+                {% else %}{{ _("Zuerst unter Einstellungen eine Nextcloud verbinden.") }} <a href="{{ url_for('views.settings') }}#nextcloud">{{ _("Einstellungen") }}</a>{% endif %}
+                {% if owner and owner['id'] != current_user['id'] %}<br>{{ _("Zurzeit wird die Nextcloud von {a0} benutzt; beim Speichern wird es deine.", a0=owner['username']) }}{% endif %}
+              </div>
+            </div>
+            <div class="col-md-4 d-flex align-items-center">
+              <div class="form-check mt-md-3">
+                <input class="form-check-input" type="checkbox" id="nc_year_folders" name="nc_year_folders" value="1" {{ 'checked' if st.nc_year_folders }}>
+                <label class="form-check-label" for="nc_year_folders">{{ _("Unterordner je Jahr") }}</label>
+              </div>
+            </div>
+            <div class="col-12"><button class="btn btn-primary" type="submit"><i class="bi bi-save"></i> {{ _("Speichern") }}</button></div>
+          </div>
+        </form>
+        {% if row %}
+        <div class="d-flex flex-wrap gap-2 mt-3">
+          {% if st.nc_folder and counts.nc.get('off') %}
+          <form method="post" action="{{ url_for('postbox.nextcloud_all', source=kind) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-cloud-upload"></i> {{ _("Bisherige Belege ({n}) auch in die Nextcloud kopieren", n=counts.nc.get('off')) }}</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('postbox.delete_source', source=kind) }}" data-confirm="{{ _("Zugangsdaten löschen? Abgerufene Belege bleiben erhalten.") }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-danger" type="submit"><i class="bi bi-trash"></i> {{ _("Zugangsdaten entfernen") }}</button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-4" id="docs">
+  <div class="card-header"><h3 class="card-title"><i class="bi bi-file-earmark-pdf"></i> {{ _("Belege") }}</h3>
+    <div class="card-tools small">
+      {% if attention %}<a href="{{ url_for('postbox.index', source=kind) }}#docs">{{ _("alle zeigen") }}</a>
+      {% else %}<a href="{{ url_for('postbox.index', source=kind, filter='attention') }}#docs">{{ _("nur zu prüfende") }}</a>{% endif %}
+    </div></div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0 small">
+      <thead class="table-light"><tr><th>{{ _("Datum") }}</th><th>{{ _("Beleg") }}</th><th>{{ _("Portfolio Performance") }}</th><th>{{ _("Nextcloud") }}</th><th class="text-end">{{ _("Aktionen") }}</th></tr></thead>
+      <tbody>
+      {% for d in docs %}
+        <tr>
+          <td class="text-nowrap">{{ d['day']|de_date if d['day'] else '–' }}</td>
+          <td>{{ d['title'] }}<div class="text-body-secondary">{{ _("Nr.") }} {{ d['external_id'] }}</div></td>
+          <td>{{ pp_badge(d['pp_status']) }}{% if d['pp_message'] %}<div class="text-body-secondary">{{ d['pp_message'] }}</div>{% endif %}</td>
+          <td>{{ nc_badge(d['nc_status']) }}{% if d['nc_status'] == 'done' and d['nc_path'] %}<div class="text-body-secondary text-break">{{ d['nc_path'] }}</div>{% elif d['nc_message'] %}<div class="text-danger">{{ d['nc_message'] }}</div>{% endif %}</td>
+          <td class="text-end text-nowrap">
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('postbox.doc_pdf', doc_id=d['id'], source=kind) }}" target="_blank" rel="noopener" title="{{ _("PDF ansehen") }}"><i class="bi bi-file-earmark-pdf"></i></a>
+            {% if pp_on and d['pp_status'] in PP_ATTENTION %}
+            <form class="d-inline" method="post" action="{{ url_for('postbox.doc_review', doc_id=d['id'], source=kind) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-warning" type="submit" title="{{ _("Auf der PDF-Import-Seite entscheiden") }}"><i class="bi bi-search"></i> {{ _("Prüfen") }}</button>
+            </form>
+            <form class="d-inline" method="post" action="{{ url_for('postbox.doc_done', doc_id=d['id'], source=kind) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-secondary" type="submit" title="{{ _("Als erledigt markieren") }}"><i class="bi bi-check2"></i></button>
+            </form>
+            {% endif %}
+            {% if st.nc_folder and d['nc_status'] in ('error', 'pending', 'off') %}
+            <form class="d-inline" method="post" action="{{ url_for('postbox.doc_nextcloud', doc_id=d['id'], source=kind) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-secondary" type="submit" title="{{ _("Jetzt in die Nextcloud kopieren") }}"><i class="bi bi-cloud-upload"></i></button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="text-body-secondary">{{ _("Noch keine Belege.") if not attention else _("Nichts zu prüfen.") }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+  {% if offset or more %}
+  <div class="card-footer small d-flex justify-content-between">
+    <span>{% if offset %}<a href="{{ url_for('postbox.index', source=kind, filter='attention' if attention else None, offset=[offset - page, 0]|max) }}#docs">{{ _("neuere") }}</a>{% endif %}</span>
+    <span>{% if more %}<a href="{{ url_for('postbox.index', source=kind, filter='attention' if attention else None, offset=offset + page) }}#docs">{{ _("ältere") }}</a>{% endif %}</span>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

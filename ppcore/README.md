@@ -82,7 +82,7 @@ All paths below `/api/v1`, JSON in and out, errors as `{"error": code, "message"
 | `POST /clients/{id}/demo` | fictional demo file `{"start", "months", "seed"}` (class `Demo`) → 201; replaces only an earlier demo file, never an uploaded one (409) |
 | `GET /clients/{id}/export?prices=all\|none\|YYYY-MM-DD` | everything gnubook books: securities (with prices, also in the base currency), accounts, portfolios, transactions with units and cross entries |
 | `POST /clients/{id}/import` | PDF import `{"files": [{"name", "data" (base64)}], "portfolio", "account", "apply", "autoFeed"}`: extracts with PP's importers, checks, imports what is OK; result with session, items (status OK/WARNING/ERROR and messages), file errors, targets |
-| `GET /clients/{id}/import/{session}` | the result again (sessions live 6 hours) |
+| `GET /clients/{id}/import/{session}` | the result again, checked against the current file; imports nothing, also while a target is missing (sessions live 6 hours) |
 | `POST /clients/{id}/import/{session}/apply` | import items with warnings after all `{"force": [index], "portfolio", "account", "extractor", "autoFeed"}` |
 | `GET /clients/{id}/quotes` | state of the last price update |
 | `POST /clients/{id}/quotes?wait=N` | update prices `{"securities": [uuid]}` (empty = all); 202 while running, waits up to N seconds |

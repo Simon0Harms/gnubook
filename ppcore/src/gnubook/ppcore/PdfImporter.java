@@ -274,6 +274,25 @@ final class PdfImporter
         }
     }
 
+    /**
+     * The session as it is now, checked again against the current file (e.g. duplicates of what was imported since).
+     * Imports nothing – while a target is missing the result shows which one, so the user can choose it.
+     */
+    Map<String, Object> view(ClientHolder holder, Session session) throws IOException
+    {
+        holder.acquire();
+        try
+        {
+            Client client = holder.client();
+            check(client, session);
+            return describe(holder, client, session);
+        }
+        finally
+        {
+            holder.lock.unlock();
+        }
+    }
+
     /** Body: {"force": [index...], "portfolio": uuid?, "account": uuid?, "extractor": label?} */
     Map<String, Object> applyLater(ClientHolder holder, Session session, JsonObject body) throws IOException
     {

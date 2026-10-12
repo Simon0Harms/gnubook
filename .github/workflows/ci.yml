@@ -56,8 +56,27 @@ jobs:
       - uses: actions/checkout@v4
       - name: Shell syntax
         run: |
-          for f in deploy/install.sh deploy/update.sh deploy/install-pp.sh ppcore/build.sh ppcore/configure.sh \
-                   ppcore/ppcore-run ppcore/smoke-test.sh; do bash -n "$f"; done
+          for f in deploy/install.sh deploy/update.sh deploy/install-pp.sh deploy/install-postbox.sh ppcore/build.sh \
+                   ppcore/configure.sh ppcore/ppcore-run ppcore/smoke-test.sh; do bash -n "$f"; done
+
+  postbox-browser:
+    # the postbox fetcher in real headless browsers against a stand-in of the finanzen.net zero web app
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [firefox, chromium]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e ".[dev,postbox]" && python -m playwright install --with-deps ${{ matrix.browser }}
+      - name: Browser tests
+        env:
+          GNUBOOK_TEST_BROWSER: ${{ matrix.browser }}
+        run: pytest -q -rs tests/test_postbox_browser.py
 
   ppcore:
     # pp-core compiled against and started with the Portfolio Performance release install-pp.sh installs

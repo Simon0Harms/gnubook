@@ -63,6 +63,14 @@ CREATE TABLE IF NOT EXISTS nextcloud_targets (
     folder TEXT NOT NULL, filename TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1,
     PRIMARY KEY (user_id, book_id)
 );
+CREATE TABLE IF NOT EXISTS postbox_sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    kind TEXT NOT NULL, login TEXT NOT NULL DEFAULT '', secret TEXT NOT NULL DEFAULT '',
+    settings TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, updated_at TEXT,
+    UNIQUE (book_id, kind)
+);
 """
 
 MIN_PASSWORD = 10
@@ -406,6 +414,48 @@ class SystemDB:
             return provision.drop_role(self.cfg.postgres.admin_url, role, with_databases)
         except provision.ProvisionError as exc:
             raise UserError(str(exc))
+
+
+    # ------------------------------------------------------------------ postbox sources (per book)
+    def postbox_source(self, book_id: int, kind: str):
+        with self.conn() as c:
+            return c.execute("SELECT * FROM postbox_sources WHERE book_id = ? AND kind = ?",
+                             (book_id, kind)).fetchone()
+
+    def postbox_sources(self, book_id: int | None = None):
+        with self.conn() as c:
+            if book_id is None:
+                return c.execute("SELECT * FROM postbox_sources ORDER BY book_id, kind").fetchall()
+            return c.execute("SELECT * FROM postbox_sources WHERE book_id = ? ORDER BY kind", (book_id,)).fetchall()
+
+    def set_postbox_source(self, book_id: int, kind: str, user_id: int | None, login: str, password: str | None,
+                           settings_json: str):
+        """Creates or updates the source of a book. password None keeps the stored one; it is encrypted."""
+        secret = None if password is None else (self.box.encrypt(password) if password else "")
+        with self.conn() as c:
+            row = c.execute("SELECT id FROM postbox_sources WHERE book_id = ? AND kind = ?", (book_id, kind)).fetchone()
+            if row is None:
+                c.execute("INSERT INTO postbox_sources (book_id, user_id, kind, login, secret, settings, created_at, "
+                          "updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                          (book_id, user_id, kind, login, secret or "", settings_json, now_iso(), now_iso()))
+            elif secret is None:
+                c.execute("UPDATE postbox_sources SET user_id = ?, login = ?, settings = ?, updated_at = ? WHERE id = ?",
+                          (user_id, login, settings_json, now_iso(), row["id"]))
+            else:
+                c.execute("UPDATE postbox_sources SET user_id = ?, login = ?, secret = ?, settings = ?, updated_at = ? "
+                          "WHERE id = ?", (user_id, login, secret, settings_json, now_iso(), row["id"]))
+
+    def set_postbox_settings(self, source_id: int, settings_json: str):
+        """Only the settings (e.g. a one-time look-back that a run used up)."""
+        with self.conn() as c:
+            c.execute("UPDATE postbox_sources SET settings = ? WHERE id = ?", (settings_json, source_id))
+
+    def postbox_password(self, row) -> str:
+        return self.box.decrypt(row["secret"]) if row["secret"] else ""
+
+    def delete_postbox_source(self, book_id: int, kind: str):
+        with self.conn() as c:
+            c.execute("DELETE FROM postbox_sources WHERE book_id = ? AND kind = ?", (book_id, kind))
 
     def nextcloud_uploads(self, book_id: int):
         """Active targets of a book whose user still may use it, joined with the user's account."""

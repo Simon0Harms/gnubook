@@ -162,10 +162,13 @@ class Client:
         with open(local, "rb") as fh:
             self.upload_bytes(fh.read(), folder, filename)
 
-    def upload_bytes(self, data: bytes, folder: str, filename: str):
-        self.ensure_folder(folder)
+    def upload_bytes(self, data: bytes, folder: str, filename: str, ensure: bool = True,
+                     content_type: str = "application/octet-stream"):
+        """ensure=False skips creating the folder (the caller already did, e.g. for many files in one folder)."""
+        if ensure:
+            self.ensure_folder(folder)
         self._request("PUT", self._dav(f"{folder}/{filename}"), data=data,
-                      headers={"Content-Type": "application/octet-stream"}, ok=(201, 204))
+                      headers={"Content-Type": content_type}, ok=(201, 204))
 
     def delete(self, path: str):
         self._request("DELETE", self._dav(path), ok=(204, 404))

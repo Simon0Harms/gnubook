@@ -46,6 +46,13 @@ def message_ids():
     for labels in (pp_views.PERIOD_LABELS, pp_views.KIND_LABELS, pp_views.STATUS_LABELS, pp_views.IMPORT_STATUS,
                    SKIP_REASONS, ROLE_LABELS):
         ids.update(labels.values())
+    # Belegeingang
+    from gnubook.postbox.service import STOP_TEXTS
+    from gnubook.web import postbox as postbox_views
+
+    for labels in (postbox_views.PP_LABELS, postbox_views.NC_LABELS, postbox_views.RUN_LABELS,
+                   postbox_views.MODE_LABELS, STOP_TEXTS):
+        ids.update(labels.values())
     return ids
 
 def test_every_text_has_an_english_translation():
