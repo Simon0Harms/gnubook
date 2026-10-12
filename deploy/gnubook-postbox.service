@@ -11,6 +11,8 @@ Environment=GNUBOOK_CONFIG=/opt/gnubook/config.toml
 ExecStart=/opt/gnubook/venv/bin/gnubook postbox-fetch --scheduled
 # a first run with a long backlog lists and downloads hundreds of documents
 TimeoutStartSec=12h
+# stopped with systemctl stop: the run is recorded as cancelled, not a failure of the unit
+SuccessExitStatus=143
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
