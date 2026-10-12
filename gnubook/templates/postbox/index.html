@@ -111,6 +111,7 @@
               <input class="form-control" id="nc_folder" name="nc_folder" value="{{ st.nc_folder }}" placeholder="/Finanzen/finanzen.net zero" {{ 'disabled' if not nc_enabled }}>
               <div class="form-text">
                 {% if not nc_enabled %}{{ _("Nextcloud ist in config.toml ausgeschaltet.") }}
+                {% elif st.nc_share_url %}{{ _("Im Ordner des Freigabelinks unten; leer = dessen oberster Ordner.") }}
                 {% elif nc_account %}{{ _("In deiner Nextcloud ({a0}); leer = keine Kopie.", a0=nc_account['server']) }}{% if nc_account['kind'] == 'share' %} {{ _("Bei einem Freigabelink innerhalb des freigegebenen Ordners.") }}{% endif %}
                 {% else %}{{ _("Zuerst unter Einstellungen eine Nextcloud verbinden.") }} <a href="{{ url_for('views.settings') }}#nextcloud">{{ _("Einstellungen") }}</a>{% endif %}
                 {% if owner and owner['id'] != current_user['id'] %}<br>{{ _("Zurzeit wird die Nextcloud von {a0} benutzt; beim Speichern wird es deine.", a0=owner['username']) }}{% endif %}
@@ -122,12 +123,31 @@
                 <label class="form-check-label" for="nc_year_folders">{{ _("Unterordner je Jahr") }}</label>
               </div>
             </div>
+            <div class="col-md-6">
+              <label class="form-label" for="nc_daily_folder">{{ _("Ordner für tägliche Kontoauszüge") }}</label>
+              <input class="form-control" id="nc_daily_folder" name="nc_daily_folder" value="{{ st.nc_daily_folder }}" placeholder="/Finanzen/finanzen.net zero/Täglich" {{ 'disabled' if not nc_enabled }}>
+              <div class="form-text">{{ _("Belege mit „Tageskontoauszug“ im Titel; leer = Nextcloud-Ordner.") }}</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="nc_weekly_folder">{{ _("Ordner für wöchentliche Kontoauszüge") }}</label>
+              <input class="form-control" id="nc_weekly_folder" name="nc_weekly_folder" value="{{ st.nc_weekly_folder }}" placeholder="/Finanzen/finanzen.net zero/Wöchentlich" {{ 'disabled' if not nc_enabled }}>
+              <div class="form-text">{{ _("Belege mit „Wochenkontoauszug“ oder „wöchentlich“ im Titel; leer = Nextcloud-Ordner.") }}</div>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label" for="nc_share_url">{{ _("Eigener Freigabelink für die Belege") }}</label>
+              <input class="form-control" id="nc_share_url" name="nc_share_url" value="{{ st.nc_share_url }}" placeholder="https://cloud.example.org/s/AbC123…" {{ 'disabled' if not nc_enabled }}>
+              <div class="form-text">{{ _("Freigabe eines Ordners mit Bearbeiten-Recht. Gesetzt: die Belege gehen dorthin statt in die Nextcloud aus den Einstellungen; die Ordner oben liegen dann innerhalb der Freigabe. Leer = keine eigene Freigabe.") }}</div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="nc_share_password">{{ _("Passwort der Freigabe") }}</label>
+              <input class="form-control" type="password" id="nc_share_password" name="nc_share_password" autocomplete="new-password" placeholder="{{ _('leer lassen = unverändert') if st.nc_share_secret else '' }}" {{ 'disabled' if not nc_enabled }}>
+            </div>
             <div class="col-12"><button class="btn btn-primary" type="submit"><i class="bi bi-save"></i> {{ _("Speichern") }}</button></div>
           </div>
         </form>
         {% if row %}
         <div class="d-flex flex-wrap gap-2 mt-3">
-          {% if st.nc_folder and counts.nc.get('off') %}
+          {% if st.nc_on and counts.nc.get('off') %}
           <form method="post" action="{{ url_for('postbox.nextcloud_all', source=kind) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-cloud-upload"></i> {{ _("Bisherige Belege ({n}) auch in die Nextcloud kopieren", n=counts.nc.get('off')) }}</button>
@@ -173,7 +193,7 @@
               <button class="btn btn-sm btn-outline-secondary" type="submit" title="{{ _("Als erledigt markieren") }}"><i class="bi bi-check2"></i></button>
             </form>
             {% endif %}
-            {% if st.nc_folder and d['nc_status'] in ('error', 'pending', 'off') %}
+            {% if st.nc_on and d['nc_status'] in ('error', 'pending', 'off') %}
             <form class="d-inline" method="post" action="{{ url_for('postbox.doc_nextcloud', doc_id=d['id'], source=kind) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn btn-sm btn-outline-secondary" type="submit" title="{{ _("Jetzt in die Nextcloud kopieren") }}"><i class="bi bi-cloud-upload"></i></button>

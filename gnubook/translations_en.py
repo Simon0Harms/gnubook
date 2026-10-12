@@ -1183,4 +1183,12 @@ EN = {
     'Der Besitzer des Postfachs hat keinen Zugriff mehr auf dieses Buch – Einstellungen einmal speichern.': 'The owner of the postbox has no access to this book any more – save the settings once.',
     'Nicht übernommen.': 'Not imported.',
     'abgebrochen: {a0}': 'aborted: {a0}',
+    'Im Ordner des Freigabelinks unten; leer = dessen oberster Ordner.': 'In the folder of the share link below; empty = its top folder.',
+    'Ordner für tägliche Kontoauszüge': 'Folder for daily account statements',
+    'Ordner für wöchentliche Kontoauszüge': 'Folder for weekly account statements',
+    'Belege mit „Tageskontoauszug“ im Titel; leer = Nextcloud-Ordner.': 'Documents with “Tageskontoauszug” in the title; empty = Nextcloud folder.',
+    'Belege mit „Wochenkontoauszug“ oder „wöchentlich“ im Titel; leer = Nextcloud-Ordner.': 'Documents with “Wochenkontoauszug” or “wöchentlich” in the title; empty = Nextcloud folder.',
+    'Eigener Freigabelink für die Belege': 'Own share link for the documents',
+    'Freigabe eines Ordners mit Bearbeiten-Recht. Gesetzt: die Belege gehen dorthin statt in die Nextcloud aus den Einstellungen; die Ordner oben liegen dann innerhalb der Freigabe. Leer = keine eigene Freigabe.': 'Share of a folder with edit permission. When set, the documents go there instead of the Nextcloud from the settings; the folders above are then inside the share. Empty = no own share.',
+    'Freigabelink: {a0}': 'Share link: {a0}',
 }

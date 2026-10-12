@@ -261,7 +261,7 @@ class PostboxService:
         tmp.chmod(0o600)
         os.replace(tmp, path)
         pp_status = "pending" if st.import_pp and self.ctx.pp is not None else "off"
-        nc_status = "pending" if st.nc_folder and row["user_id"] is not None and self.cfg.nextcloud.enabled else "off"
+        nc_status = "pending" if st.nc_on and row["user_id"] is not None and self.cfg.nextcloud.enabled else "off"
         self.store.add_doc(kind, doc, name, hashlib.sha256(data).hexdigest(), len(data), pp_status, nc_status)
 
     @staticmethod
@@ -424,12 +424,21 @@ class PostboxService:
             svc.request_sync()
         return result.get("session")
 
-    def _nc_client(self, row):
-        """(client, None) for the owner's Nextcloud, or (None, why not)."""
+    def _nc_client(self, row, st: SourceSettings | None = None):
+        """(client, None) for the own share link of the source or the owner's Nextcloud, or (None, why not)."""
         if not self.cfg.nextcloud.enabled:
             return None, _("Nextcloud ist in config.toml ausgeschaltet.")
         if row["user_id"] is None or not self.reg.system.may_use(row["user_id"], self.ctx.id):
             return None, _("Der Besitzer des Postfachs hat keinen Zugriff mehr auf dieses Buch – Einstellungen einmal speichern.")
+        if st is not None and st.nc_share_url:
+            from ..nextcloud import Client, parse_share_link
+
+            try:
+                server, token = parse_share_link(st.nc_share_url, self.cfg.nextcloud.allow_http)
+                password = self.reg.system.box.decrypt(st.nc_share_secret) if st.nc_share_secret else ""
+                return Client.for_share(server, token, password, st.nc_share_legacy), None
+            except Exception as exc:  # noqa: BLE001 – key changed, link invalid
+                return None, str(exc)
         account = self.reg.system.nextcloud_account(row["user_id"])
         if account is None:
             return None, _("Keine Nextcloud verbunden (Einstellungen → Nextcloud).")
@@ -440,10 +449,10 @@ class PostboxService:
         except Exception as exc:  # noqa: BLE001 – key changed
             return None, str(exc)
 
-    def nc_folder(self, st: SourceSettings, day: str | None) -> str:
+    def nc_folder(self, st: SourceSettings, day: str | None, title: str | None = None) -> str:
         from ..nextcloud import clean_folder
 
-        folder = clean_folder(st.nc_folder)
+        folder = clean_folder(st.nc_base_folder(title))
         if st.nc_year_folders:
             folder = folder.rstrip("/") + "/" + ((day or "")[:4] or "ohne-Datum")
         return folder
@@ -452,11 +461,11 @@ class PostboxService:
         rows = only if only is not None else self.store.for_nc(kind)
         if not rows:
             return
-        if not st.nc_folder:
+        if not st.nc_on:
             for r in rows:
                 self.store.set_nc(r["id"], "off")
             return
-        client, why = self._nc_client(row)
+        client, why = self._nc_client(row, st)
         if client is None:
             for r in rows:
                 self.store.set_nc(r["id"], "error", message=why)
@@ -472,7 +481,7 @@ class PostboxService:
                 self.store.set_nc(r["id"], "error", message=_("PDF fehlt: {a0}", a0=exc))
                 continue
             try:
-                folder = self.nc_folder(st, r["day"])
+                folder = self.nc_folder(st, r["day"], r["title"])
                 if folder not in ensured:
                     client.ensure_folder(folder)
                     ensured.add(folder)

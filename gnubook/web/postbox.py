@@ -95,7 +95,7 @@ def index():
 @bp.route("/source", methods=["POST"])
 @login_required(demo_never=True)
 def save_source():
-    from ..nextcloud import NextcloudError, clean_folder
+    from ..nextcloud import NextcloudError, clean_folder, connect_share, parse_share_link
 
     kind = _kind()
     reg, ctx = registry(), state()
@@ -121,12 +121,30 @@ def save_source():
         overlap = max(0, min(60, int(f.get("overlap_days") or 3)))
     except ValueError:
         overlap = 3
-    nc_folder = (f.get("nc_folder") or "").strip()
-    if nc_folder:
-        try:
-            nc_folder = clean_folder(nc_folder)
-        except NextcloudError as exc:
-            problems.append(str(exc))
+    folders = {}
+    for key in ("nc_folder", "nc_daily_folder", "nc_weekly_folder"):
+        folders[key] = (f.get(key) or "").strip()
+        if folders[key]:
+            try:
+                folders[key] = clean_folder(folders[key])
+            except NextcloudError as exc:
+                problems.append(str(exc))
+    nc_folder = folders["nc_folder"]
+    # own share link for the documents: checked (and its WebDAV endpoint found) when it or its password changes
+    share_url = (f.get("nc_share_url") or "").strip()
+    share_password = f.get("nc_share_password") or ""
+    share = None  # (url, secret, legacy) to store, None = keep
+    if not share_url:
+        share = ("", "", False)
+    elif share_url != st.nc_share_url or share_password:
+        if not problems:
+            try:
+                server, token = parse_share_link(share_url, reg.cfg.nextcloud.allow_http)
+                client, legacy = connect_share(server, token, share_password)
+                client.test_write("/")
+                share = (share_url, reg.system.box.encrypt(share_password) if share_password else "", legacy)
+            except NextcloudError as exc:
+                problems.append(_("Freigabelink: {a0}", a0=exc))
     if problems:
         for p in problems:
             flash(p, "danger")
@@ -139,12 +157,17 @@ def save_source():
     st.rescan_from = rescan.isoformat() if rescan else ""
     st.import_pp = f.get("import_pp") == "1"
     st.nc_folder = nc_folder
+    st.nc_daily_folder = folders["nc_daily_folder"]
+    st.nc_weekly_folder = folders["nc_weekly_folder"]
+    if share is not None:
+        st.nc_share_url, st.nc_share_secret, st.nc_share_legacy = share
     st.nc_year_folders = f.get("nc_year_folders") == "1"
     reg.system.set_postbox_source(ctx.id, kind, g.user["id"], login, password or None, st.to_json())
     ctx.appdb.audit(session.get("user", "?"), "postbox-source", None,
                     f"{SOURCES[kind]}: {login}, ab {st.since}" + (" (Passwort geändert)" if password else ""))
     msg = _("Gespeichert.")
-    if nc_folder and reg.cfg.nextcloud.enabled and reg.system.nextcloud_account(g.user["id"]) is None:
+    if (nc_folder and not st.nc_share_url and reg.cfg.nextcloud.enabled
+            and reg.system.nextcloud_account(g.user["id"]) is None):
         msg += " " + _("Für die Kopie in die Nextcloud zuerst unter Einstellungen eine Nextcloud verbinden.")
     flash(msg, "success")
     return _back(kind)

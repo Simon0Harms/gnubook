@@ -637,3 +637,50 @@ def test_documents_failing_in_nextcloud_do_not_hold_back_new_ones(reg, book, fet
     assert all(states[d["id"]] == "done" for d in old[4:])
     assert all(states[d["id"]] == "error" for d in old[:4])
     assert "PDF fehlt" in svc.store.doc(old[0]["id"])["nc_message"]
+
+
+def test_statement_kind():
+    from gnubook.postbox.settings import statement_kind
+
+    assert statement_kind("Tageskontoauszug: EUR-Konto LU0908500753, DE0008430026") == "daily"
+    assert statement_kind("Wochenkontoauszug: EUR-Konto") == "weekly"
+    assert statement_kind("Kontoauszug wöchentlich") == "weekly"
+    assert statement_kind("Steuerausgleichsrechnung") is None and statement_kind(None) is None
+
+
+def test_own_share_link_and_statement_folders(reg, book, web, fetcher, pp_import, nc):
+    from .test_nextcloud import SHARE, SHARE_PW
+
+    reg.cfg.nextcloud.allow_http = True
+    form = {"csrf_token": web.csrf, "login": "simon@example.org", "password": "geheim-123", "since": "2026-10-08",
+            "import_pp": "1", "nc_folder": "/Belege", "nc_year_folders": "1", "nc_daily_folder": "Belege/Täglich",
+            "nc_weekly_folder": "/Belege/Wöchentlich", "nc_share_url": f"{nc.url}/s/{SHARE}",
+            "nc_share_password": "falsch"}
+    r = web.post("/postbox/source", data=form, follow_redirects=True)
+    assert "Freigabelink:" in r.text and reg.system.postbox_source(book.id, KIND) is None
+    r = web.post("/postbox/source", data=dict(form, nc_share_password=SHARE_PW), follow_redirects=True)
+    assert "Gespeichert" in r.text
+    st = SourceSettings.from_json(reg.system.postbox_source(book.id, KIND)["settings"])
+    assert st.nc_share_url.endswith(SHARE) and st.nc_share_secret.startswith("enc:v1:") and SHARE_PW not in r.text
+    assert (st.nc_daily_folder, st.nc_weekly_folder) == ("/Belege/Täglich", "/Belege/Wöchentlich")
+    # saving again without the password keeps the share
+    web.post("/postbox/source", data=dict(form, password="", nc_share_password=""))
+    assert SourceSettings.from_json(reg.system.postbox_source(book.id, KIND)["settings"]).nc_share_secret
+
+    fetcher.listing = [Listed("1", "Tageskontoauszug: EUR-Konto LU0908500753", D(2026, 10, 9), "/1"),
+                       Listed("2", "Wochenkontoauszug: EUR-Konto", D(2026, 10, 9), "/2"),
+                       Listed("3", "Steuerausgleichsrechnung", D(2026, 10, 9), "/3")]
+    svc = PostboxService(reg, book)
+    out = svc.run(KIND, "test")
+    assert out.status == "ok", out.message
+    paths = {d["title"][:4]: d["nc_path"] for d in svc.store.docs(KIND)}
+    assert paths["Tage"].startswith("/Belege/Täglich/2026/") and paths["Woch"].startswith("/Belege/Wöchentlich/2026/")
+    assert paths["Steu"].startswith("/Belege/2026/")
+    # in the shared folder (/Share in the fake), not in the Nextcloud of the settings
+    assert all(f"/Share{p}" in nc.files for p in paths.values())
+    assert not any(k.startswith("/Belege") for k in nc.files)
+
+    # removing the link: back to the Nextcloud of the settings
+    web.post("/postbox/source", data=dict(form, password="", nc_share_url="", nc_share_password=""))
+    st = SourceSettings.from_json(reg.system.postbox_source(book.id, KIND)["settings"])
+    assert (st.nc_share_url, st.nc_share_secret) == ("", "")
