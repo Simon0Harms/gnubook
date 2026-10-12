@@ -78,6 +78,10 @@ def index():
             svc.refresh_sessions(kind)  # decisions made on the PDF import page since the last run
         except Exception:  # noqa: BLE001 – the page shows the stored state anyway
             pass
+    try:
+        svc.close_dead_run(kind)
+    except Exception:  # noqa: BLE001 – only for the display
+        pass
     owner = reg.system.user(row["user_id"]) if row is not None and row["user_id"] else None
     nc_account = reg.system.nextcloud_account(g.user["id"]) if reg.cfg.nextcloud.enabled else None
     docs = svc.store.docs(kind, attention=attention, limit=PAGE + 1, offset=offset)

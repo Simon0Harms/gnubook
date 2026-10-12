@@ -1198,4 +1198,5 @@ EN = {
     'Abbruch angefordert – der Lauf hält beim nächsten Schritt an (meist nach wenigen Sekunden).': 'Cancel requested – the run stops at its next step (usually within seconds).',
     'Abbruch angefordert …': 'Cancel requested …',
     'Laufenden Abruf abbrechen? Bis dahin geladene Belege bleiben erhalten.': 'Cancel the running fetch? Documents fetched so far are kept.',
+    'abgebrochen – der Prozess lief nicht mehr': 'cancelled – the process was no longer running',
 }

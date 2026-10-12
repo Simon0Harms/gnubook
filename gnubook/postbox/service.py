@@ -116,6 +116,35 @@ class PostboxService:
             return None
         return last if (row["updated_at"] or "") <= last["started_at"] else None
 
+    def alive(self, kind: str) -> bool | None:
+        """True when a process holds the run lock of the source, False when none does (a run shown as running
+        died), None when that cannot be told (lock file not readable, e.g. created by root)."""
+        try:
+            fd = os.open(self.root / f"book-{self.ctx.id}-{kind}.lock", os.O_RDONLY)
+        except FileNotFoundError:
+            return False
+        except OSError:
+            return None
+        try:
+            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+        except OSError:
+            return None
+        finally:
+            os.close(fd)  # closing also releases a lock taken here
+        return False
+
+    def close_dead_run(self, kind: str) -> bool:
+        """A run shown as running whose process is gone (killed, container restarted): mark it and clear a
+        cancel request, so the page does not wait for it. True when one was closed."""
+        run = self.store.running(kind)
+        if run is None or self.alive(kind) is not False:
+            return False
+        self.store.finish_run(run["id"], "cancelled", _("abgebrochen – der Prozess lief nicht mehr"))
+        jobs.clear_cancel(self.cfg.app.data_dir, self.ctx.id, kind)
+        return True
+
     @contextmanager
     def _lock(self, kind: str, wait: float = 0):
         self.root.mkdir(parents=True, exist_ok=True)

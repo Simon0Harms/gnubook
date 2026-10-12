@@ -736,3 +736,18 @@ def test_cancel_from_the_web_interface(reg, book, web, fetcher, pp_import, cfg):
     assert not jobs.cancel_requested(cfg.app.data_dir, book.id, KIND)  # cleared after the run
     assert jobs.pending(cfg.app.data_dir, book.id) == []
     assert "abgebrochen" in web.get("/postbox/").text
+
+
+def test_dead_run_is_closed_when_the_page_is_shown(reg, book, web, cfg):
+    _source(reg, book)
+    svc = PostboxService(reg, book)
+    run_id = svc.store.start_run(KIND, "simon")  # its process was killed: nobody holds the lock
+    jobs.request_cancel(cfg.app.data_dir, book.id, KIND, "simon")
+    assert svc.alive(KIND) is False
+    page = web.get("/postbox/").text
+    assert "Abbruch angefordert" not in page and "der Prozess lief nicht mehr" in page
+    assert svc.store.running(KIND) is None and svc.store.runs(KIND, 1)[0]["id"] == run_id
+    assert not jobs.cancel_requested(cfg.app.data_dir, book.id, KIND)
+    with svc._lock(KIND):
+        svc.store.start_run(KIND, "simon")
+        assert svc.alive(KIND) is True and not svc.close_dead_run(KIND)
