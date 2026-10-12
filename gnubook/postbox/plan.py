@@ -53,7 +53,7 @@ def parse_day(text: str | None, today: date | None = None) -> date | None:
 
 
 def stop_day(since: date | None, complete_day: date | None, overlap: int, rescan: date | None = None) -> date | None:
-    """Oldest posting day a run has to list. None means: no limit (the caller refuses to run without `since`)."""
+    """Oldest posting day a run has to list. None means: no limit – down to the oldest document."""
     if complete_day is None:
         stop = since
     else:

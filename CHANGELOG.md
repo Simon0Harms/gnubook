@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Belegeingang: *Belege ab* may stay empty – then every document down to the oldest one is fetched
 - Belegeingang: an own Nextcloud share link for the documents (instead of the Nextcloud of the GnuCash copy),
   and sub folders per year, week or day
 - Belegeingang (optional, `deploy/install-postbox.sh`, docs/POSTBOX.md): documents of a finanzen.net zero account are

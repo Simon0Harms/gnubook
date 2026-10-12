@@ -58,7 +58,8 @@ The script
 ## First steps
 
 1. *Belegeingang*: enter user name and password of finanzen.net zero.
-2. *Belege ab*: documents posted before this day are never fetched. For the first run choose the day after the
+2. *Belege ab*: documents posted before this day are never fetched. Empty: every document down to the oldest one
+   in the postbox (the first run clicks *Mehr anzeigen* to the end of the list; mind `max_clicks`). For the first run choose the day after the
    last document you imported into PP by hand – otherwise PP finds possible duplicates for every older document
    (it does not import them, but they wait for a decision).
 3. *Nextcloud-Ordner*: the folder in your Nextcloud (connected under *Einstellungen → Nextcloud*), e.g.

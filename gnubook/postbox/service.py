@@ -160,8 +160,6 @@ class PostboxService:
             return RunOutcome("ok", self._process_text(done), processed=done)
         if scheduled and self.paused(kind, row) is not None:
             return RunOutcome("paused", _("Automatischer Abruf pausiert: die letzte Anmeldung schlug fehl. Zugangsdaten prüfen und speichern oder von Hand abrufen."))
-        if st.since_day is None:
-            return RunOutcome("error", _("Bitte zuerst „Belege ab“ festlegen."))
         try:
             password = self.reg.system.postbox_password(row)
         except Exception as exc:  # noqa: BLE001 – key changed: report instead of crashing

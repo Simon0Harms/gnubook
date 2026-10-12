@@ -18,10 +18,10 @@
       <div class="card-header"><h3 class="card-title"><i class="bi bi-inbox"></i> {{ _("Abruf") }}</h3></div>
       <div class="card-body">
         {% if row is none %}
-          <p class="small mb-0">{{ _("Noch nicht eingerichtet: rechts Zugangsdaten und „Belege ab“ eintragen und speichern.") }}</p>
+          <p class="small mb-0">{{ _("Noch nicht eingerichtet: rechts Zugangsdaten eintragen und speichern.") }}</p>
         {% else %}
           <dl class="row small mb-3">
-            <dt class="col-6">{{ _("Belege ab") }}</dt><dd class="col-6">{{ st.since|de_date }}</dd>
+            <dt class="col-6">{{ _("Belege ab") }}</dt><dd class="col-6">{{ st.since|de_date if st.since else _("alle (ältester Beleg)") }}</dd>
             <dt class="col-6">{{ _("Vollständig gelesen bis") }}</dt><dd class="col-6">{{ complete_day|de_date if complete_day else _("noch nie") }}</dd>
             <dt class="col-6">{{ _("Automatischer Abruf") }}</dt><dd class="col-6">{{ _("an") if st.enabled else _("aus") }}</dd>
             <dt class="col-6">{{ _("Belege gesamt") }}</dt><dd class="col-6">{{ counts.total }}{% if counts.attention %} · <a href="{{ url_for('postbox.index', source=kind, filter='attention') }}#docs" class="text-warning-emphasis">{{ _("{n} zu prüfen", n=counts.attention) }}</a>{% endif %}</dd>
@@ -85,7 +85,8 @@
             <div class="col-12"><div class="form-text mt-0">{{ _("Nur für den Posteingang – ohne Secure-TAN-Freigabe kann damit nicht gehandelt werden. Das Passwort wird verschlüsselt gespeichert (Schlüssel aus config.toml).") }}</div></div>
             <div class="col-sm-6 col-lg-4">
               <label class="form-label" for="since">{{ _("Belege ab") }}</label>
-              <input class="form-control" type="date" id="since" name="since" value="{{ st.since }}" required>
+              <input class="form-control" type="date" id="since" name="since" value="{{ st.since }}">
+              <div class="form-text">{{ _("Leer = alle Belege bis zum ältesten im Postfach.") }}</div>
             </div>
             <div class="col-sm-6 col-lg-4">
               <label class="form-label" for="overlap_days">{{ _("Überlappung (Tage)") }}</label>

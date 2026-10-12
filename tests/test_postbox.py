@@ -310,9 +310,7 @@ def test_incomplete_run_and_failed_download_keep_the_mark(reg, book, fetcher, pp
 
 
 def test_dry_run_rescan_and_errors(reg, book, fetcher, pp_import):
-    _source(reg, book, since="")
     svc = PostboxService(reg, book)
-    assert svc.run(KIND, "test").status == "error"           # no "since"
     _source(reg, book, rescan_from="2026-09-25", since="2026-09-20")
     out = svc.run(KIND, "test", mode="dry-run")
     assert out.status == "dry_run" and out.downloaded == 0 and svc.store.counts(KIND)["total"] == 0
@@ -686,3 +684,24 @@ def test_subfolders():
     assert st.nc_subfolder(D(2026, 10, 9)) == "2026/2026-10-09" and st.nc_subfolder(None) == "ohne-Datum"
     st.nc_subfolders = "ymd"
     assert st.nc_subfolder(D(2026, 10, 9)) == "2026/10/09"
+
+
+def test_without_since_fetches_down_to_the_oldest(reg, book, web, fetcher, pp_import, nc):
+    _source(reg, book, since="", nc_folder="")
+    svc = PostboxService(reg, book)
+    out = svc.run(KIND, "test")
+    assert out.status == "ok", out.message
+    assert fetcher.stops == [None]  # no limit: "Mehr anzeigen" until the end of the list
+    assert len(svc.store.docs(KIND, limit=500)) == len(_listing())  # 20.09. and older too
+    assert svc.store.complete_day(KIND) == D(2026, 10, 10)
+    svc.run(KIND, "test")
+    assert fetcher.stops[-1] == D(2026, 10, 7)  # later runs: complete day minus overlap
+
+    # emptying "Belege ab" in the form after a day was set: the next run lists everything once more
+    form = {"csrf_token": web.csrf, "login": "simon@example.org", "password": "", "since": "2026-10-01"}
+    web.post("/postbox/source", data=form)
+    r = web.post("/postbox/source", data=dict(form, since=""), follow_redirects=True)
+    assert "Gespeichert" in r.text and "alle (ältester Beleg)" in r.text
+    assert svc.store.complete_day(KIND) is None
+    r = web.post("/postbox/source", data=dict(form, since="31.02.2026"), follow_redirects=True)
+    assert "kein gültiges Datum" in r.text

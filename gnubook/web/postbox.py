@@ -112,9 +112,9 @@ def save_source():
         problems.append(_("Bitte den Benutzernamen angeben."))
     if not password and (row is None or not row["secret"]):
         problems.append(_("Bitte das Passwort angeben."))
-    if since is None:
-        problems.append(_("Bitte angeben, ab welchem Tag Belege geholt werden („Belege ab“)."))
-    elif since > date.today():
+    if since is None and (f.get("since") or "").strip():
+        problems.append(_("„Belege ab“ ist kein gültiges Datum."))
+    elif since is not None and since > date.today():
         problems.append(_("„Belege ab“ liegt in der Zukunft."))
     if rescan is not None and since is not None and rescan < since:
         problems.append(_("„Einmalig erneut prüfen ab“ liegt vor „Belege ab“."))
@@ -150,10 +150,13 @@ def save_source():
         for p in problems:
             flash(p, "danger")
         return _back(kind, "#source")
-    if rescan is None and row is not None and st.since_day is not None and since < st.since_day:
+    if rescan is None and row is not None and st.since_day is not None and since is not None and since < st.since_day:
         rescan = since  # "Belege ab" moved back: the next run lists back to the new day once
+    if row is not None and since is None and st.since_day is not None:
+        # "Belege ab" emptied: the next run lists the whole postbox down to its oldest document once
+        PostboxService(reg, ctx).store.set_complete_day(kind, None)
     st.enabled = f.get("enabled") == "1"
-    st.since = since.isoformat()
+    st.since = since.isoformat() if since else ""
     st.overlap_days = overlap
     st.rescan_from = rescan.isoformat() if rescan else ""
     st.import_pp = f.get("import_pp") == "1"
@@ -164,7 +167,7 @@ def save_source():
     st.nc_year_folders = st.nc_subfolders == "year"
     reg.system.set_postbox_source(ctx.id, kind, g.user["id"], login, password or None, st.to_json())
     ctx.appdb.audit(session.get("user", "?"), "postbox-source", None,
-                    f"{SOURCES[kind]}: {login}, ab {st.since}" + (" (Passwort geändert)" if password else ""))
+                    f"{SOURCES[kind]}: {login}, ab {st.since or 'Anfang'}" + (" (Passwort geändert)" if password else ""))
     msg = _("Gespeichert.")
     if (nc_folder and not st.nc_share_url and reg.cfg.nextcloud.enabled
             and reg.system.nextcloud_account(g.user["id"]) is None):
