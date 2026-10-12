@@ -84,8 +84,10 @@ if command -v systemd-run >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
   systemd-run --quiet --wait --pipe --collect -p RuntimeMaxSec=300 -p User=gnubook -p Group=gnubook -p NoNewPrivileges=true \
     -p ProtectSystem=strict -p ProtectHome=true -p PrivateTmp=true -p "ReadWritePaths=$APP_DIR/data" \
     -E HOME="$APP_DIR/data/postbox/home" -E PLAYWRIGHT_BROWSERS_PATH="$BROWSERS" \
-    "$PY" -c "$SMOKE" "$BROWSER" ||
-    die "Der Browser startet nicht (Meldung oben). Mit dem anderen Browser versuchen: install-postbox.sh chromium"
+    "$PY" -c "$SMOKE" "$BROWSER" </dev/null 2>&1 | cat
+  # stdin/stdout are no terminal: systemd would chown a terminal to the service user, which fails in an LXC (208/STDIN)
+  [ "${PIPESTATUS[0]}" = 0 ] ||
+    die "Der Browser startet nicht (Meldung oben, sonst: journalctl -n 30 -u 'run-*'). Mit dem anderen Browser versuchen: install-postbox.sh chromium"
 else
   timeout 300 runuser -u gnubook -- env HOME="$APP_DIR/data/postbox/home" PLAYWRIGHT_BROWSERS_PATH="$BROWSERS" \
     "$PY" -c "$SMOKE" "$BROWSER" ||
