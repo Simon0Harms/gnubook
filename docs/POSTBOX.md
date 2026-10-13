@@ -97,7 +97,8 @@ limit (`[postbox] max_clicks`, if set) or whose *Mehr anzeigen* stopped loading 
 *Einmalig erneut prüfen ab* makes the next complete run list back to an earlier day once.
 
 **Downloads.** A PDF link of the postbox is a plain request that only needs the session; it is fetched inside the
-page by the browser itself. The oldest documents are fetched first – the broker keeps documents only for a while, so a long
+page by the browser itself. When the session of the web app runs out during a long run (HTTP 401), the run logs in again and goes on
+(at most 20 times per run). The oldest documents are fetched first – the broker keeps documents only for a while, so a long
 run that breaks off has the ones closest to being removed already. Every PDF is stored at once (`data/postbox/book-<id>/finanzen-zero/<year>/`, file name
 `2026-10-09_246891282_Wertpapierabrechnung-Kauf-DE0008430026.pdf`) and recorded, so a run that breaks off keeps
 what it got.

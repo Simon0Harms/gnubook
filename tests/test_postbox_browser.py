@@ -249,3 +249,12 @@ def test_progress_reports_clicks_and_downloads(site, tmp_path):
     assert lines[0].startswith("Browser startet")
     assert any("„Mehr anzeigen“ 2×: 30 Einträge gelesen" in t for t in lines)
     assert any(t.startswith("Download 20 von 20:") for t in lines)
+
+
+def test_session_running_out_during_downloads_logs_in_again(site, tmp_path):
+    handler, url = site
+    handler.expire_after = 7  # the session ends after every 7th download
+    since = date(2026, 10, 1)
+    result, got, _f = _run(url, tmp_path, since, since=since)
+    assert len(got) == 20 and result.downloaded == 20 and not result.failed
+    assert len(handler.logins) == 3  # first login + two new ones

@@ -48,6 +48,7 @@ MORE = '[data-zid="post-box-more-link"]'
 LOGIN_PATHS = ("/", "/login", "/anmelden", "/auth", "/signin")
 MAX_PDF = 50 * 1024 * 1024
 MAX_FAILURES_IN_A_ROW = 3        # downloads; then the session is probably gone
+MAX_RELOGINS = 20                # new logins per run after the session ran out
 TZ = ZoneInfo("Europe/Berlin")
 
 # consent buttons, most privacy-friendly first; only clicked inside a cookie/consent container, before the login
@@ -523,31 +524,60 @@ class FinanzenZeroFetcher:
             raise Cancelled(_("Abgebrochen."))
 
     def _download_all(self, page, result: FetchResult, sink):
-        in_a_row = 0
-        for i, doc in enumerate(result.selected):
+        """Downloads result.selected. When the session runs out during a long run (the app answers 401), logs in
+        again and retries the documents that failed with it (at most MAX_RELOGINS times per run)."""
+        todo, total = result.selected, len(result.selected)
+        i, relogins, lost = 0, 0, []  # lost: (doc, message) of the session failures in a row
+        while i < len(todo):
+            doc = todo[i]
             self._check_cancel()
-            self._say(_("Download {a0} von {a1}: {a2} ({a3})", a0=i + 1, a1=len(result.selected), a2=doc.title,
+            self._say(_("Download {a0} von {a1}: {a2} ({a3})", a0=i + 1, a1=total, a2=doc.title,
                         a3=doc.day.strftime("%d.%m.%Y") if doc.day else "?"))
             try:
                 data = self._download(page, doc)
+            except SessionLost as exc:
+                lost.append((doc, str(exc)))
             except FetchError as exc:
-                result.failed.append((doc, str(exc)))
                 # a document the server refuses on its own (404, 500, no PDF) must not keep the others from being
                 # fetched; only failures that hit every download end the downloads of this run
-                in_a_row = in_a_row + 1 if isinstance(exc, SessionLost) else 0
+                result.failed.extend(lost)
+                lost = []
+                result.failed.append((doc, str(exc)))
             except Exception as exc:  # noqa: BLE001 – the page may be gone (e.g. logged out by the app)
-                result.failed.append((doc, _first_line(exc)))
-                in_a_row += 1
+                lost.append((doc, _first_line(exc)))
             else:
-                in_a_row = 0
+                result.failed.extend(lost)  # single failures between successes were the documents themselves
+                lost = []
                 sink(doc, data)
                 result.downloaded += 1
                 page.wait_for_timeout(max(0, int(self.cfg.download_pause_ms)))
+            i += 1
+            if len(lost) < MAX_FAILURES_IN_A_ROW:
                 continue
-            if in_a_row >= MAX_FAILURES_IN_A_ROW:
-                for rest in result.selected[i + 1:]:
-                    result.failed.append((rest, _("nicht versucht – zu viele Fehler hintereinander")))
-                return
+            if relogins < MAX_RELOGINS and self._relogin(page):
+                relogins += 1
+                i -= len(lost)  # the same documents once more with the new session
+                lost = []
+                continue
+            result.failed.extend(lost)
+            for rest in todo[i:]:
+                result.failed.append((rest, _("nicht versucht – zu viele Fehler hintereinander")))
+            return
+        result.failed.extend(lost)
+
+    def _relogin(self, page) -> bool:
+        """Logs in again after the session ran out. False when that did not work (the run then stops downloading)."""
+        self._say(_("Sitzung abgelaufen – erneute Anmeldung …"))
+        try:
+            page.context.clear_cookies()
+            self._submitted = False
+            self._open_inbox(page)
+            return True
+        except FetchError:
+            raise  # e.g. the login is refused now: the run's result
+        except Exception as exc:  # noqa: BLE001 – browser trouble: stop downloading, keep what was fetched
+            log.warning("Postfach: erneute Anmeldung fehlgeschlagen: %s", _first_line(exc))
+            return False
 
     def _download(self, page, doc: Listed) -> bytes:
         url = urljoin(self.base + "/", doc.href)

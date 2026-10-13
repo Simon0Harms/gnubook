@@ -1209,4 +1209,5 @@ EN = {
     'Portfolio Performance: Belege {a0}–{a1} von {a2}': 'Portfolio Performance: documents {a0}–{a1} of {a2}',
     'Nextcloud: Beleg {a0} von {a1}': 'Nextcloud: document {a0} of {a1}',
     'vor {n} s': '{n} s ago',
+    'Sitzung abgelaufen – erneute Anmeldung …': 'Session expired – logging in again …',
 }

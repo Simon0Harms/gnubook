@@ -145,6 +145,8 @@ class FzeroHandler(BaseHTTPRequestHandler):
     day_format: str = "%d.%m.%y"
     decisions: list
     fail_status: int = 500
+    expire_after: int = 0  # > 0: the session ends after this many downloads (like a session time limit)
+    served: int = 0
 
     def log_message(self, *args):
         pass
@@ -214,6 +216,9 @@ class FzeroHandler(BaseHTTPRequestHandler):
             doc_id = path.split("/")[5]
             if doc_id in cls.fail_ids:
                 return self._json(cls.fail_status, {"error": "kaputt"})
+            cls.served += 1
+            if cls.expire_after and cls.served % cls.expire_after == 0:
+                cls.sessions.clear()  # this was the last download of the session
             return self._send(200, pdf_bytes(doc_id), "application/pdf")
         return self._send(404, "not found", "text/plain")
 

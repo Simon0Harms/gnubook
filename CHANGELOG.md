@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Belegeingang: logs in again when the session runs out during a long run (downloads failed with HTTP 401)
 - Belegeingang: the oldest documents are downloaded first
 - Belegeingang: progress of a running run on the page (reloading itself) and in the journal
 - Belegeingang: *Abbrechen* stops a running run from the web interface
