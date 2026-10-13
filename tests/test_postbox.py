@@ -771,3 +771,10 @@ def test_progress_is_shown_while_running(reg, book, web, fetcher, pp_import, cfg
     assert jobs.progress(cfg.app.data_dir, book.id, KIND) is None  # cleared after the run
     page = web.get("/postbox/").text
     assert "data-autoreload" not in page
+
+
+def test_select_fetches_the_oldest_first():
+    listed = [Listed("30", "a", D(2026, 10, 10), "/30"), Listed("31", "b", D(2026, 10, 10), "/31"),
+              Listed("12", "c", D(2026, 10, 9), "/12"), Listed("x", "ohne Datum", None, "/x"),
+              Listed("11", "d", D(2026, 10, 9), "/11"), Listed("5", "e", D(2026, 9, 1), "/5")]
+    assert [d.external_id for d in plan.select(listed, {"12"}, None)] == ["5", "11", "30", "31", "x"]

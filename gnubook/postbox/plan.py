@@ -74,7 +74,10 @@ def batch_done(batch: list[Listed], stop: date | None) -> bool:
 
 
 def select(listed: list[Listed], known: set[str], since: date | None) -> list[Listed]:
-    """Entries to download: unknown ids, not older than `since` (entries without a readable day are taken)."""
+    """Entries to download: unknown ids, not older than `since` (entries without a readable day are taken).
+
+    Oldest first: the broker keeps documents only for a while, so the ones closest to being removed are fetched
+    before a long run may break off (within a day by rising number, entries without a day last)."""
     out, seen = [], set()
     for d in listed:
         if not d.external_id or not d.href or d.external_id in known or d.external_id in seen:
@@ -83,7 +86,12 @@ def select(listed: list[Listed], known: set[str], since: date | None) -> list[Li
             continue
         seen.add(d.external_id)
         out.append(d)
+    out.sort(key=lambda d: (d.day is None, d.day or date.min, _number(d.external_id)))
     return out
+
+
+def _number(external_id: str) -> tuple[int, str]:
+    return (int(external_id), "") if external_id.isdigit() else (0, external_id)
 
 
 def complete_day_after(listed: list[Listed], failed_days, previous: date | None) -> date | None:
