@@ -28,6 +28,8 @@ class SourceSettings:
     # sub folders by posting date below nc_folder: "" (none), "year" (2026), "week" (2026/KW41), "day" (2026/2026-10-09), "ymd" (2026/10/09);
     # None = from nc_year_folders
     nc_subfolders: str | None = None
+    # delete the PDF kept in data/postbox once it is in Nextcloud and nothing is left to do for PP
+    delete_local: bool = True
     # own Nextcloud share link (folder shared with edit permission) instead of the owner's Nextcloud; nc_folder and
     # the folders below are then inside the shared folder ('' = its top). Password encrypted (crypto.SecretBox).
     nc_share_url: str = ""

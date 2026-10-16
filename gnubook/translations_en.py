@@ -1226,4 +1226,7 @@ EN = {
     '{a0}: {a1} Depotumsätze gelesen.': '{a0}: {a1} securities account transactions read.',
     '„{a0}“ ist kein Datum': '“{a0}” is not a date',
     '„{a0}“ ist keine Zahl': '“{a0}” is not a number',
+    '{a0} lokale Kopien gelöscht': '{a0} local copies deleted',
+    'Die lokale Kopie ist gelöscht – der Beleg liegt in der Nextcloud: {a0}': 'The local copy is deleted – the document is in Nextcloud: {a0}',
+    'Lokale Kopie löschen, sobald der Beleg in der Nextcloud ist und für Portfolio Performance nichts mehr offen ist': 'Delete the local copy once the document is in Nextcloud and nothing is left to do for Portfolio Performance',
 }

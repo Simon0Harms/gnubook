@@ -125,6 +125,11 @@ are booked right after the run, otherwise by the hourly `gnubook-pp.timer`.
 Failed uploads are repeated by every run; *Bisherige Belege … auch in die Nextcloud kopieren* copies documents
 fetched before a folder was set.
 
+**Local copies.** With *Lokale Kopie löschen …* (on by default) the PDF in `data/postbox/` is deleted as soon as it is in
+Nextcloud and nothing is left to do for PP (*übernommen*, *nicht erkannt*, *übersprungen*, *erledigt* or import
+*aus*); documents waiting for a decision keep theirs until they are decided. The list keeps every document with its
+number and checksum, so it is never fetched again; its PDF is then only in Nextcloud.
+
 ## When runs happen
 
 - `gnubook-postbox.timer`: Monday to Friday at **23:20** (± 5 minutes) for all postboxes with *Automatisch

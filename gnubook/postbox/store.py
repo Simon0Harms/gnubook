@@ -22,6 +22,7 @@ from .plan import Listed
 
 PP_RETRY = ("pending", "needs_target")          # imported again by every run
 PP_ATTENTION = ("review", "needs_target", "error", "partial")
+PP_FINAL = ("imported", "unsupported", "skipped", "done", "off")  # nothing left to do for PP
 NC_RETRY = ("pending", "error")
 RUNNING_STALE = timedelta(hours=13)              # a "running" run older than this died without finishing
 
@@ -99,6 +100,12 @@ class PostboxStore:
                              f"({','.join('?' * len(statuses))}) "
                              f"ORDER BY nc_status <> 'pending', COALESCE(day, ''), id",
                              (source, *statuses)).fetchall()
+
+    def finished(self, source: str):
+        """Documents in Nextcloud with nothing left to do for PP: their local PDF may go."""
+        with self.appdb.conn() as c:
+            return c.execute(f"SELECT * FROM postbox_docs WHERE source = ? AND nc_status = 'done' AND pp_status IN "
+                             f"({','.join('?' * len(PP_FINAL))})", (source, *PP_FINAL)).fetchall()
 
     def with_session(self, source: str):
         """Documents waiting for a decision in a pp-core import session that may still exist (6 hours)."""

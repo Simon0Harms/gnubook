@@ -166,6 +166,7 @@ def save_source():
     st.overlap_days = overlap
     st.rescan_from = rescan.isoformat() if rescan else ""
     st.import_pp = f.get("import_pp") == "1"
+    st.delete_local = f.get("delete_local") == "1"
     st.nc_folder = nc_folder
     if share is not None:
         st.nc_share_url, st.nc_share_secret, st.nc_share_legacy = share
@@ -236,6 +237,9 @@ def doc_pdf(doc_id):
     row = _doc_or_404(svc, doc_id, kind)
     path = svc.doc_path(row)
     if not path.is_file():
+        if row["nc_status"] == "done":
+            flash(_("Die lokale Kopie ist gelöscht – der Beleg liegt in der Nextcloud: {a0}", a0=row["nc_path"] or "?"), "info")
+            return _back(kind, "#docs")
         abort(404)
     return send_file(path, mimetype="application/pdf", download_name=row["filename"],
                      as_attachment=request.args.get("download") == "1")
@@ -270,6 +274,7 @@ def doc_done(doc_id):
     svc = _svc()
     row = _doc_or_404(svc, doc_id, kind)
     svc.store.set_pp(doc_id, "done", _("vom Benutzer als erledigt markiert"), row["pp_items"], row["pp_imported"])
+    svc.delete_finished(kind)
     state().appdb.audit(session.get("user", "?"), "postbox-done", None, f"{row['external_id']} {row['title']}")
     return _back(kind, "#docs")
 

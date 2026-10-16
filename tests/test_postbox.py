@@ -240,7 +240,7 @@ def fetcher(monkeypatch):
 
 
 def _source(reg, book, **changes):
-    st = SourceSettings(since="2026-10-01", nc_folder="/Finanzen/zero")
+    st = SourceSettings(since="2026-10-01", nc_folder="/Finanzen/zero", delete_local=False)  # tests read the PDFs
     for k, v in changes.items():
         setattr(st, k, v)
     reg.system.set_postbox_source(book.id, KIND, 1, "simon@example.org", "geheim-123", st.to_json())
@@ -778,3 +778,34 @@ def test_select_fetches_the_oldest_first():
               Listed("12", "c", D(2026, 10, 9), "/12"), Listed("x", "ohne Datum", None, "/x"),
               Listed("11", "d", D(2026, 10, 9), "/11"), Listed("5", "e", D(2026, 9, 1), "/5")]
     assert [d.external_id for d in plan.select(listed, {"12"}, None)] == ["5", "11", "30", "31", "x"]
+
+
+def test_local_copy_is_deleted_when_nothing_is_left_to_do(reg, book, fetcher, pp_import, nc, web):
+    assert SourceSettings().delete_local and SourceSettings.from_json("{}").delete_local  # on by default
+    _source(reg, book, delete_local=True)
+    svc = PostboxService(reg, book)
+    out = svc.run(KIND, "test")
+    assert "lokale Kopien gelöscht" in out.message
+    docs = svc.store.docs(KIND, limit=500)
+    for d in docs:
+        assert d["nc_status"] == "done"
+        if d["pp_status"] in ("imported", "unsupported"):
+            assert not svc.doc_path(d).exists()  # in Nextcloud and done for PP
+        else:
+            assert d["pp_status"] == "review" and svc.doc_path(d).exists()  # still needed for the decision
+    review = next(d for d in docs if d["pp_status"] == "review")
+    gone = next(d for d in docs if d["pp_status"] == "imported")
+    r = web.get(f"/postbox/docs/{gone['id']}/pdf", follow_redirects=True)
+    assert "liegt in der Nextcloud" in r.text and gone["nc_path"] in r.text
+    web.post(f"/postbox/docs/{review['id']}/done", data={"csrf_token": web.csrf})
+    assert not svc.doc_path(review).exists()
+    # a later run does not fetch the deleted ones again
+    fetcher.stops.clear()
+    assert svc.run(KIND, "test").downloaded == 0
+
+
+def test_local_copy_is_kept_when_switched_off(reg, book, fetcher, pp_import, nc):
+    _source(reg, book, delete_local=False)
+    svc = PostboxService(reg, book)
+    svc.run(KIND, "test")
+    assert all(svc.doc_path(d).exists() for d in svc.store.docs(KIND, limit=500))

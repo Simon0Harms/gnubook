@@ -322,6 +322,8 @@ class PostboxService:
             parts.append(_("{a0} zur Prüfung", a0=done["attention"]))
         if done.get("uploaded"):
             parts.append(_("{a0} in die Nextcloud kopiert", a0=done["uploaded"]))
+        if done.get("deleted"):
+            parts.append(_("{a0} lokale Kopien gelöscht", a0=done["deleted"]))
         for msg in done.get("errors", [])[:2]:
             parts.append(msg)
         return " · ".join(parts)
@@ -336,7 +338,28 @@ class PostboxService:
         self._process_pp(kind, st, done, sync_now)
         if row is not None:
             self._process_nc(kind, row, st, done)
+        done["deleted"] = self.delete_finished(kind, st)
         return done
+
+    def delete_finished(self, kind: str, st: SourceSettings | None = None) -> int:
+        """Deletes the local PDF of documents that are in Nextcloud and need nothing more from PP (when switched
+        on). The list keeps them – with number and checksum, so they are never fetched again."""
+        if st is None:
+            row = self.source(kind)
+            st = self.settings_of(row) if row is not None else None
+        if st is None or not st.delete_local:
+            return 0
+        n = 0
+        for r in self.store.finished(kind):
+            path = self.doc_path(r)
+            try:
+                path.unlink()
+                n += 1
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                log.warning("Postfach: %s nicht gelöscht: %s", path, exc)
+        return n
 
     def _process_pp(self, kind: str, st: SourceSettings, done: dict, sync_now: bool):
         rows = self.store.for_pp(kind)

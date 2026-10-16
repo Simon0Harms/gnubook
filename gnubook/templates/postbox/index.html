@@ -114,6 +114,10 @@
                 <input class="form-check-input" type="checkbox" id="import_pp" name="import_pp" value="1" {{ 'checked' if st.import_pp }} {{ 'disabled' if not pp_on }}>
                 <label class="form-check-label" for="import_pp">{{ _("In Portfolio Performance importieren") }}{% if not pp_on %} <span class="text-body-secondary">({{ _("Portfolio Performance ist nicht eingerichtet") }})</span>{% endif %}</label>
               </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="delete_local" name="delete_local" value="1" {{ 'checked' if st.delete_local }}>
+                <label class="form-check-label" for="delete_local">{{ _("Lokale Kopie löschen, sobald der Beleg in der Nextcloud ist und für Portfolio Performance nichts mehr offen ist") }}</label>
+              </div>
             </div>
             <div class="col-md-8">
               <label class="form-label" for="nc_folder">{{ _("Nextcloud-Ordner") }}</label>
