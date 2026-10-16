@@ -21,10 +21,12 @@ echo ">> Sicherung nach $APP_DIR/backup/gnubook-$STAMP.tar.gz"
 mkdir -p "$APP_DIR/backup"
 EXTRA=""
 for f in gunicorn.conf.py ppcore.properties ppcore.env; do [ -f "$APP_DIR/$f" ] && EXTRA="$EXTRA $f"; done
+# the PDFs of the Belegeingang (data/postbox/book-*) are left out: they are in Nextcloud and can take gigabytes
 # shellcheck disable=SC2086
 tar -czf "$APP_DIR/backup/gnubook-$STAMP.tar.gz" -C "$APP_DIR" \
   --exclude=data/ppcore/workspace --exclude=data/ppcore/home \
-  --exclude=data/postbox/home --exclude=data/postbox/debug config.toml data $EXTRA
+  --exclude=data/postbox/home --exclude=data/postbox/debug --exclude="data/postbox/book-*" \
+  config.toml data $EXTRA
 ls -1t "$APP_DIR"/backup/gnubook-*.tar.gz | tail -n +11 | xargs -r rm --
 
 OLD=$($GIT rev-parse HEAD)

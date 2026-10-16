@@ -1,5 +1,6 @@
 # Changelog
 ## Unreleased
+- gnubook-update: the backup before an update leaves out the PDFs of the Belegeingang (`data/postbox/book-*`)
 - Belegeingang: the local PDF is deleted once it is in Nextcloud and nothing is left to do for PP (on by default)
 - Portfolio Performance: the PDF import also reads lists of securities account transactions – CSV with the
   columns of PP's CSV import, or the Excel list finanzen.net zero sends on request – with PP's CSV importer and the
