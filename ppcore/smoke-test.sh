@@ -202,6 +202,25 @@ assert done["imported"] >= 1 and not done["needsTarget"], done
 again = call("POST", "/clients/xfer/import", {"files": [{"name": "again.txt", "data": doc}], "apply": True})
 assert not again["needsTarget"] and again["imported"] == 0, again  # the bank's target is remembered
 assert [i["status"] for i in again["items"]] == ["WARNING"], again["items"]  # possible duplicate
+# CSV import (gnubook's canonical CSV, read by PP's CSV importer): the same checks as PDFs – the purchase already
+# imported from the statement above is a possible duplicate, the others are new; a CSV never reuses a bank's target
+CSV = """date;time;type;isin;wkn;name;shares;value;fees;taxes;currency;note
+2022-04-05;16:54:29;BUY;DE0008430026;843002;Muster Rück AG;2;600.00;0.00;0.00;EUR;schon aus dem PDF
+2022-05-02;10:00:00;BUY;DE0008430026;843002;Muster Rück AG;1;310.00;0.00;0.00;EUR;neu
+2022-06-01;11:00:00;SELL;DE0008430026;843002;Muster Rück AG;1;330.00;0.00;2.10;EUR;mit Steuer
+2022-07-01;;DELIVERY_INBOUND;IE00B4L5Y983;;Xfer ETF;3;300.00;0.00;0.00;EUR;Einlieferung
+"""
+csvdoc = base64.b64encode(CSV.encode()).decode()
+ci = call("POST", "/clients/xfer/import", {"csv": [{"name": "depot.csv", "data": csvdoc}], "apply": True})
+assert ci["needsTarget"] and ci["imported"] == 0 and not ci["fileErrors"], ci
+cd = call("POST", f"/clients/xfer/import/{ci['session']}/apply", {"portfolio": PA,
+          "account": "acc00000-0000-4000-8000-000000000001", "force": []})
+status = {i.get("note") or i.get("kind"): i["status"] for i in cd["items"] if i["kind"] != "SecurityItem"}
+assert cd["imported"] == 3 and not cd["needsTarget"], cd
+assert sorted(i["status"] for i in cd["items"] if i["kind"] != "SecurityItem") == ["OK", "OK", "OK", "WARNING"], cd["items"]
+bad = base64.b64encode(b"date;type;shares;value\n2022-13-01;BUY;1;10.00\n").decode()
+cb = call("POST", "/clients/xfer/import", {"csv": [{"name": "kaputt.csv", "data": bad}], "apply": False})
+assert cb["fileErrors"] and not [i for i in cb["items"] if i["kind"] != "SecurityItem"], cb
 raw = call("GET", "/clients/smoke/file")
 assert b"<client" in raw[:200], raw[:200]
 print("pp-core smoke test passed:", len(feeds), "price sources")

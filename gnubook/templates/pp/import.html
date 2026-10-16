@@ -2,7 +2,7 @@
 {% from "pp/_macros.html" import money, shares %}
 {% block title %}{{ _("PDF-Import") }}{% endblock %}
 {% block header %}{{ _("Portfolio Performance") }}{% endblock %}
-{% block subheader %}<div class="small text-body-secondary">{{ _("Abrechnungen, Dividendengutschriften und Steuerbelege als PDF – erkannt von den Importfiltern von Portfolio Performance") }}</div>{% endblock %}
+{% block subheader %}<div class="small text-body-secondary">{{ _("Abrechnungen, Dividendengutschriften und Steuerbelege als PDF – erkannt von den Importfiltern von Portfolio Performance; Depotumsätze als CSV- oder Excel-Liste") }}</div>{% endblock %}
 {% block content %}
 {% include "pp/_nav.html" %}
 {% if not summary.exists %}
@@ -10,7 +10,7 @@
 {% else %}
 
 <div class="card mb-4">
-  <div class="card-header"><h3 class="card-title"><i class="bi bi-file-earmark-arrow-up"></i> {{ _("PDF-Dokumente oder Archive hochladen") }}</h3></div>
+  <div class="card-header"><h3 class="card-title"><i class="bi bi-file-earmark-arrow-up"></i> {{ _("PDF-Dokumente, Umsatzlisten oder Archive hochladen") }}</h3></div>
   <div class="card-body">
     <form method="post" action="{{ url_for('pp.pdf_import') }}" enctype="multipart/form-data">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -18,7 +18,7 @@
         <div class="col-12 col-lg-5">
           <label class="form-label" for="files">{{ _("Dateien") }}</label>
           <input class="form-control" type="file" id="files" name="files" accept="{{ ACCEPT }}" multiple required>
-          <div class="form-text">{{ _("Einzelne PDFs oder mehrere gepackt als ZIP oder TAR (.tar.gz, .tgz, .tar.bz2, .tar.xz).") }}</div>
+          <div class="form-text">{{ _("Einzelne PDFs oder mehrere gepackt als ZIP oder TAR (.tar.gz, .tgz, .tar.bz2, .tar.xz). Depotumsätze als CSV (Spalten wie beim CSV-Import von Portfolio Performance: Datum, Typ, Stück, Wert, ISIN/WKN/Wertpapiername, Gebühren, Steuern, …) oder die Excel-Umsatzliste von finanzen.net zero.") }}</div>
         </div>
         <div class="col-6 col-lg-2">
           <label class="form-label" for="portfolio">{{ _("Depot") }}</label>
@@ -42,7 +42,7 @@
           <button class="btn btn-primary w-100" type="submit"><i class="bi bi-upload"></i> {{ _("Importieren") }}</button>
         </div>
       </div>
-      <p class="small text-body-secondary mt-2 mb-0">{{ _("„automatisch“: das Depot und Konto, in das die Bank zuletzt importiert hat, sonst das einzige. Mögliche Duplikate werden nicht übernommen, solange du sie nicht ausdrücklich freigibst.") }}</p>
+      <p class="small text-body-secondary mt-2 mb-0">{{ _("„automatisch“: das Depot und Konto, in das die Bank zuletzt importiert hat, sonst das einzige – bei CSV- und Excel-Listen nur das einzige, sonst wird gefragt. Mögliche Duplikate (auch Buchungen, die schon aus PDFs da sind) werden nicht übernommen, solange du sie nicht ausdrücklich freigibst.") }}</p>
     </form>
   </div>
 </div>
@@ -73,7 +73,7 @@
           </select></div>
         <div class="col-12 col-md-2"><button class="btn btn-sm btn-primary w-100" type="submit">{{ _("Übernehmen") }}</button></div>
       </div>
-      <p class="small text-body-secondary mb-0 mt-1">{{ _("Die Wahl wird für diese Bank gemerkt.") }}</p>
+      <p class="small text-body-secondary mb-0 mt-1">{{ _("Die Wahl wird für diese Bank gemerkt; für CSV- und Excel-Listen nicht.") }}</p>
     </form>
     {% endfor %}
 

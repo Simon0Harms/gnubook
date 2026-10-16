@@ -289,8 +289,9 @@ class FakePPCore:
                 "newSecurities": [ETF], "portfolios": [{"uuid": P1, "name": "Depot Musterbank"}],
                 "accounts": [{"uuid": A1, "name": "Verrechnungskonto", "currency": "EUR"}]}
 
-    def import_pdfs(self, cid, files, portfolio=None, account=None, apply=True, auto_feed=True):
+    def import_pdfs(self, cid, files, portfolio=None, account=None, apply=True, auto_feed=True, csv=()):
         self.calls.append(("import", [n for n, _d in files], portfolio, account, auto_feed))
+        self.csv = list(csv)
         return self._import_result()
 
     def import_session(self, cid, session):

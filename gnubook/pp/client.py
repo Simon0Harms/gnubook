@@ -108,8 +108,12 @@ class PPCoreClient:
                              timeout=max(self.timeout, 120))
 
     def import_pdfs(self, cid: str, files: list[tuple[str, bytes]], portfolio: str | None = None,
-                    account: str | None = None, apply: bool = True, auto_feed: bool = True) -> dict:
+                    account: str | None = None, apply: bool = True, auto_feed: bool = True,
+                    csv: list[tuple[str, bytes]] = ()) -> dict:
+        """PDF documents (files) and canonical CSV files of securities account transactions (csv, see
+        pp.csvimport), extracted and checked by PP; what is in order is imported when apply is set."""
         body = {"files": [{"name": name, "data": base64.b64encode(data).decode()} for name, data in files],
+                "csv": [{"name": name, "data": base64.b64encode(data).decode()} for name, data in csv],
                 "portfolio": portfolio, "account": account, "apply": apply, "autoFeed": auto_feed}
         return self._request("POST", f"/clients/{cid}/import", body, timeout=max(self.timeout, 300))
 

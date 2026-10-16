@@ -19,7 +19,7 @@ from flask import (Blueprint, Response, abort, flash, g, jsonify, redirect, rend
 from .. import reports as rp
 from ..book import WriteLockError
 from ..money import ZERO
-from ..pp import archive
+from ..pp import archive, csvimport
 from ..pp.client import PPCoreError
 from ..pp.plan import SKIP_REASONS, build_plan
 from ..pp.settings import ROLE_LABELS, ROLE_TYPES, PPSettings, default_name, resolved
@@ -388,13 +388,22 @@ def pdf_import():
             files, problems = archive.expand([(n, d) for n, d in files if d])
             for name, message in problems:
                 flash(_("{a0}: {a1}", a0=name, a1=message), "warning")
-            if not files:
+            tables = []
+            for name, data in [(n, d) for n, d in files if csvimport.is_table(n)]:
+                try:
+                    canonical, count = csvimport.convert(name, data)
+                    tables.append((name.rsplit("/", 1)[-1].rsplit(".", 1)[0] + ".csv", canonical))
+                    flash(_("{a0}: {a1} Depotumsätze gelesen.", a0=name, a1=count), "info")
+                except csvimport.CsvImportError as exc:
+                    flash(_("{a0}: {a1}", a0=name, a1=exc), "warning")
+            files = [(n, d) for n, d in files if not csvimport.is_table(n)]
+            if not files and not tables:
                 if not problems:
-                    flash(_("Bitte mindestens eine PDF-Datei oder ein Archiv auswählen."), "warning")
+                    flash(_("Bitte mindestens eine PDF-, CSV- oder Excel-Datei oder ein Archiv auswählen."), "warning")
                 return redirect(url_for("pp.pdf_import"))
             result = svc.client.import_pdfs(svc.cid, files, portfolio=request.form.get("portfolio") or None,
                                             account=request.form.get("account") or None,
-                                            auto_feed=request.form.get("auto_feed") == "1")
+                                            auto_feed=request.form.get("auto_feed") == "1", csv=tables)
             session["pp_import"] = result.get("session")
             _after_import(svc, result)
             return redirect(url_for("pp.pdf_import", session=result.get("session")))

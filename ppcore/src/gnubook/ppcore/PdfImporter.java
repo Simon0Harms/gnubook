@@ -3,6 +3,7 @@ package gnubook.ppcore;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -36,6 +37,8 @@ import name.abuchen.portfolio.datatransfer.actions.CheckTransactionDateAction;
 import name.abuchen.portfolio.datatransfer.actions.CheckValidTypesAction;
 import name.abuchen.portfolio.datatransfer.actions.DetectDuplicatesAction;
 import name.abuchen.portfolio.datatransfer.actions.InsertAction;
+import name.abuchen.portfolio.datatransfer.csv.CSVExtractor;
+import name.abuchen.portfolio.datatransfer.csv.CSVImporter;
 import name.abuchen.portfolio.datatransfer.pdf.PDFImportAssistant;
 import name.abuchen.portfolio.model.Account;
 import name.abuchen.portfolio.model.Annotated;
@@ -58,6 +61,54 @@ import name.abuchen.portfolio.money.Money;
 final class PdfImporter
 {
     private static final Duration KEEP = Duration.ofHours(6);
+    static final String CSV_LABEL = "CSV: "; //$NON-NLS-1$
+
+    /** Reads a canonical CSV file (see extract) with PP's CSV importer for securities account transactions. */
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    private static List<Extractor.Item> readCsv(Client client, File file, List<Exception> errors) throws IOException
+    {
+        CSVImporter importer = new CSVImporter(client, file);
+        CSVExtractor extractor = importer.getExtractorByCode("portfolio-transaction") //$NON-NLS-1$
+                        .orElseThrow(() -> new IOException("PP has no CSV extractor for securities account transactions"));
+        importer.setExtractor(extractor);
+        importer.setDelimiter(';');
+        importer.setEncoding(StandardCharsets.UTF_8);
+        importer.setFirstLineHeader(true);
+        importer.setSkipLines(0);
+        importer.processFile(true);
+        for (CSVImporter.Column column : importer.getColumns())
+        {
+            column.setField(null);
+            String code = column.getLabel() == null ? "" : column.getLabel().trim(); //$NON-NLS-1$
+            for (CSVImporter.Field field : extractor.getFields())
+            {
+                if (!field.getCode().equals(code))
+                    continue;
+                column.setField(field);
+                CSVImporter.FieldFormat format = field.guessFormat(client, importer.getFirstNonEmptyValue(column));
+                if (field instanceof CSVImporter.DateField)
+                    format = byCode(field, "yyyy-MM-dd"); //$NON-NLS-1$
+                else if (field instanceof CSVImporter.AmountField)
+                    format = byCode(field, "0,000.00"); //$NON-NLS-1$
+                else if (field instanceof CSVImporter.EnumField enumField)
+                {
+                    CSVImporter.EnumMapFormat map = new CSVImporter.EnumMapFormat(enumField.getEnumType());
+                    for (Object constant : enumField.getEnumType().getEnumConstants())
+                        map.map().put((Enum) constant, ((Enum) constant).name());
+                    format = new CSVImporter.FieldFormat(code, map);
+                }
+                column.setFormat(format);
+                break;
+            }
+        }
+        return importer.createItems(errors);
+    }
+
+    private static CSVImporter.FieldFormat byCode(CSVImporter.Field field, String code)
+    {
+        return field.getAvailableFieldFormats().stream().filter(f -> code.equals(f.getCode())).findFirst()
+                        .orElseThrow(() -> new IllegalStateException("PP knows no format " + code));
+    }
 
     /** One extracted item. */
     static final class Entry
@@ -190,13 +241,19 @@ final class PdfImporter
     }
 
     /**
-     * Extracts the uploaded files. Body: {"files": [{"name": "...", "data": base64}], "portfolio": uuid?,
-     * "account": uuid?, "apply": true|false, "autoFeed": true|false}
+     * Extracts the uploaded files. Body: {"files": [{"name": "...", "data": base64}], "csv": [{"name": "...",
+     * "data": base64}], "portfolio": uuid?, "account": uuid?, "apply": true|false, "autoFeed": true|false}
+     *
+     * "csv" are securities account transactions in gnubook's canonical CSV: UTF-8, ';', header line with PP's field
+     * codes (date;time;type;isin;wkn;name;shares;value;fees;taxes;currency;note), dates yyyy-MM-dd, amounts with '.',
+     * type = name of PortfolioTransaction.Type. They are read by PP's own CSV importer and then checked like PDFs
+     * (duplicates, ...). Each CSV file is a bank of its own: its target is never taken from an earlier import.
      */
     Map<String, Object> extract(ClientHolder holder, JsonObject body) throws IOException
     {
-        JsonArray files = body.has("files") && body.get("files").isJsonArray() ? body.getAsJsonArray("files") : null;
-        if (files == null || files.isEmpty())
+        JsonArray files = body.has("files") && body.get("files").isJsonArray() ? body.getAsJsonArray("files") : new JsonArray();
+        JsonArray csvs = body.has("csv") && body.get("csv").isJsonArray() ? body.getAsJsonArray("csv") : new JsonArray();
+        if (files.isEmpty() && csvs.isEmpty())
             throw ApiException.badRequest("no files");
         Path tmp = Files.createTempDirectory("ppcore-import-");
         Session session = new Session(holder.id);
@@ -221,14 +278,32 @@ final class PdfImporter
                 Files.write(p, data);
                 inputs.add(p.toFile());
             }
+            Map<String, File> csvInputs = new LinkedHashMap<>();
+            for (JsonElement e : csvs)
+            {
+                JsonObject f = e.getAsJsonObject();
+                String name = safeName(Json.str(f, "name"), used);
+                byte[] data;
+                try
+                {
+                    data = Base64.getDecoder().decode(Json.str(f, "data"));
+                }
+                catch (IllegalArgumentException | NullPointerException ex)
+                {
+                    throw ApiException.badRequest("file " + name + " is not base64 encoded");
+                }
+                Path p = tmp.resolve(name);
+                Files.write(p, data);
+                csvInputs.put(name, p.toFile());
+            }
 
             holder.acquire();
             try
             {
                 Client client = holder.client();
                 Map<File, List<Exception>> errors = new HashMap<>();
-                Map<Extractor, List<Extractor.Item>> result = new PDFImportAssistant(client, inputs)
-                                .run(new NullProgressMonitor(), errors);
+                Map<Extractor, List<Extractor.Item>> result = inputs.isEmpty() ? new HashMap<>()
+                                : new PDFImportAssistant(client, inputs).run(new NullProgressMonitor(), errors);
                 for (Map.Entry<File, List<Exception>> err : errors.entrySet())
                     for (Exception ex : err.getValue())
                         session.fileErrors.add(Json.obj().with("file", err.getKey().getName()).with("message",
@@ -245,6 +320,18 @@ final class PdfImporter
                             extractedFiles.add(file);
                         session.entries.add(new Entry(i++, label, file, item));
                     }
+                }
+                for (Map.Entry<String, File> c : csvInputs.entrySet())
+                {
+                    List<Exception> csvErrors = new ArrayList<>();
+                    List<Extractor.Item> items = readCsv(client, c.getValue(), csvErrors);
+                    for (Exception ex : csvErrors)
+                        session.fileErrors.add(Json.obj().with("file", c.getKey()).with("message",
+                                        ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage()));
+                    for (Extractor.Item item : items)
+                        session.entries.add(new Entry(i++, CSV_LABEL + c.getKey(), c.getKey(), item));
+                    if (items.isEmpty() && csvErrors.isEmpty())
+                        session.fileErrors.add(Json.obj().with("file", c.getKey()).with("message", "no transactions"));
                 }
                 for (File f : inputs)
                     if (!extractedFiles.contains(f.getName())
@@ -493,6 +580,8 @@ final class PdfImporter
         JsonObject saved = state.has("importTargets") ? state.getAsJsonObject("importTargets") : new JsonObject();
         for (Map.Entry<String, Target> t : session.targets.entrySet())
         {
+            if (t.getKey().startsWith(CSV_LABEL))
+                continue; // a CSV file names no bank: the next one may belong to another securities account
             boolean used = session.entries.stream().anyMatch(e -> e.imported && e.extractor.equals(t.getKey()));
             if (!used)
                 continue;

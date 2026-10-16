@@ -1,7 +1,9 @@
 # Changelog
-
 ## Unreleased
-
+- Portfolio Performance: the PDF import also reads lists of securities account transactions – CSV with the
+  columns of PP's CSV import, or the Excel list finanzen.net zero sends on request – with PP's CSV importer and the
+  same checks as PDFs (possible duplicates are not imported without a decision). pp-core: `"csv"` in
+  `POST /clients/{id}/import`
 - Belegeingang: logs in again when the session runs out during a long run (downloads failed with HTTP 401)
 - Belegeingang: the oldest documents are downloaded first
 - Belegeingang: progress of a running run on the page (reloading itself) and in the journal
@@ -114,9 +116,7 @@
 - CLI: `user-add`, `user-list`, `user-password`, `book-add`, `book-list`, `token-create`, `--book` for
   `check-balances` and `backup`
 - A 0.1 single-user configuration is taken over automatically on first start
-
 ## 0.1.0 – first version
-
 - Dashboard, account tree, registers with running balance, search
 - Transaction editor with free splits, quick-fill, arithmetic in amount fields; edit, copy, delete
 - Bank balance checkpoints (STAND / ENDSALDO / "Kontostand am") with acceptance of known differences and

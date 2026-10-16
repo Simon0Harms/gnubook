@@ -127,10 +127,30 @@ def test_pdf_import(web, fake):
     assert fake.calls[-1] == ("apply", "s-1", ["1"], None, None, None)
 
 
+def test_csv_import_is_converted_and_checked_by_pp(web, fake):
+    data = ("Datum;Uhrzeit;Typ;Wertpapiername;ISIN;WKN;Stück;Wert;Gebühren;Steuern;Buchungswährung;Notiz\n"
+            "16.09.2021;11:46:32;Kauf;X(IE)-MSCI WORLD 1C;IE00BJ0KDQ92;A1XB5U;4;320,28;0,00;0,00;EUR;Beleg 1\n"
+            "17.09.2021;;Verkauf;X(IE)-MSCI WORLD 1C;IE00BJ0KDQ92;A1XB5U;2;1.160,10;0,00;1,91;EUR;\n").encode()
+    r = web.post("/pp/import", data={"csrf_token": web.csrf, "portfolio": "",
+                                     "files": [(io.BytesIO(data), "depot.csv"), (io.BytesIO(b"%PDF-1.4 x"), "a.pdf")]},
+                 content_type="multipart/form-data", follow_redirects=True)
+    assert "depot.csv: 2 Depotumsätze gelesen" in r.text
+    assert fake.calls[-1][:2] == ("import", ["a.pdf"])  # PDFs as before, the list as canonical CSV
+    (name, canonical), = fake.csv
+    assert name == "depot.csv" and canonical.decode().splitlines() == [
+        "date;time;type;isin;wkn;name;shares;value;fees;taxes;currency;note",
+        "2021-09-16;11:46:32;BUY;IE00BJ0KDQ92;A1XB5U;X(IE)-MSCI WORLD 1C;4;320.28;0.00;0.00;EUR;Beleg 1",
+        "2021-09-17;;SELL;IE00BJ0KDQ92;A1XB5U;X(IE)-MSCI WORLD 1C;2;1160.10;0.00;1.91;EUR;"]
+    r = web.post("/pp/import", data={"csrf_token": web.csrf,
+                                     "files": (io.BytesIO(b"Datum;Typ;Wert\n01.01.2020;Dividende;5\n"), "x.csv")},
+                 content_type="multipart/form-data", follow_redirects=True)
+    assert "Spalten nicht erkannt" in r.text
+
+
 def test_import_needs_files(web):
     r = web.post("/pp/import", data={"csrf_token": web.csrf}, content_type="multipart/form-data",
                  follow_redirects=True)
-    assert "mindestens eine PDF-Datei oder ein Archiv" in r.text
+    assert "mindestens eine PDF-, CSV- oder Excel-Datei oder ein Archiv" in r.text
 
 
 def test_securities_quotes_and_delete(web, fake):

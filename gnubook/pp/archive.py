@@ -13,7 +13,7 @@ import zipfile
 
 from ..i18n import gettext as _
 
-DOC_SUFFIXES = (".pdf", ".txt")
+DOC_SUFFIXES = (".pdf", ".txt", ".csv", ".xlsx")  # .csv/.xlsx: transactions (pp.csvimport)
 TAR_SUFFIXES = (".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz")
 ARCHIVE_SUFFIXES = (".zip",) + TAR_SUFFIXES
 ACCEPT = ",".join(DOC_SUFFIXES + ARCHIVE_SUFFIXES) + ",application/pdf,application/zip,application/x-tar,application/gzip"

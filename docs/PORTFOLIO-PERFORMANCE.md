@@ -25,7 +25,7 @@ A menu entry *Portfolio Performance* with these pages:
 | *Kennzahlen* | TTWROR (cumulative and per year), IRR, absolute change, max. drawdown, volatility for a period (this year, 12 months, 3/5 years, all, custom) and for all or one securities account; charts of the performance and of the value against the invested capital; PP's calculation table (initial value, capital gains, earnings, fees, taxes, final value) |
 | *Vermögensaufstellung* | holdings on any date: shares, price, value, FIFO cost, unrealised and realised gains, dividends, IRR and TTWROR per security; cash accounts |
 | *Buchungen* | all PP transactions with their state in the GnuCash book (booked, edited in GnuCash, conflict, deleted in GnuCash, detached, not booked and why); conflicts are resolved here; transactions can be deleted in PP |
-| *PDF-Import* | upload bank statements (contract notes, dividends, taxes) as PDF, several at once also as ZIP or TAR archive; PP's importers read them; possible duplicates and warnings are shown and only imported when you allow it |
+| *PDF-Import* | upload bank statements (contract notes, dividends, taxes) as PDF, several at once also as ZIP or TAR archive; PP's importers read them; possible duplicates and warnings are shown and only imported when you allow it. Lists of securities account transactions as well: a CSV file with the columns of PP's CSV import (German or English names), or the Excel list of transactions finanzen.net zero sends on request – read by PP's CSV importer and checked the same way, so transactions already there from PDFs or an earlier list are possible duplicates (see below) |
 | *Einstellungen → Depot hinzufügen* | add a securities account to the PP file, with a new or an existing cash account; the GnuCash accounts are created by the next run |
 | *Ein-/Auslieferung* | enter an inbound or outbound delivery or a *Depotwechsel* (transfer to another securities account of the PP file, booked at FIFO cost) by hand (securities without cash flow), for documents PP's importers do not read – e.g. Baader Bank / Scalable Capital *Depotauslieferung*; value empty = shares × price of that day; more shares out than held only after confirmation |
 | *Wertpapiere und Kurse* | securities with their price source, last price and number of prices; search for a price source (Yahoo by ISIN), update prices |
@@ -284,3 +284,25 @@ pp-core links Portfolio Performance's bundles, which are licensed under the Ecli
 pp-core source code in `ppcore/` is part of gnubook (GPL-3.0-or-later) with an additional permission to
 combine it with Portfolio Performance, see [ppcore/README.md](../ppcore/README.md). Portfolio Performance itself
 is downloaded from its official releases and not distributed with gnubook.
+
+## Transaction lists (CSV, Excel)
+
+On *PDF-Import* a `.csv` or `.xlsx` file (also inside a ZIP) is read as a list of **securities account
+transactions** – buy, sell, delivery inbound/outbound, transfer in/out. Dividends, deposits and other cash account
+transactions are not read from lists.
+
+- **CSV**: one line per transaction, columns named as in PP's CSV import, in German or English: *Datum/Date*,
+  *Typ/Type* (*Kauf*, *Verkauf*, *Einlieferung*, *Auslieferung*, … or *Buy*, *Sell*, *Delivery (Inbound)*, …),
+  *Stück/Shares*, *Wert/Value* (the amount booked: paid for a purchase, credited for a sale), *ISIN*, *WKN* or
+  *Wertpapiername*, optional *Uhrzeit*, *Gebühren*, *Steuern*, *Buchungswährung*, *Notiz*. `;`, `,` or tab;
+  dates like `31.12.2024` or `2024-12-31`; amounts like `1.234,56` or `1,234.56`.
+- **finanzen.net zero Excel list** (one file per securities account, on request from the bank): *Kauf*/*Verkauf*
+  with the amount booked; taxes of a sale = market value − amount credited; *Einlieferung*, *Depotumbuchung
+  Ausl.* and exchanges of a corporate action (*Umtausch CA*) become deliveries at market value. The note names the
+  securities account, the document number and the trading venue.
+
+gnubook turns the list into one canonical CSV which pp-core reads with PP's own CSV importer; then the same checks
+as for PDFs run. A transaction PP considers already present (same day, security, shares and amount – whether from a
+PDF or an earlier list) is shown as possible duplicate and not imported unless you tick it. A list names no bank,
+so its securities account and cash account are asked for unless the file has only one, and the choice is not
+remembered.
