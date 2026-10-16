@@ -77,3 +77,20 @@ def test_other_excel_is_refused():
         csvimport.read_zero_xlsx(_xlsx([["Datum", "Betrag"], ["x", 1]]))
     with pytest.raises(CsvImportError, match="keine Excel-Datei"):
         csvimport.read_zero_xlsx(b"not a zip")
+
+
+def test_finanzen_zero_excel_other_kinds_and_marked_days():
+    data = _xlsx([HEAD,
+                  [None, 1, "Depotumbuchung Einl.", 1, "STK", 221, "IE00BJ0KDQ92/EUR", "MSCI WORLD", 45146.0, 45146.0,
+                   0.3, 84.718, 1483210, "A1XB5U", "EUR", -18722.68, None, 18722.68, 0, "TOT", "EDE", "XETRA"],
+                  [None, 2, "Kapitalkauf CA", 1, "STK", 1.2, "FR0000120073", "AIR LIQUIDE", 45453.0, 45453.0,
+                   0.0, 0, 1483210, None, "EUR", 0, None, 0, 0, "TOT", "GDM", "GETTEX"],
+                  [None, 3, "Kauf", 1, "STK", 4, "DE0008402215", "HANNOVER RUECK", "!13.10.2025", "!09.10.2025",
+                   0.5, 266, 1483210, 840221, "EUR", -1064, None, 1064, 0, "TOT", "GDM", "GETTEX"],
+                  [None, 4, "Sonstiges CA", 1, "STK", -2, "DE000TUAG000", "TUI", 45000.0, 45000.0,
+                   0.0, 0, 1483210, None, "EUR", 0, None, 0, 0, "TOT", "GDM", "GETTEX"]])
+    inbound, bonus, buy, other = csvimport.read_zero_xlsx(data)
+    assert (inbound.type, inbound.value, inbound.day) == ("DELIVERY_INBOUND", Decimal("18722.68"), date(2023, 8, 8))
+    assert (bonus.type, bonus.shares, bonus.value) == ("DELIVERY_INBOUND", Decimal("1.2"), 0)
+    assert (buy.type, buy.day, buy.wkn) == ("BUY", date(2025, 10, 9), "840221")
+    assert other.type == "DELIVERY_OUTBOUND"  # an unknown corporate action without cash: by the sign of the shares

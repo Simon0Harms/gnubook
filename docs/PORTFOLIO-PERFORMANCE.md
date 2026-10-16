@@ -298,7 +298,8 @@ transactions are not read from lists.
   dates like `31.12.2024` or `2024-12-31`; amounts like `1.234,56` or `1,234.56`.
 - **finanzen.net zero Excel list** (one file per securities account, on request from the bank): *Kauf*/*Verkauf*
   with the amount booked; taxes of a sale = market value − amount credited; *Einlieferung*, *Depotumbuchung
-  Ausl.* and exchanges of a corporate action (*Umtausch CA*) become deliveries at market value. The note names the
+  Ausl.*/*Einl.* and corporate actions without cash (*Umtausch CA*, *Kapitalkauf CA*, …) become deliveries at
+  market value (in or out by the sign of the shares). The note names the
   securities account, the document number and the trading venue.
 
 gnubook turns the list into one canonical CSV which pp-core reads with PP's own CSV importer; then the same checks

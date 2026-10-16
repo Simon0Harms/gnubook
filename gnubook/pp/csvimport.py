@@ -119,7 +119,7 @@ def _day(text) -> date:
         return text.date()
     if isinstance(text, date):
         return text
-    s = str(text or "").strip()
+    s = str(text or "").strip().lstrip("!")  # finanzen.net zero marks some days with a leading "!"
     for fmt in ("%d.%m.%Y", "%Y-%m-%d", "%d.%m.%y", "%d/%m/%Y", "%Y/%m/%d", "%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"):
         try:
             return datetime.strptime(s, fmt).date()
@@ -290,7 +290,8 @@ def _excel_time(v) -> str:
 
 _ZERO_TYPES = {"kauf": "BUY", "verkauf": "SELL", "einlieferung": "DELIVERY_INBOUND",
                "depotumbuchung ausl.": "DELIVERY_OUTBOUND", "kauf umtausch ca": "DELIVERY_INBOUND",
-               "verkauf umtausch ca": "DELIVERY_OUTBOUND", "auslieferung": "DELIVERY_OUTBOUND"}
+               "verkauf umtausch ca": "DELIVERY_OUTBOUND", "auslieferung": "DELIVERY_OUTBOUND",
+               "depotumbuchung einl.": "DELIVERY_INBOUND", "kapitalkauf ca": "DELIVERY_INBOUND"}
 
 
 def read_zero_xlsx(data: bytes) -> list[Row]:
@@ -323,9 +324,13 @@ def read_zero_xlsx(data: bytes) -> list[Row]:
         kind_text = str(get(r, "WPGARTB-D") or "").strip()
         kind = _ZERO_TYPES.get(kind_text.lower())
         try:
+            signed = _number(get(r, "NW-D"), False) or Decimal(0)
+            if kind is None and kind_text.lower().endswith(" ca") and not _number(get(r, "BETRAB-D"), False):
+                # another corporate action without cash: shares in or out
+                kind = "DELIVERY_INBOUND" if signed > 0 else "DELIVERY_OUTBOUND"
             if kind is None:
                 raise CsvImportError(_("unbekannte Art „{a0}“", a0=kind_text))
-            shares = abs(_number(get(r, "NW-D"), False) or Decimal(0))
+            shares = abs(signed)
             if not shares:
                 raise CsvImportError(_("keine Stückzahl"))
             booked = abs(_number(get(r, "BETRAB-D"), False) or Decimal(0))
