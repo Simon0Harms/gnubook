@@ -156,11 +156,15 @@ def save_source():
         for p in problems:
             flash(p, "danger")
         return _back(kind, "#source")
-    if rescan is None and row is not None and st.since_day is not None and since is not None and since < st.since_day:
-        rescan = since  # "Belege ab" moved back: the next run lists back to the new day once
-    if row is not None and since is None and st.since_day is not None:
-        # "Belege ab" emptied: the next run lists the whole postbox down to its oldest document once
-        PostboxService(reg, ctx).store.set_complete_day(kind, None)
+    # moving "Belege ab" back or emptying it lists further back once – but only when documents can be missing there:
+    # when the old day was after the oldest document fetched so far (else everything before it was listed already)
+    oldest = PostboxService(reg, ctx).store.oldest_day(kind) if row is not None else None
+    widened = (row is not None and st.since_day is not None and (since is None or since < st.since_day)
+               and (oldest is None or st.since_day > oldest))
+    if widened and since is not None and rescan is None:
+        rescan = since  # the next run lists back to the new day once
+    if widened and since is None:
+        PostboxService(reg, ctx).store.set_complete_day(kind, None)  # the next run lists the whole postbox once
     st.enabled = f.get("enabled") == "1"
     st.since = since.isoformat() if since else ""
     st.overlap_days = overlap

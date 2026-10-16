@@ -94,7 +94,10 @@ known yet:
 The overlap (default 3 days) catches documents that are posted late for an earlier day. A run that hit the click
 limit (`[postbox] max_clicks`, if set) or whose *Mehr anzeigen* stopped loading does not move the
 "completely listed" day, and a document whose download failed holds it back – the next run lists that range again.
-*Einmalig erneut prüfen ab* makes the next complete run list back to an earlier day once.
+After a complete run *Belege ab* moves up to the stop day of the next run, so the page shows how far back
+the next run reads (not when the settings were saved with another value during the run). *Einmalig erneut prüfen ab* makes the next complete run list back to an earlier day once. Moving *Belege ab* back, or emptying it,
+does the same – but only when the old day was after the oldest document fetched so far; before that everything has
+been listed already.
 
 **Downloads.** A PDF link of the postbox is a plain request that only needs the session; it is fetched inside the
 page by the browser itself. When the session of the web app runs out during a long run (HTTP 401), the run logs in again and goes on

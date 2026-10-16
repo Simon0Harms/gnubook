@@ -1,5 +1,8 @@
 # Changelog
 ## Unreleased
+- Belegeingang: after a complete run *Belege ab* moves up to the day the next run lists back to
+- Belegeingang: moving *Belege ab* back or emptying it lists the postbox again only when documents can be missing
+  before the old day (it was after the oldest document fetched so far)
 - gnubook-update: the backup before an update leaves out the PDFs of the Belegeingang (`data/postbox/book-*`)
 - Belegeingang: the local PDF is deleted once it is in Nextcloud and nothing is left to do for PP (on by default)
 - Portfolio Performance: the PDF import also reads lists of securities account transactions – CSV with the

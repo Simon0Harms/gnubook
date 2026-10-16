@@ -318,7 +318,7 @@ def test_dry_run_rescan_and_errors(reg, book, fetcher, pp_import):
     out = svc.run(KIND, "test")
     assert fetcher.stops[-1] == D(2026, 9, 20)
     assert svc.settings_of(svc.source(KIND)).rescan_from == ""  # used up by the complete run
-    assert svc.settings_of(svc.source(KIND)).since == "2026-09-20"
+    assert svc.settings_of(svc.source(KIND)).since == "2026-10-07"  # moved up: complete day 10.10. minus 3 days
 
     fetcher.error = LoginFailed("Anmeldung abgelehnt: falsch")
     out = svc.run(KIND, "test")
@@ -809,3 +809,30 @@ def test_local_copy_is_kept_when_switched_off(reg, book, fetcher, pp_import, nc)
     svc = PostboxService(reg, book)
     svc.run(KIND, "test")
     assert all(svc.doc_path(d).exists() for d in svc.store.docs(KIND, limit=500))
+
+
+def test_widening_belege_ab_relists_only_when_documents_can_be_missing(reg, book, web, fetcher, pp_import):
+    form = {"csrf_token": web.csrf, "login": "simon@example.org", "password": "geheim-123", "import_pp": "1"}
+    web.post("/postbox/source", data=dict(form, since="2015-01-01"))
+    svc = PostboxService(reg, book)
+    svc.run(KIND, "test")
+    assert svc.store.complete_day(KIND) == D(2026, 10, 10) and svc.store.oldest_day(KIND) == D(2026, 9, 20)
+    # the complete run moved "Belege ab" up to the day the next run lists back to
+    assert SourceSettings.from_json(reg.system.postbox_source(book.id, KIND)["settings"]).since == "2026-10-07"
+    # emptying a day that lay before every document: nothing can be missing, the next runs stay short
+    web.post("/postbox/source", data=dict(form, password="", since="2015-01-01"))
+    svc.store.set_complete_day(KIND, D(2026, 10, 10))  # (moving back from 07.10. asked for a look back)
+    web.post("/postbox/source", data=dict(form, password="", since="", rescan_from=""))
+    assert svc.store.complete_day(KIND) == D(2026, 10, 10)
+    # a day after the oldest document, then emptied: the next run lists everything once more
+    web.post("/postbox/source", data=dict(form, password="", since="2026-10-01"))
+    web.post("/postbox/source", data=dict(form, password="", since=""))
+    assert svc.store.complete_day(KIND) is None
+    # moving it back from a day after the oldest document asks for a look back once, from before it does not
+    svc.store.set_complete_day(KIND, D(2026, 10, 10))
+    web.post("/postbox/source", data=dict(form, password="", since="2026-10-01"))
+    web.post("/postbox/source", data=dict(form, password="", since="2026-09-01"))
+    assert SourceSettings.from_json(reg.system.postbox_source(book.id, KIND)["settings"]).rescan_from == "2026-09-01"
+    web.post("/postbox/source", data=dict(form, password="", since="2026-09-01", rescan_from=""))
+    web.post("/postbox/source", data=dict(form, password="", since="2015-01-01", rescan_from=""))
+    assert SourceSettings.from_json(reg.system.postbox_source(book.id, KIND)["settings"]).rescan_from == ""

@@ -20,7 +20,7 @@ import time
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -271,8 +271,7 @@ class PostboxService:
             if new_complete is not None and new_complete > today:
                 new_complete = today  # a misread or future-dated entry must not make later runs stop too early
             self.store.set_complete_day(kind, new_complete)
-            if st.rescan_from:
-                self._clear_rescan(kind, st.rescan_from)
+            self._after_complete(kind, st, new_complete)
         done = self.process(kind, row, st, sync_now)
         out.processed = done
         parts = [_("{a0} neu heruntergeladen", a0=result.downloaded), reach]
@@ -291,14 +290,24 @@ class PostboxService:
         out.message = " · ".join(p for p in parts if p)
         return out
 
-    def _clear_rescan(self, kind: str, used: str):
-        """The one-time look back is used up – unless the settings were saved with a new one during the run."""
+    def _after_complete(self, kind: str, used: SourceSettings, complete):
+        """After a complete run: the one-time look back is used up, and "Belege ab" moves up to the day the next run
+        lists back to (completely listed day minus overlap) – it shows what the next run reads. Both only when the
+        settings were not saved with other values during the run."""
         row = self.source(kind)
         if row is None:
             return
         current = self.settings_of(row)
-        if current.rescan_from == used:
+        changed = False
+        if used.rescan_from and current.rescan_from == used.rescan_from:
             current.rescan_from = ""
+            changed = True
+        if complete is not None and current.since == used.since:
+            day = complete - timedelta(days=max(0, current.overlap_days))
+            if current.since_day is None or day > current.since_day:
+                current.since = day.isoformat()
+                changed = True
+        if changed:
             self.reg.system.set_postbox_settings(row["id"], current.to_json())
 
     def _save(self, kind: str, row, st: SourceSettings, doc: plan.Listed, data: bytes):

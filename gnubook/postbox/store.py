@@ -101,6 +101,12 @@ class PostboxStore:
                              f"ORDER BY nc_status <> 'pending', COALESCE(day, ''), id",
                              (source, *statuses)).fetchall()
 
+    def oldest_day(self, source: str) -> date | None:
+        with self.appdb.conn() as c:
+            value = c.execute("SELECT MIN(day) FROM postbox_docs WHERE source = ? AND day IS NOT NULL",
+                              (source,)).fetchone()[0]
+        return date.fromisoformat(value) if value else None
+
     def finished(self, source: str):
         """Documents in Nextcloud with nothing left to do for PP: their local PDF may go."""
         with self.appdb.conn() as c:
