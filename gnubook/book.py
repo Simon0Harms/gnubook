@@ -12,6 +12,7 @@ import socket
 import threading
 import time
 import warnings
+import weakref
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, datetime, time as dtime, timedelta, timezone
@@ -60,6 +61,42 @@ LOCK_TAG = f"gnubook@{socket.gethostname()}"[:255]
 
 class BookError(RuntimeError):
     pass
+
+
+class BookPaused(BookError):
+    """The connection to the book is paused (e.g. while GnuCash Desktop re-creates the database)."""
+
+
+class _IdleReaper:
+    """One background thread that closes the idle pool connections of every Book after idle_timeout seconds.
+
+    Without it SQLAlchemy keeps up to pool_size connections open for ever – and GnuCash Desktop cannot drop the
+    database ("Save As") while any session is connected to it.
+    """
+
+    def __init__(self):
+        self._books = weakref.WeakSet()
+        self._lock = threading.Lock()
+        self._thread = None
+
+    def add(self, book):
+        with self._lock:
+            self._books.add(book)
+            if self._thread is None:
+                self._thread = threading.Thread(target=self._loop, daemon=True, name="gnubook-idle-reaper")
+                self._thread.start()
+
+    def _loop(self):
+        while True:
+            time.sleep(5)
+            for book in list(self._books):
+                try:
+                    book.close_idle()
+                except Exception:  # noqa: BLE001 – never let the reaper die
+                    pass
+
+
+_REAPER = _IdleReaper()
 
 
 class WriteLockError(BookError):
@@ -198,7 +235,7 @@ class AccountIndex:
 class Book:
     """Connection to one GnuCash SQL book."""
 
-    def __init__(self, url: str, tz: str = "Europe/Berlin", separator: str = ":"):
+    def __init__(self, url: str, tz: str = "Europe/Berlin", separator: str = ":", idle_timeout: float = 0):
         if not url:
             raise BookError(_("Keine Buch-URL konfiguriert ([book] url)"))
         self.url = url
@@ -222,6 +259,23 @@ class Book:
         self.profile = None    # gnubook.banks.BankProfile; None = German default
         self._schema_ok: bool | None = None
         self._schema_checked = 0.0
+        # callable returning a text while the book is paused (set by the registry), else None
+        self.pause_check = None
+        self.idle_timeout = idle_timeout
+        self._last_use = time.monotonic()
+
+        @event.listens_for(self.engine, "do_connect")
+        def _refuse_when_paused(_dialect, _rec, _cargs, _cparams):
+            reason = self.paused()
+            if reason:
+                raise BookPaused(reason)
+
+        @event.listens_for(self.engine, "checkin")
+        def _note_use(_dbapi_conn, _rec):
+            self._last_use = time.monotonic()
+
+        if idle_timeout and not self.is_sqlite:
+            _REAPER.add(self)
 
     # ------------------------------------------------------------------ basics
     @contextmanager
@@ -231,6 +285,23 @@ class Book:
 
     def dispose(self):
         self.engine.dispose()
+
+    def paused(self) -> str | None:
+        """Text of the pause (who/until when) while the connection to the book is paused, else None."""
+        if self.pause_check is None:
+            return None
+        return self.pause_check() or None
+
+    def close_idle(self):
+        """Closes the pooled connections when none is in use and the last use is idle_timeout seconds ago."""
+        if not self.idle_timeout or self.is_sqlite:
+            return
+        pool = self.engine.pool
+        if not hasattr(pool, "checkedin"):  # NullPool & co. keep nothing open
+            return
+        if pool.checkedin() and not pool.checkedout() \
+                and time.monotonic() - self._last_use >= self.idle_timeout:
+            self.engine.dispose()
 
     def schema_info(self) -> dict:
         with self.connect() as conn:

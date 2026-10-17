@@ -107,6 +107,22 @@
       </div>
     </div>
     {% endif %}
+    <div class="card mb-4" id="pause">
+      <div class="card-header"><h3 class="card-title">{{ _("Verbindung zum Buch") }}</h3></div>
+      <div class="card-body small">
+        <p>{{ _("GnuCash Desktop kann ein Buch mit „Speichern unter …“ nur neu in diese Datenbank schreiben, wenn niemand sonst mit ihr verbunden ist. Pausieren schließt alle Verbindungen von gnubook und hält gnubook so lange von der Datenbank fern.") }}</p>
+        <form method="post" action="{{ url_for('views.pause') }}" class="d-flex flex-wrap gap-2 align-items-center">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <select class="form-select form-select-sm w-auto" name="minutes" aria-label="{{ _("Dauer") }}">
+            <option value="15">{{ _("15 Minuten") }}</option>
+            <option value="30" selected>{{ _("30 Minuten") }}</option>
+            <option value="60">{{ _("1 Stunde") }}</option>
+            <option value="240">{{ _("4 Stunden") }}</option>
+          </select>
+          <button class="btn btn-sm btn-outline-warning" type="submit"><i class="bi bi-pause-circle"></i> {{ _("Verbindung pausieren") }}</button>
+        </form>
+      </div>
+    </div>
     <div class="card mb-4">
       <div class="card-header"><h3 class="card-title">{{ _("Sperre (GnuCash Desktop)") }}</h3></div>
       <div class="card-body small">

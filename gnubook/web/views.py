@@ -11,7 +11,7 @@ from decimal import Decimal
 from flask import (Blueprint, abort, flash, g, jsonify, redirect, render_template, request, session, url_for)
 
 from .. import checkpoints as cps
-from ..book import ASSET_TYPES, GROUP_LABELS, LIABILITY_TYPES, BookError, WriteLockError, latest_prices
+from ..book import ASSET_TYPES, GROUP_LABELS, LIABILITY_TYPES, BookError, BookPaused, WriteLockError, latest_prices
 from ..importer import is_special_account
 from ..ledger import (MULTI, annotate_rows, balances, description_suggestions, latest_by_description,
                       load_transaction, monthly_income_expense, recent_transactions, register_rows,
@@ -63,6 +63,8 @@ def lock_info():
     if "lock_info" not in g:
         try:
             g.lock_info = state().book.foreign_lock_holders()
+        except BookPaused:
+            g.lock_info = None
         except Exception as exc:  # DB unreachable
             log.warning("lock check failed: %s", exc)
             g.lock_info = None
@@ -904,7 +906,61 @@ def unlock():
     return redirect(url_for("views.settings"))
 
 
+PAUSE_MINUTES = (15, 30, 60, 240)
+
+
+@bp.route("/settings/pause", methods=["POST"])
+@login_required
+def pause():
+    """Closes every connection to the book and keeps gnubook away from it for a while (e.g. so that GnuCash
+    Desktop can re-create the database with "Save As", which needs the database without other sessions)."""
+    st = state()
+    try:
+        minutes = int(request.form.get("minutes", "30"))
+    except ValueError:
+        minutes = 30
+    if minutes not in PAUSE_MINUTES:
+        minutes = 30
+    user = session.get("user", "?")
+    st.appdb.audit(user, "pause", None, _("Verbindung für {a0} Minuten pausiert", a0=minutes))
+    registry().pause(st.id, minutes, user)
+    flash(_("Die Verbindung zum Buch ist für {a0} Minuten pausiert. gnubook hält keine Verbindung zur Datenbank mehr offen.",
+            a0=minutes), "success")
+    return redirect(url_for("views.paused"))
+
+
+@bp.route("/settings/paused")
+@login_required
+def paused():
+    st = state()
+    reason = st.book.paused()
+    if not reason:
+        return redirect(url_for("views.settings"))
+    return render_template("paused.html", reason=reason), 503
+
+
+@bp.route("/settings/resume", methods=["POST"])
+@login_required
+def resume():
+    st = state()
+    registry().resume(st.id)
+    try:
+        registry().context(st.id).appdb.audit(session.get("user", "?"), "resume", None,
+                                              _("Verbindung fortgesetzt"))
+    except Exception:  # noqa: BLE001 – the audit log is not worth an error page here
+        log.exception("audit after resume failed")
+    flash(_("Die Verbindung zum Buch ist wieder aktiv."), "success")
+    return redirect(url_for("views.settings"))
+
+
 # ------------------------------------------------------------------------------------------ errors
+
+@bp.app_errorhandler(BookPaused)
+def book_paused(e):
+    if request.path.startswith("/api/"):
+        return jsonify({"message": str(e)}), 503
+    return render_template("paused.html", reason=str(e)), 503
+
 
 @bp.app_errorhandler(404)
 def not_found(e):

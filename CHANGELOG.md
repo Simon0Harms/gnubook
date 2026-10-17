@@ -1,5 +1,13 @@
 # Changelog
 ## Unreleased
+- *Einstellungen → Verbindung zum Buch*: the connection to a book can be paused for 15 minutes to 4 hours. gnubook
+  closes all its connections and opens none until the pause ends or *Verbindung fortsetzen* is pressed – so GnuCash
+  Desktop can re-create the database with *Speichern unter* (`DROP DATABASE` failed with *is being accessed by other
+  users*). The pause is stored in `system.sqlite`, so the backup, PP and Belegeingang jobs skip the book as well;
+  pages show the pause (HTTP 503), the API answers 503
+- unused PostgreSQL connections are closed after `[book] idle_timeout` seconds (default 60, 0 = keep them open)
+- docs/INSTALL.md: privileges GnuCash Desktop needs for *Speichern unter → postgres* (`CREATEDB`, `template1`
+  and `postgres` in pg_hba.conf) and how to take them back afterwards
 - Belegeingang: after a complete run *Belege ab* moves up to the day the next run lists back to
 - Belegeingang: moving *Belege ab* back or emptying it lists the postbox again only when documents can be missing
   before the old day (it was after the oldest document fetched so far)

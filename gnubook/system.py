@@ -106,6 +106,9 @@ class SystemDB:
                 c.execute("ALTER TABLE books ADD COLUMN import_settings TEXT NOT NULL DEFAULT '{}'")
             if "pp_settings" not in cols:  # Portfolio Performance link (0.5.0)
                 c.execute("ALTER TABLE books ADD COLUMN pp_settings TEXT NOT NULL DEFAULT '{}'")
+            if "paused_until" not in cols:  # pause of the book connection
+                c.execute("ALTER TABLE books ADD COLUMN paused_until TEXT NOT NULL DEFAULT ''")
+                c.execute("ALTER TABLE books ADD COLUMN paused_by TEXT NOT NULL DEFAULT ''")
             nc_cols = {r[1] for r in c.execute("PRAGMA table_info(nextcloud_accounts)")}
             if "kind" not in nc_cols:  # first Nextcloud version (account only)
                 c.execute("ALTER TABLE nextcloud_accounts ADD COLUMN kind TEXT NOT NULL DEFAULT 'account'")
@@ -225,6 +228,36 @@ class SystemDB:
     def book(self, book_id):
         with self.conn() as c:
             return c.execute("SELECT * FROM books WHERE id = ?", (book_id,)).fetchone()
+
+    # ------------------------------------------------------------------ pause
+    def pause_book(self, book_id, minutes: int, by: str) -> str:
+        """Pauses the connection to the book for `minutes`; returns the end (ISO, UTC)."""
+        from datetime import datetime, timedelta, timezone
+
+        until = (datetime.now(timezone.utc) + timedelta(minutes=minutes)).replace(microsecond=0).isoformat()
+        with self.conn() as c:
+            c.execute("UPDATE books SET paused_until = ?, paused_by = ? WHERE id = ?", (until, by, book_id))
+        return until
+
+    def resume_book(self, book_id):
+        with self.conn() as c:
+            c.execute("UPDATE books SET paused_until = '', paused_by = '' WHERE id = ?", (book_id,))
+
+    def book_pause(self, book_id) -> dict | None:
+        """{'until': datetime (UTC), 'by': user} while the book is paused, else None (also after the end)."""
+        from datetime import datetime, timezone
+
+        with self.conn() as c:
+            row = c.execute("SELECT paused_until, paused_by FROM books WHERE id = ?", (book_id,)).fetchone()
+        if row is None or not row["paused_until"]:
+            return None
+        try:
+            until = datetime.fromisoformat(row["paused_until"])
+        except ValueError:
+            return None
+        if until <= datetime.now(timezone.utc):
+            return None
+        return {"until": until, "by": row["paused_by"]}
 
     def add_book(self, name: str, url: str, timezone: str = "Europe/Berlin", backup_file: str = "",
                  managed_db: str = "") -> int:
@@ -549,7 +582,9 @@ class Registry:
                 cached[1].book.dispose()
                 if cached[1].pp is not None:
                     cached[1].pp.close()
-            book = Book(row["url"], row["timezone"], self.cfg.book.account_separator)
+            book = Book(row["url"], row["timezone"], self.cfg.book.account_separator,
+                        idle_timeout=self.cfg.book.idle_timeout)
+            book.pause_check = self._pause_checker(book_id, book.tz)
             appdb = AppDB(self.data / "books" / f"{book_id}.sqlite")
             book.profile = get_profile(row["profile"] or "de", self.cfg.checkpoints.patterns)
             from .pp.settings import PPSettings
@@ -572,6 +607,50 @@ class Registry:
                 ctx.backup.extras = ctx.pp.backup_files  # the PP file goes into Nextcloud next to the book copy
             self._contexts[book_id] = (key, ctx)
             return ctx
+
+    def _pause_checker(self, book_id: int, tz=None):
+        """Callable for Book.pause_check: the pause text, read from system.sqlite at most every 2 seconds.
+
+        system.sqlite is shared by the web app and the timer jobs (backup, PP, Belegeingang), so a pause set in
+        the web interface also stops the jobs from connecting.
+        """
+        cache = {"at": 0.0, "value": None}
+
+        def check():
+            import time as _time
+
+            now = _time.monotonic()
+            if now - cache["at"] >= 2.0:
+                cache["value"] = self.system.book_pause(book_id)
+                cache["at"] = now
+            p = cache["value"]
+            if p is None:
+                return None
+            return _("Die Verbindung zum Buch ist bis {a0} pausiert ({a1}).",
+                     a0=p["until"].astimezone(tz).strftime("%d.%m.%Y %H:%M"), a1=p["by"] or "?")
+
+        check.reset = lambda: cache.update(at=0.0)
+        return check
+
+    def pause(self, book_id: int, minutes: int, by: str) -> str:
+        """Pauses the book and closes every connection gnubook holds to it (this process)."""
+        until = self.system.pause_book(book_id, minutes, by)
+        self._refresh_pause(book_id)
+        return until
+
+    def resume(self, book_id: int):
+        """Ends the pause. The context is built again – GnuCash may have re-created the database meanwhile."""
+        self.system.resume_book(book_id)
+        self.drop_context(book_id)
+
+    def _refresh_pause(self, book_id: int):
+        with self._lock:
+            cached = self._contexts.get(book_id)
+        if cached:
+            check = cached[1].book.pause_check
+            if check is not None and hasattr(check, "reset"):
+                check.reset()
+            cached[1].book.dispose()
 
     IMPORT_KEYS = ("fallback_account", "transit_account", "transit_between", "accounts", "iban_map",
                    "match_days", "transfer_match_days")

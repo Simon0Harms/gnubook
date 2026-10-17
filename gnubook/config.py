@@ -23,6 +23,9 @@ class BookConfig:
     url: str = ""
     timezone: str = "Europe/Berlin"
     account_separator: str = ":"
+    # seconds after which unused PostgreSQL connections are closed (0 = keep them open). Open connections keep
+    # GnuCash Desktop from re-creating the database with "Save As".
+    idle_timeout: int = 60
 
 
 @dataclass

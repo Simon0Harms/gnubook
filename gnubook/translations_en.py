@@ -1229,4 +1229,24 @@ EN = {
     '{a0} lokale Kopien gelöscht': '{a0} local copies deleted',
     'Die lokale Kopie ist gelöscht – der Beleg liegt in der Nextcloud: {a0}': 'The local copy is deleted – the document is in Nextcloud: {a0}',
     'Lokale Kopie löschen, sobald der Beleg in der Nextcloud ist und für Portfolio Performance nichts mehr offen ist': 'Delete the local copy once the document is in Nextcloud and nothing is left to do for Portfolio Performance',
+    # ---------------------------------------------------------------- pause of the book connection
+    "Die Verbindung zum Buch ist bis {a0} pausiert ({a1}).": "The connection to the book is paused until {a0} ({a1}).",
+    "Verbindung für {a0} Minuten pausiert": "Connection paused for {a0} minutes",
+    "Die Verbindung zum Buch ist für {a0} Minuten pausiert. gnubook hält keine Verbindung zur Datenbank mehr offen.":
+        "The connection to the book is paused for {a0} minutes. gnubook no longer keeps a connection to the database open.",
+    "Verbindung fortgesetzt": "Connection resumed",
+    "Die Verbindung zum Buch ist wieder aktiv.": "The connection to the book is active again.",
+    "Verbindung pausiert": "Connection paused",
+    "Solange die Pause läuft, öffnet gnubook keine Verbindung zur Datenbank – auch die Sicherung und die Hintergrund-Jobs nicht. So kann GnuCash Desktop das Buch z. B. mit „Speichern unter …“ neu anlegen. Danach die Verbindung hier fortsetzen.":
+        "While the pause lasts, gnubook opens no connection to the database – neither does the backup nor any background job. This lets GnuCash Desktop re-create the book, e.g. with “Save As …”. Resume the connection here afterwards.",
+    "Verbindung fortsetzen": "Resume connection",
+    "Verbindung zum Buch": "Connection to the book",
+    "GnuCash Desktop kann ein Buch mit „Speichern unter …“ nur neu in diese Datenbank schreiben, wenn niemand sonst mit ihr verbunden ist. Pausieren schließt alle Verbindungen von gnubook und hält gnubook so lange von der Datenbank fern.":
+        "GnuCash Desktop can only write a book into this database again with “Save As …” when nobody else is connected to it. Pausing closes all connections of gnubook and keeps gnubook away from the database meanwhile.",
+    "Dauer": "Duration",
+    "15 Minuten": "15 minutes",
+    "30 Minuten": "30 minutes",
+    "1 Stunde": "1 hour",
+    "4 Stunden": "4 hours",
+    "Verbindung pausieren": "Pause connection",
 }

@@ -20,6 +20,9 @@ CONFIG_TEMPLATE = """# gnubook configuration
 [book]
 url = "{url}"
 timezone = "Europe/Berlin"
+# close unused PostgreSQL connections after so many seconds (0 = keep them open). GnuCash Desktop can only
+# re-create a database with "Speichern unter" when nobody is connected to it.
+idle_timeout = 60
 
 [app]
 secret_key = "{secret}"
@@ -151,6 +154,15 @@ def _book_ctx(reg, ref):
         if str(b["id"]) == str(ref) or b["name"].casefold() == str(ref).casefold():
             return reg.context(b["id"])
     raise click.ClickException(f"Buch nicht gefunden: {ref}")
+
+
+def _skip_paused(bc) -> bool:
+    """Timer jobs leave a paused book alone (see Einstellungen → Verbindung zum Buch)."""
+    reason = bc.book.paused()
+    if reason:
+        click.echo(f"{bc.name}: übersprungen – {reason}")
+        return True
+    return False
 
 
 book_option = click.option("--book", "book_ref", default=None, help="Buch (Name oder ID); nötig bei mehreren Büchern")
@@ -400,11 +412,16 @@ def backup(ctx, book_ref, directory, keep, prefix):
 
     reg = _registry(ctx)
     bc = _book_ctx(reg, book_ref)
+    if _skip_paused(bc):
+        return
     prefix = prefix or slug(bc.name)
     out_dir = Path(directory) if directory else Path(reg.cfg.app.data_dir) / "backup" / "manual"
     target = out_dir / f"{prefix}-{datetime.now():%Y%m%d-%H%M%S}.gnucash"
-    export_gnucash_file(bc.book, target)
-    rotate(out_dir, prefix, keep)
+    try:
+        export_gnucash_file(bc.book, target)
+        rotate(out_dir, prefix, keep)
+    finally:
+        reg.dispose()
     click.echo(f"Gesichert: {target}")
 
 
@@ -470,6 +487,8 @@ def pp_update(ctx, book_ref, quotes):
     reg = _registry(ctx)
     failed = 0
     for bc in _pp_books(reg, book_ref):
+        if _skip_paused(bc):
+            continue
         try:
             due = quotes
             if due is None:
@@ -610,7 +629,7 @@ def postbox_fetch(ctx, book_ref, source, scheduled, from_requests, dry_run, proc
     failed = 0
     for book_id, kind, job_mode, actor in todo:
         bc = reg.context(book_id)
-        if bc is None:
+        if bc is None or _skip_paused(bc):
             continue
         # a requested run waits for a run of the same postbox that is in progress (instead of being dropped)
         wait = max(0.0, deadline - _time.monotonic()) if from_requests else 0

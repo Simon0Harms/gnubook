@@ -175,6 +175,27 @@ Fill the database:
   postgres* with database `gnucash_anna`.
 - **A new book.** Create a new book in GnuCash Desktop and save it the same way.
 
+> [!IMPORTANT]
+> *Speichern unter → postgres* does not write into an existing database: GnuCash **drops** the database and
+> creates it again. For this it connects to the databases `template1` and `postgres`, and the role needs
+> `CREATEDB` (and must own the old database). Grant this only for the first save, then take it back:
+>
+> ```bash
+> su - postgres -c "psql -c 'ALTER ROLE gnucash_anna CREATEDB'"
+> # pg_hba.conf, above the other lines – only for Anna's PC:
+> #   host  template1,postgres  gnucash_anna  <annas-pc-ip>/32  scram-sha-256
+> su - postgres -c "psql -c 'SELECT pg_reload_conf()'"
+> ```
+>
+> After *Speichern unter*: `ALTER ROLE gnucash_anna NOCREATEDB`, remove the line from pg_hba.conf, reload.
+> From then on Anna uses *Datei → Öffnen*, which needs only her own database.
+>
+> `DROP DATABASE` fails with *database … is being accessed by other users* while any other session is
+> connected – for example gnubook. If the book is already connected in gnubook, use *Einstellungen →
+> Verbindung zum Buch → Verbindung pausieren* first, and *Verbindung fortsetzen* afterwards. gnubook also closes
+> unused connections after `[book] idle_timeout` seconds (default 60). Check with
+> `SELECT pid, usename, client_addr FROM pg_stat_activity WHERE datname = 'gnucash_anna';`.
+
 Then, as administrator in gnubook:
 
 1. *Bücher → Buch verbinden*. Enter the name and URL
@@ -269,6 +290,10 @@ The GnuCash book itself is not touched by updates. Its backups are the PostgreSQ
 - Close GnuCash Desktop when you are done. After a crash a stale lock may remain. GnuCash offers
   *Trotzdem öffnen* (open anyway), and *Einstellungen* in gnubook can remove it.
 - Bookings made in gnubook appear in GnuCash Desktop the next time you open the book.
+- To replace the book with *Speichern unter* in GnuCash Desktop, pause the connection in gnubook first
+  (*Einstellungen → Verbindung zum Buch*). While paused, gnubook – including the backup and the timer jobs –
+  opens no connection to the database. The pause ends by itself after the chosen time or with
+  *Verbindung fortsetzen*.
 
 ## Files and services
 

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Verbindung pausiert") }}{% endblock %}
+{% block header %}{{ _("Verbindung pausiert") }}{% endblock %}
+{% block content %}
+<div class="card"><div class="card-body">
+  <p class="mb-2"><i class="bi bi-pause-circle"></i> {{ reason }}</p>
+  <p class="small text-body-secondary">{{ _("Solange die Pause läuft, öffnet gnubook keine Verbindung zur Datenbank – auch die Sicherung und die Hintergrund-Jobs nicht. So kann GnuCash Desktop das Buch z. B. mit „Speichern unter …“ neu anlegen. Danach die Verbindung hier fortsetzen.") }}</p>
+  <form method="post" action="{{ url_for('views.resume') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-success" type="submit"><i class="bi bi-play-circle"></i> {{ _("Verbindung fortsetzen") }}</button>
+  </form>
+</div></div>
+{% endblock %}
