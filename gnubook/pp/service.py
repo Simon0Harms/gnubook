@@ -13,6 +13,7 @@ from pathlib import Path
 from ..appdb import now_iso
 from ..book import WriteLockError
 from ..i18n import _
+from . import cashflows
 from .client import PPCoreClient, PPCoreError
 from .settings import PPSettings
 from .sync import SyncError, SyncResult, book_guid, sync
@@ -90,9 +91,18 @@ class PPService:
             settings = self.settings()
             if not settings.enabled:
                 raise SyncError(_("Die Übernahme nach GnuCash ist für dieses Buch ausgeschaltet."))
+            mirror = None
+            if settings.cashflows:
+                # first GnuCash -> PP (deposits and removals), then PP -> GnuCash with the updated file
+                index = self.ctx.book.load_accounts()
+                mirror = cashflows.plan_mirror(self.ctx.book, index, settings,
+                                               self.client.export(self.cid, prices="none"))
+                if not dry_run:
+                    cashflows.apply(self.client, self.cid, mirror)
+                    self.ctx.appdb.set_meta("pp_cashflow_fp", self._cashflow_fp(settings, mirror))
             export = self.client.export(self.cid, prices="all" if settings.prices else "none")
             try:
-                result = sync(self.ctx, settings, export, force=force, actor=actor, dry_run=dry_run)
+                result = sync(self.ctx, settings, export, force=force, actor=actor, dry_run=dry_run, cash=mirror)
             except Exception as exc:
                 if not dry_run and not isinstance(exc, WriteLockError):
                     self.ctx.appdb.pp_add_run(now_iso(), actor, (export.get("client") or {}).get("revision", ""),
@@ -116,9 +126,23 @@ class PPService:
             with self.ctx.book.connect() as conn:
                 if book_guid(conn) != known_book:  # book replaced: book everything again
                     return True
+        if settings.cashflows:
+            # deposits or removals entered in GnuCash since the last run
+            accounts = {"accounts": summary.get("accountList") or []}
+            flows, _skipped = cashflows.collect(self.ctx.book, self.ctx.book.load_accounts(), settings, accounts)
+            if self._cashflow_fp(settings, cashflows.Mirror(flows=flows)) != appdb.meta("pp_cashflow_fp"):
+                return True
         return (summary.get("revision") != appdb.meta("pp_revision")
                 or settings.booking_fingerprint() != appdb.meta("pp_settings_fp")
                 or last[:10] != date.today().isoformat())
+
+    @staticmethod
+    def _cashflow_fp(settings: PPSettings, mirror) -> str:
+        import hashlib
+        import json
+
+        relevant = [settings.cash_accounts, settings.cashflows_from, settings.cashflows_replace, mirror.fingerprint()]
+        return hashlib.sha256(json.dumps(relevant, sort_keys=True).encode()).hexdigest()
 
     def request_sync(self, after_quotes: bool = False):
         """After a change of the PP file: book it (when switched on) and copy the file into Nextcloud."""

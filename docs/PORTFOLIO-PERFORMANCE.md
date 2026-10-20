@@ -125,6 +125,43 @@ PP's deposits, withdrawals and transfers between PP cash accounts are **not** bo
 them). Instead of the clearing account, a PP cash account can also be mapped to a GnuCash account directly
 (*Geldseite je PP-Konto*), for example when there is no bank import for it.
 
+## Deposits and removals from GnuCash into PP
+
+PP needs the deposits and removals of its cash accounts for its figures: without them every purchase drives the
+PP cash account below zero, and *Vermögen*, TTWROR and drawdown are wrong. When a PP cash account has an account
+of its own in the book (*Geldseite je PP-Konto*, for example one GnuCash account per broker), the money paid in
+and out is entered in GnuCash anyway. The option *Ein- und Auszahlungen dieser Konten aus GnuCash nach Portfolio
+Performance übernehmen* writes it into the PP file:
+
+| GnuCash transaction on the mapped account, counter account | PP cash account transaction |
+|---|---|
+| asset, bank, cash, liability or equity account (e.g. the current account) | deposit / removal |
+| income account | interest / interest charge |
+| the taxes account of the link | taxes / tax refund |
+| the interest charges account of the link | interest charge / interest |
+| another expense account | fees / fees refund |
+| the clearing account | not taken (bank-import lines of the securities business) |
+
+- Bookings gnubook made from PP (purchases, sales, dividends, …) are left out – they are in PP already.
+- A transaction with several counter splits gives one PP transaction per counter split (e.g. a transfer of 1,000 €
+  with 2.50 € fee: deposit 1,000, fees 2.50). One that touches two mapped accounts gives a removal on one and a
+  deposit on the other.
+- Transactions dated in the future (scheduled ones) are taken on their day; transactions before *Ein-/Auszahlungen
+  ab* are not taken.
+- GnuCash leads. A changed amount, date, description or account in GnuCash replaces the PP transaction; a deletion
+  in GnuCash deletes it in PP. Changes of these transactions in PP are overwritten by the next run.
+- The PP transactions carry `gnubook:<split GUID>` in PP's *source* field (*Quelle*). That is how they are found
+  again – nothing else is stored, so the link also survives the loss of gnubook's data directory. They are never
+  booked back into GnuCash (*Buchungen* lists them as *aus dem GnuCash-Buch übernommen*).
+- **Duplicates:** deposits that are already in the PP file (entered in PP's desktop application, from PDF account
+  statements) stay there and count twice. *Vorhandene Einlagen/Entnahmen dieser PP-Konten ersetzen* deletes the
+  deposits and removals of the mapped PP cash accounts that do not come from GnuCash (from *Ein-/Auszahlungen ab*
+  on), also ones imported later. Run a *Probelauf* first: it shows how many would be created, changed and deleted.
+- Each run first writes the differences into the PP file (one save, so one backup), then books PP into GnuCash as
+  before. The hourly timer runs when the PP file, the settings or the deposits and removals in GnuCash changed.
+- Only PP cash accounts in the book's currency; each GnuCash account may belong to one PP cash account only, and
+  it cannot be the clearing account.
+
 ## How the transactions are booked
 
 | PP transaction | GnuCash splits |
@@ -135,7 +172,7 @@ them). Instead of the clearing account, a PP cash account can also be mapped to 
 | interest, interest charge, fees, taxes, refunds | clearing account against the matching income or expense account |
 | transfer between securities accounts | from one securities account to the other at FIFO cost |
 | inbound / outbound delivery | securities account against the deliveries account (at FIFO cost when outbound) |
-| deposit, withdrawal, transfer between cash accounts | not booked (bank import) |
+| deposit, withdrawal, transfer between cash accounts | not booked (bank import, or they come from GnuCash – see above) |
 
 Details:
 

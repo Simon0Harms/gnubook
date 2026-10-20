@@ -57,6 +57,12 @@ class SyncResult:
     prices_added: int = 0
     prices_updated: int = 0
     prices_removed: int = 0
+    # deposits and removals from the GnuCash book into PP (pp/cashflows.py)
+    cash_created: int = 0
+    cash_updated: int = 0
+    cash_deleted: int = 0
+    cash_replaced: int = 0
+    cash_skipped: list = field(default_factory=list)  # (day, description, reason)
     errors: list = field(default_factory=list)
     changes: list = field(default_factory=list)  # (action, key, description)
     wrote: bool = False
@@ -74,6 +80,11 @@ class SyncResult:
             parts.append(_("{n} Konflikte", n=self.conflicts))
         if self.gone:
             parts.append(_("{n} in GnuCash gelöscht", n=self.gone))
+        if self.cash_created or self.cash_deleted:
+            new = self.cash_created - self.cash_updated
+            gone = self.cash_deleted - self.cash_updated
+            parts.append(_("nach PP: {a} Ein-/Auszahlungen neu, {u} geändert, {d} gelöscht", a=new,
+                           u=self.cash_updated, d=gone))
         if self.prices_added or self.prices_updated or self.prices_removed:
             parts.append(_("Kurse +{a}/~{u}/-{r}", a=self.prices_added, u=self.prices_updated, r=self.prices_removed))
         if self.accounts_created:
@@ -125,7 +136,7 @@ def _norm(d: Decimal) -> str:
 class Syncer:
     """One synchronisation run for one book."""
 
-    def __init__(self, ctx, settings: PPSettings, export: dict, force=(), actor: str = "pp-sync"):
+    def __init__(self, ctx, settings: PPSettings, export: dict, force=(), actor: str = "pp-sync", cash=None):
         self.ctx = ctx
         self.book = ctx.book
         self.appdb = ctx.appdb
@@ -134,6 +145,11 @@ class Syncer:
         self.force = set(force or ())
         self.actor = actor
         self.result = SyncResult(revision=(export.get("client") or {}).get("revision") or "")
+        if cash is not None:  # pp/cashflows.Mirror of this run
+            r = self.result
+            r.cash_created, r.cash_deleted = len(cash.create), len(cash.delete)
+            r.cash_updated, r.cash_replaced = cash.updated, len(cash.replaced)
+            r.cash_skipped = list(cash.skipped)
 
     # ------------------------------------------------------------------ planning
     def plan(self, index: AccountIndex) -> Plan:
@@ -281,7 +297,9 @@ class Syncer:
         if getattr(self, "_book_guid", None):
             self.appdb.set_meta("pp_book_guid", self._book_guid)
         self.appdb.set_meta("pp_last_sync", now_iso())
-        details = json.dumps({"changes": r.changes[:500], "errors": r.errors}, ensure_ascii=False)
+        details = json.dumps({"changes": r.changes[:500], "errors": r.errors,
+                              "cash_skipped": [[str(d), t, why] for d, t, why in r.cash_skipped[:200]]},
+                             ensure_ascii=False)
         self.appdb.pp_add_run(started, self.actor, r.revision, "ok" if r.ok else "error", r.summary(), details)
 
     # ------------------------------------------------------------------ checks before writing
@@ -650,5 +668,5 @@ class Syncer:
 
 
 def sync(ctx, settings: PPSettings, export: dict, force=(), actor: str = "pp-sync",
-         dry_run: bool = False) -> SyncResult:
-    return Syncer(ctx, settings, export, force=force, actor=actor).run(dry_run=dry_run)
+         dry_run: bool = False, cash=None) -> SyncResult:
+    return Syncer(ctx, settings, export, force=force, actor=actor, cash=cash).run(dry_run=dry_run)

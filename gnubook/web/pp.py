@@ -332,6 +332,14 @@ def sync_now():
         if dry:
             flash(_("Probelauf: {a0} neu, {a1} zu ändern, {a2} zu löschen, {a3} Konflikte.", a0=result.created,
                     a1=result.updated, a2=result.deleted, a3=result.conflicts), "info")
+            if svc.settings().cashflows:
+                flash(_("Probelauf nach PP: {a0} Ein-/Auszahlungen neu, {a1} zu ändern, {a2} zu löschen (davon {a3} vorhandene Einlagen/Entnahmen ersetzt).",  # noqa: E501
+                        a0=result.cash_created - result.cash_updated, a1=result.cash_updated,
+                        a2=result.cash_deleted - result.cash_updated, a3=result.cash_replaced), "info")
+        if result.cash_skipped:
+            shown = "; ".join(f"{d} {t}: {why}" for d, t, why in result.cash_skipped[:5])
+            flash(_("Nicht nach PP übernommen: {a0}", a0=shown + (" …" if len(result.cash_skipped) > 5 else "")),
+                  "warning")
         else:
             flash(_("Übernommen: {a0}", a0=result.summary()), "success" if result.ok else "warning")
     except WriteLockError as exc:
@@ -701,6 +709,10 @@ def settings():
         except ValueError:
             new.price_days = 400
         new.namespace = (f.get("namespace") or "").strip()[:100] or "Portfolio Performance"
+        new.cashflows = f.get("cashflows") == "1"
+        cashflows_from = _parse_date(f.get("cashflows_from"))
+        new.cashflows_from = cashflows_from.isoformat() if cashflows_from else ""
+        new.cashflows_replace = f.get("cashflows_replace") == "1"
         problems = _check_settings(new, idx)
         if problems:
             for p in problems:
@@ -756,6 +768,19 @@ def _check_settings(s: PPSettings, idx) -> list[str]:
         elif acc.placeholder:
             problems.append(_("{a0} ist ein Platzhalterkonto und nimmt keine Buchungen an.", a0=acc.full_name))
     clearing = resolved(s, idx)["clearing"]
+    if s.cashflows:
+        if not s.cash_accounts:
+            problems.append(_("Für Ein-/Auszahlungen aus GnuCash bitte mindestens einem PP-Konto ein eigenes Konto im Buch zuordnen."))  # noqa: E501
+        seen = {}
+        for ref in s.cash_accounts.values():
+            acc = idx.find(ref)
+            if acc is None:
+                continue
+            if acc.full_name == clearing:
+                problems.append(_("Das Zwischenkonto kann nicht das eigene Konto eines PP-Kontos sein, wenn Ein-/Auszahlungen aus GnuCash übernommen werden."))  # noqa: E501
+            if acc.guid in seen:
+                problems.append(_("{a0} ist mehreren PP-Konten zugeordnet – so ist nicht klar, wohin die Ein-/Auszahlungen gehören.", a0=acc.full_name))  # noqa: E501
+            seen[acc.guid] = ref
     for ref in s.bank_accounts:
         acc = idx.find(ref)
         if acc is not None and acc.full_name == clearing:
