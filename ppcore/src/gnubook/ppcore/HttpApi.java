@@ -297,6 +297,12 @@ final class HttpApi
                 require(method, "POST");
                 sendJson(ex, 201, Portfolios.create(holder, body(ex)));
             }
+            case "cashflows" -> {
+                if (seg.length != 3)
+                    throw ApiException.notFound("unknown path");
+                require(method, "POST");
+                sendJson(ex, 200, CashFlows.apply(holder, body(ex)));
+            }
             case "transactions" -> {
                 if (seg.length == 3)
                 {

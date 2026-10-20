@@ -32,6 +32,7 @@ ROLES = ("clearing", "dividends", "interest", "gains", "fees", "taxes", "interes
 
 ACCOUNT_TYPES = ("DIVIDENDS", "INTEREST", "INTEREST_CHARGE", "FEES", "FEES_REFUND", "TAXES", "TAX_REFUND")
 NOT_BOOKED = ("DEPOSIT", "REMOVAL")
+FROM_GNUCASH = "gnubook:"  # source of the PP transactions written from the GnuCash book (pp/cashflows.py)
 PURCHASE = ("BUY", "TRANSFER_IN", "DELIVERY_INBOUND")
 
 DESCRIPTIONS = {
@@ -337,6 +338,13 @@ def build_plan(export: dict, base: str, *, sync_from: date | None = None, realiz
 
         if kind == "account" and typ in ("BUY", "SELL") and cross.get("type") == "buysell":
             continue  # booked from the securities side
+        if kind == "account" and (t.get("source") or "").startswith(FROM_GNUCASH) and not cross:
+            # written into PP from the GnuCash book (pp/cashflows.py): it is there already
+            done.add(t["uuid"])
+            plan.bookings.append(Booking(t["uuid"], typ, day, t.get("note") or typ, _notes(t),
+                                         t.get("currency") or base, account=t.get("owner"),
+                                         amount=dec(t.get("amount")), skip="from_gnucash", uuids=(t["uuid"],)))
+            continue
         if kind == "account" and (typ in NOT_BOOKED or cross.get("type") == "account-transfer"):
             done.add(t["uuid"])
             b = Booking(t["uuid"], typ, day, {"DEPOSIT": "Einlage", "REMOVAL": "Entnahme"}.get(typ, "Umbuchung"),
@@ -499,6 +507,7 @@ def _dividend_portfolio(sec: str, pp_account: str, portfolios: dict, held: dict)
 
 SKIP_REASONS = {
     "bankimport": "kommt über den Bankimport (Ein-/Auszahlung, Umbuchung)",
+    "from_gnucash": "aus dem GnuCash-Buch übernommen",
     "before_start": "vor dem Startdatum – im Anfangsbestand enthalten",
     "currency": "Konto in Fremdwährung – bitte in GnuCash Desktop buchen",
     "unsupported": "Buchungsart wird nicht übernommen",

@@ -48,6 +48,13 @@ class PPSettings:
     price_days: int = 400
     # GnuCash namespace ("Typ") for securities gnubook creates
     namespace: str = "Portfolio Performance"
+    # deposits and removals (and interest, fees, taxes) entered in GnuCash on the account of a PP cash account
+    # (cash_accounts) are written into the PP file – see pp/cashflows.py
+    cashflows: bool = False
+    # earlier GnuCash transactions are not mirrored (empty: all)
+    cashflows_from: str = ""
+    # deposits and removals in these PP cash accounts that do not come from GnuCash are deleted in PP
+    cashflows_replace: bool = False
 
     @classmethod
     def from_json(cls, text: str | None) -> "PPSettings":
@@ -69,6 +76,13 @@ class PPSettings:
     def start(self) -> date | None:
         try:
             return date.fromisoformat(self.sync_from) if self.sync_from else None
+        except ValueError:
+            return None
+
+    @property
+    def cashflows_start(self) -> date | None:
+        try:
+            return date.fromisoformat(self.cashflows_from) if self.cashflows_from else None
         except ValueError:
             return None
 

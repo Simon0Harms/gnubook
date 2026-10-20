@@ -252,6 +252,30 @@ class FakePPCore:
                fields.get("amount") or "100", shares=fields["shares"], security=sec, note=fields.get("note")))
         return {"uuid": uuid, "type": fields["type"], "security": sec, "shares": fields["shares"]}
 
+    def apply_cashflows(self, cid, create, delete):
+        """Like pp-core's POST /cashflows: deletes cash account transactions, creates new ones (one revision)."""
+        from gnubook.pp.client import PPCoreError
+
+        self.calls.append(("cashflows", [dict(c) for c in create], list(delete)))
+        known = {t["uuid"]: t for t in self.export_data["transactions"]}
+        for uuid in delete:
+            t = known.get(uuid)
+            if t is None:
+                raise PPCoreError(f"unknown transaction {uuid}", 404, "not_found")
+            if t["kind"] != "account" or t.get("cross"):
+                raise PPCoreError(f"transaction {uuid} is no deposit", 409, "not_a_cash_flow")
+        e = without(self.export_data, *delete)
+        created = []
+        for i, c in enumerate(create):
+            uuid = f"cf-{len(self.calls)}-{i}"
+            e["transactions"].append(_t(uuid, "account", c["account"], c["type"], c["date"], c["amount"],
+                                        note=c.get("note") or None, source=c.get("source")))
+            created.append({"uuid": uuid, "source": c.get("source")})
+        n = len([c for c in self.calls if c[0] == "cashflows"])
+        e["client"]["revision"] = f"{self.export_data['client']['revision']}-cf{n}"
+        self.export_data = e
+        return {"created": created, "deleted": len(delete), "revision": e["client"]["revision"]}
+
     def delete_transaction(self, cid, uuid):
         self.deleted.append(uuid)
         self.export_data = without(self.export_data, uuid)

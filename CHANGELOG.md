@@ -1,5 +1,13 @@
 # Changelog
 ## Unreleased
+- Portfolio Performance: deposits and removals can be taken from the GnuCash book into the PP file (*Einstellungen →
+  Ein- und Auszahlungen dieser Konten aus GnuCash nach Portfolio Performance übernehmen*). For every PP cash account
+  with an account of its own in the book (*Geldseite je PP-Konto*), each transaction on that account that was not
+  booked from PP becomes a PP transaction: transfers as deposit/removal, income as interest, expenses as fees or
+  taxes. GnuCash leads: changes and deletions there are repeated in PP; the PP transactions carry gnubook's key in
+  PP's *source* field and are not booked back. Optional start date, and *ersetzen* to delete PP's own
+  deposits/removals of these accounts. The hourly run notices new entries in GnuCash. pp-core:
+  `POST /clients/{id}/cashflows`
 - *Einstellungen → Verbindung zum Buch*: the connection to a book can be paused for 15 minutes to 4 hours. gnubook
   closes all its connections and opens none until the pause ends or *Verbindung fortsetzen* is pressed – so GnuCash
   Desktop can re-create the database with *Speichern unter* (`DROP DATABASE` failed with *is being accessed by other

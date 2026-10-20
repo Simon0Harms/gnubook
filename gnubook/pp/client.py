@@ -158,5 +158,11 @@ class PPCoreClient:
         """Manual inbound/outbound delivery (see ppcore/README.md, POST /clients/{id}/transactions)."""
         return self._request("POST", f"/clients/{cid}/transactions", fields)
 
+    def apply_cashflows(self, cid: str, create: list[dict], delete: list[str]) -> dict:
+        """Cash account transactions from the GnuCash book: create and delete in one save (see pp/cashflows.py,
+        POST /clients/{id}/cashflows)."""
+        return self._request("POST", f"/clients/{cid}/cashflows", {"create": create, "delete": delete},
+                             timeout=max(self.timeout, 120))
+
     def delete_transaction(self, cid: str, uuid: str) -> dict:
         return self._request("DELETE", f"/clients/{cid}/transactions/{urllib.parse.quote(uuid)}")

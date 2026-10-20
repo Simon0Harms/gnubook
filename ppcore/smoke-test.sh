@@ -154,6 +154,28 @@ assert out_t.get("note") == "Depotwechsel" and in_t["owner"] == PB, in_t
 call("DELETE", f"/clients/xfer/transactions/{tr['uuid']}")
 xt = {t["uuid"] for t in call("GET", "/clients/xfer/export?prices=none")["transactions"]}
 assert tr["uuid"] not in xt and tr["targetUuid"] not in xt, xt
+# cash flows from the GnuCash book: created with gnubook's source, replaced and deleted in one call each
+ACC = "acc00000-0000-4000-8000-000000000001"
+cf = call("POST", "/clients/xfer/cashflows", {"create": [
+    {"account": ACC, "type": "DEPOSIT", "date": "2024-01-01", "amount": "5000", "note": "Einzahlung",
+     "source": "gnubook:split-1"},
+    {"account": ACC, "type": "FEES", "date": "2024-01-03", "amount": "2.50", "source": "gnubook:split-2"}]})
+assert len(cf["created"]) == 2 and cf["created"][0]["source"] == "gnubook:split-1", cf
+ct = {t["uuid"]: t for t in call("GET", "/clients/xfer/export?prices=none")["transactions"]}
+dep = ct[cf["created"][0]["uuid"]]
+assert dep["type"] == "DEPOSIT" and float(dep["amount"]) == 5000 and dep["source"] == "gnubook:split-1", dep
+assert dep["note"] == "Einzahlung" and dep["owner"] == ACC and dep["cross"] is None, dep
+before = call("GET", "/clients/xfer")["transactions"]
+call("POST", "/clients/xfer/cashflows", {"create": [{"account": ACC, "type": "BUY", "date": "2024-01-01",
+     "amount": "1"}]}, expect=400)
+call("POST", "/clients/xfer/cashflows", {"create": [{"account": ACC, "type": "DEPOSIT", "date": "2024-01-01",
+     "amount": "1"}], "delete": ["00000000-0000-4000-8000-00000000dead"]}, expect=404)
+assert call("GET", "/clients/xfer")["transactions"] == before  # a refused call writes nothing
+cf2 = call("POST", "/clients/xfer/cashflows", {"create": [{"account": ACC, "type": "DEPOSIT", "date": "2024-01-01",
+           "amount": "4500", "note": "Einzahlung", "source": "gnubook:split-1"}],
+           "delete": [c["uuid"] for c in cf["created"]]})
+assert cf2["deleted"] == 2 and len(cf2["created"]) == 1, cf2
+assert call("GET", "/clients/xfer")["transactions"] == before - 1
 # new securities account with a new cash account, and one with an existing cash account
 np = call("POST", "/clients/xfer/portfolios", {"name": "Depot C", "accountName": "Konto C", "currency": "usd"},
           expect=201)
