@@ -94,3 +94,15 @@ def test_finanzen_zero_excel_other_kinds_and_marked_days():
     assert (bonus.type, bonus.shares, bonus.value) == ("DELIVERY_INBOUND", Decimal("1.2"), 0)
     assert (buy.type, buy.day, buy.wkn) == ("BUY", date(2025, 10, 9), "840221")
     assert other.type == "DELIVERY_OUTBOUND"  # an unknown corporate action without cash: by the sign of the shares
+
+
+def test_finanzen_zero_excel_skips_cancelled_bookings():
+    data = _xlsx([HEAD,
+                  [None, 83905710, "Depotumbuchung Einl.", 1, "STK", 1, "DE000TUAG000", "TUI", 44608.0, 44608.0,
+                   0.9, 3.43, 1483210, "TUAG00", "EUR", -3.43, None, 3.43, 0, "STORNO", "EDE", "XETRA"],
+                  [None, 86172534, "Depotumbuchung Einl.", 1, "STK", 1, "DE000TUAG000", "TUI", 44608.0, 44608.0,
+                   0.9, 3.43, 1483210, "TUAG00", "EUR", -3.43, None, 3.43, 0, "TOT (AUSGEBUCHT)", "EDE", "XETRA"],
+                  [None, 719686925, "Kauf", 1, "STK", 1, "DE0008430026", "MUENCH.RUECKVERS.", "!15.10.2026",
+                   "!15.10.2026", 0.5, 543.4, 1483210, 843002, "EUR", -543.4, None, 543.4, 0, "BUCHUNG", "GDM", "GETTEX"]])
+    rows = csvimport.read_zero_xlsx(data)
+    assert ["Beleg 86172534" in rows[0].note, len(rows)] == [True, 2]  # pending (BUCHUNG) rows are real trades

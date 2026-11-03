@@ -299,7 +299,8 @@ def read_zero_xlsx(data: bytes) -> list[Row]:
 
     Columns used: BELEG-D (document number), WPGARTB-D (kind), NW-D (shares, negative = out), WPNRID-D (ISIN/currency),
     WPBEZK-D (name), WPNRE-D (WKN), BUDAT-D + BUZEIT-D (trade day and time), BETRAB-D (amount booked), KWAB-D
-    (market value), GEAB-D (fees), WHGAB-D (currency), BOKZBEZ-D (trading venue), SNR-D (securities account).
+    (market value), GEAB-D (fees), WHGAB-D (currency), BOKZBEZ-D (trading venue), SNR-D (securities account),
+    STATB-D (status: rows marked STORNO are cancelled bookings and are skipped).
     Taxes of a sale are the market value minus the amount credited (minus fees). Exchanges of a corporate action
     ("Umtausch CA", booked with amount 0) become deliveries at market value."""
     table = _xlsx_rows(data)
@@ -321,6 +322,8 @@ def read_zero_xlsx(data: bytes) -> list[Row]:
     for n, r in enumerate(table[head_at + 1:], start=head_at + 2):
         if get(r, "BELEG-D") in (None, ""):
             continue  # totals and empty lines
+        if str(get(r, "STATB-D") or "").strip().upper() == "STORNO":
+            continue  # a cancelled booking: its correction is a row of its own
         kind_text = str(get(r, "WPGARTB-D") or "").strip()
         kind = _ZERO_TYPES.get(kind_text.lower())
         try:
