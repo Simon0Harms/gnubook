@@ -12,10 +12,12 @@ DEFAULT_NAMES = {
     "de": {"securities_root": "Wertpapiere", "clearing": "Wertpapier-Verrechnung", "dividends": "Dividenden",
            "interest": "Zinsen", "gains": "Kursgewinne", "fees": "Wertpapiergebühren",
            "taxes": "Kapitalertragsteuer", "interest_charge": "Sollzinsen", "delivery": "Wertpapier-Einlieferungen",
+           "sub": "Wertpapiere",
            "top": {"ASSET": "Aktiva", "INCOME": "Erträge", "EXPENSE": "Aufwendungen", "EQUITY": "Eigenkapital"}},
     "en": {"securities_root": "Investments", "clearing": "Investment clearing", "dividends": "Dividends",
            "interest": "Interest", "gains": "Capital gains", "fees": "Investment fees",
            "taxes": "Capital gains tax", "interest_charge": "Interest charges", "delivery": "Securities deliveries",
+           "sub": "Securities",
            "top": {"ASSET": "Assets", "INCOME": "Income", "EXPENSE": "Expenses", "EQUITY": "Equity"}},
 }
 # GnuCash type of each role account
@@ -117,7 +119,15 @@ def default_name(index: AccountIndex, role: str) -> str:
     if top is not None and not top.placeholder and typ == "EQUITY":
         # e.g. a top-level "Anfangsbestand" equity account that takes bookings directly
         return top.full_name
-    return f"{top_name}{index.separator}{leaf}"
+    name = f"{top_name}{index.separator}{leaf}"
+    if role != "securities_root":
+        # charts often keep e.g. "Erträge:Zinsen" as a placeholder with Girokonto/Festgeld/... below it:
+        # then book on a child of its own ("Erträge:Zinsen:Wertpapiere") instead of failing every run
+        acc = index.find(name)
+        while acc is not None and acc.placeholder:
+            name = f"{name}{index.separator}{names['sub']}"
+            acc = index.find(name)
+    return name
 
 
 def resolved(settings: PPSettings, index: AccountIndex) -> dict:

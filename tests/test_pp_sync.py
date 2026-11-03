@@ -337,3 +337,19 @@ def test_gnucash_reads_the_pp_bookings(state):
     for guid, acc in idx.by_guid.items():
         assert D(gnc[guid]["balance"]) == ours.get(guid, D(0)), acc.full_name
         assert gnc[guid]["splits"] == n_splits.get(guid, 0), acc.full_name
+
+
+def test_default_role_account_avoids_placeholder():
+    from types import SimpleNamespace as NS
+
+    from gnubook.pp import settings as ps
+    accs = {"Erträge": NS(placeholder=True, full_name="Erträge", type="INCOME"),
+            "Erträge:Zinsen": NS(placeholder=True, full_name="Erträge:Zinsen", type="INCOME")}
+    idx = NS(separator=":", find=accs.get)
+    orig = ps.chart_language, ps.top_account
+    ps.chart_language, ps.top_account = (lambda i: "de"), (lambda i, t: accs["Erträge"])
+    try:
+        assert ps.default_name(idx, "interest") == "Erträge:Zinsen:Wertpapiere"
+        assert ps.default_name(idx, "dividends") == "Erträge:Dividenden"
+    finally:
+        ps.chart_language, ps.top_account = orig
