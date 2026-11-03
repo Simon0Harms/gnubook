@@ -1,5 +1,10 @@
 # Changelog
 ## Unreleased
+- Portfolio Performance import: duplicates of transactions with a document number (*Vorgangs-Nr.* of Baader Bank /
+  finanzen invest PDFs, *Beleg* of the finanzen invest Excel list) are found by that number instead of PP's check,
+  which flagged every identical trade of a day once one of them was in the file (#2). A number already in the file
+  is a duplicate, another number of the same kind never is; identical transactions without a comparable number are
+  matched 1:1, so of n identical new items only as many are flagged as there are such transactions
 - Portfolio Performance: deposits and removals can be taken from the GnuCash book into the PP file (*Einstellungen →
   Ein- und Auszahlungen dieser Konten aus GnuCash nach Portfolio Performance übernehmen*). For every PP cash account
   with an account of its own in the book (*Geldseite je PP-Konto*), each transaction on that account that was not
