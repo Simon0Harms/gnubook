@@ -30,6 +30,8 @@ CENT = Decimal("0.01")
 # role names of the fixed accounts (see settings.PPSettings)
 ROLES = ("clearing", "dividends", "interest", "gains", "fees", "taxes", "interest_charge", "delivery")
 
+# account transactions that GnuCash provides for a "GnuCash only" cash account (dividends stay with PP: security)
+GNUCASH_MASTER_TYPES = ("INTEREST", "INTEREST_CHARGE", "FEES", "FEES_REFUND", "TAXES", "TAX_REFUND")
 ACCOUNT_TYPES = ("DIVIDENDS", "INTEREST", "INTEREST_CHARGE", "FEES", "FEES_REFUND", "TAXES", "TAX_REFUND")
 NOT_BOOKED = ("DEPOSIT", "REMOVAL")
 FROM_GNUCASH = "gnubook:"  # source of the PP transactions written from the GnuCash book (pp/cashflows.py)
@@ -275,7 +277,8 @@ def parse_securities(export: dict) -> dict:
 
 
 def build_plan(export: dict, base: str, *, sync_from: date | None = None, realized_gains: bool = True,
-               capitalize_fees: bool = False, cash_accounts: dict | None = None) -> Plan:
+               capitalize_fees: bool = False, cash_accounts: dict | None = None,
+               gnucash_master: set | frozenset = frozenset()) -> Plan:
     """All bookings of the export. `base` is the currency of the GnuCash book (ISO code)."""
     cash_accounts = cash_accounts or {}
     securities = parse_securities(export)
@@ -344,6 +347,13 @@ def build_plan(export: dict, base: str, *, sync_from: date | None = None, realiz
             plan.bookings.append(Booking(t["uuid"], typ, day, t.get("note") or typ, _notes(t),
                                          t.get("currency") or base, account=t.get("owner"),
                                          amount=dec(t.get("amount")), skip="from_gnucash", uuids=(t["uuid"],)))
+            continue
+        if kind == "account" and typ in GNUCASH_MASTER_TYPES and t.get("owner") in gnucash_master and not cross:
+            # GnuCash is the master of this cash account: the book's version reaches PP via pp/cashflows.py
+            done.add(t["uuid"])
+            plan.bookings.append(Booking(t["uuid"], typ, day, DESCRIPTIONS.get(typ, typ).format(sec="").strip(),
+                                         _notes(t), t.get("currency") or base, account=t.get("owner"),
+                                         amount=dec(t.get("amount")), skip="gnucash_only", uuids=(t["uuid"],)))
             continue
         if kind == "account" and (typ in NOT_BOOKED or cross.get("type") == "account-transfer"):
             done.add(t["uuid"])
@@ -508,6 +518,7 @@ def _dividend_portfolio(sec: str, pp_account: str, portfolios: dict, held: dict)
 SKIP_REASONS = {
     "bankimport": "kommt über den Bankimport (Ein-/Auszahlung, Umbuchung)",
     "from_gnucash": "aus dem GnuCash-Buch übernommen",
+    "gnucash_only": "Konto nur aus GnuCash – kommt aus dem Buch nach PP",
     "before_start": "vor dem Startdatum – im Anfangsbestand enthalten",
     "currency": "Konto in Fremdwährung – bitte in GnuCash Desktop buchen",
     "unsupported": "Buchungsart wird nicht übernommen",

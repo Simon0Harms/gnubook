@@ -93,7 +93,10 @@
         {% for a in summary.accountList %}
           <div class="row g-2 align-items-center mb-1">
             <div class="col-md-5 small">{{ a.name }} ({{ a.currency }}){% if a.retired %} – {{ _("aufgelöst") }}{% endif %}</div>
-            <div class="col-md-7"><input class="form-control form-control-sm" name="cash_{{ a.uuid }}" list="bank-accounts" value="{{ settings.cash_accounts.get(a.uuid, '') }}" placeholder="{{ names.clearing }}"></div>
+            <div class="col-md-5"><input class="form-control form-control-sm" name="cash_{{ a.uuid }}" list="bank-accounts" value="{{ settings.cash_accounts.get(a.uuid, '') }}" placeholder="{{ names.clearing }}"></div>
+            <div class="col-md-2"><div class="form-check small mb-0" title="{{ _("Zinsen, Gebühren und Steuern dieses Kontos kommen nur aus GnuCash nach PP; in PP erfasste werden nicht ins Buch gebucht.") }}">
+              <input class="form-check-input" type="checkbox" id="gnucash_only_{{ a.uuid }}" name="gnucash_only_{{ a.uuid }}" value="1" {{ 'checked' if a.uuid in settings.gnucash_only }}>
+              <label class="form-check-label" for="gnucash_only_{{ a.uuid }}">{{ _("nur aus GnuCash") }}</label></div></div>
           </div>
         {% endfor %}
         {% endif %}
@@ -111,7 +114,7 @@
           <div class="col-md-6">
             <div class="form-check mt-md-3"><input class="form-check-input" type="checkbox" id="cashflows_replace" name="cashflows_replace" value="1" {{ 'checked' if settings.cashflows_replace }}>
               <label class="form-check-label small" for="cashflows_replace">{{ _("Vorhandene Einlagen/Entnahmen dieser PP-Konten ersetzen (in PP löschen, wenn sie nicht aus GnuCash kommen)") }}</label></div>
-            <div class="form-text">{{ _("Gegen doppelte Einlagen, z. B. aus PDF-Kontoauszügen. Vorher einen Probelauf machen.") }}</div>
+            <div class="form-text">{{ _("Gegen doppelte Einlagen, z. B. aus PDF-Kontoauszügen. Bei Konten „nur aus GnuCash“ auch Zinsen, Gebühren und Steuern. Vorher einen Probelauf machen.") }}</div>
           </div>
         </div>
         <datalist id="bank-accounts">{% for a in bank_choices %}<option value="{{ a.full_name }}"></option>{% endfor %}</datalist>

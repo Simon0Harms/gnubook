@@ -159,7 +159,8 @@ class Syncer:
         return build_plan(self.export, base.mnemonic, sync_from=self.settings.start,
                           realized_gains=self.settings.realized_gains,
                           capitalize_fees=self.settings.capitalize_fees,
-                          cash_accounts=self.settings.cash_accounts)
+                          cash_accounts=self.settings.cash_accounts,
+                          gnucash_master=self.settings.gnucash_master())
 
     def run(self, dry_run: bool = False) -> SyncResult:
         started = now_iso()

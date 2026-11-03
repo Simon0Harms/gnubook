@@ -57,6 +57,10 @@ class PPSettings:
     cashflows_from: str = ""
     # deposits and removals in these PP cash accounts that do not come from GnuCash are deleted in PP
     cashflows_replace: bool = False
+    # PP cash accounts (uuids, keys of cash_accounts) where GnuCash is the only master: their interest, fees and
+    # taxes entered in PP are not booked into GnuCash (they come from the book via pp/cashflows.py) and, with
+    # cashflows_replace, are deleted in PP like the deposits/removals
+    gnucash_only: list = field(default_factory=list)
 
     @classmethod
     def from_json(cls, text: str | None) -> "PPSettings":
@@ -69,10 +73,15 @@ class PPSettings:
         s.accounts = {k: v for k, v in (s.accounts or {}).items() if k in ROLE_TYPES and v}
         s.cash_accounts = {k: v for k, v in (s.cash_accounts or {}).items() if v}
         s.bank_accounts = [v for v in (s.bank_accounts or []) if v]
+        s.gnucash_only = [v for v in (s.gnucash_only or []) if v in s.cash_accounts]
         return s
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), ensure_ascii=False, sort_keys=True)
+
+    def gnucash_master(self) -> set:
+        """PP cash accounts whose interest/fees/taxes come only from GnuCash (needs cashflows)."""
+        return set(self.gnucash_only) & set(self.cash_accounts) if self.cashflows else set()
 
     @property
     def start(self) -> date | None:
@@ -93,7 +102,7 @@ class PPSettings:
         import hashlib
 
         relevant = {k: getattr(self, k) for k in ("securities_root", "accounts", "cash_accounts", "sync_from",
-                                                  "realized_gains", "capitalize_fees")}
+                                                  "gnucash_only", "realized_gains", "capitalize_fees")}
         return hashlib.sha256(json.dumps(relevant, sort_keys=True).encode()).hexdigest()
 
 

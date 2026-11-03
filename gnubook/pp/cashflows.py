@@ -43,6 +43,8 @@ SLOT = "gnubook-pp"  # the slot of the bookings made from PP (pp/sync.py)
 TRANSFER_TYPES = {"ASSET", "BANK", "CASH", "LIABILITY", "CREDIT", "EQUITY", "RECEIVABLE", "PAYABLE", "STOCK",
                   "MUTUAL", "TRADING"}
 REPLACEABLE = ("DEPOSIT", "REMOVAL")
+# also replaced on "GnuCash only" accounts (PPSettings.gnucash_only); same list as pp/plan.py
+GNUCASH_MASTER_TYPES = ("INTEREST", "INTEREST_CHARGE", "FEES", "FEES_REFUND", "TAXES", "TAX_REFUND")
 
 
 @dataclass(frozen=True)
@@ -208,6 +210,7 @@ def plan_mirror(book, index, settings: PPSettings, export: dict) -> Mirror:
     mirrored_accounts = {f.account for f in flows} | {
         u for u in settings.cash_accounts if u in {a["uuid"] for a in export.get("accounts") or []}}
     start = settings.cashflows_start
+    master = settings.gnucash_master()
     in_pp = {}
     for t in export.get("transactions") or []:
         if t.get("kind") != "account":
@@ -219,7 +222,9 @@ def plan_mirror(book, index, settings: PPSettings, export: dict) -> Mirror:
                 m.delete.append(t["uuid"])
             else:
                 in_pp[key] = t
-        elif (settings.cashflows_replace and t.get("type") in REPLACEABLE and not t.get("cross")
+        elif (settings.cashflows_replace and not t.get("cross")
+              and (t.get("type") in REPLACEABLE
+                   or (t.get("type") in GNUCASH_MASTER_TYPES and t.get("owner") in master))
               and t.get("owner") in mirrored_accounts
               and (start is None or (t.get("date") or "")[:10] >= start.isoformat())):
             m.delete.append(t["uuid"])

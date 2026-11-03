@@ -228,3 +228,23 @@ def test_settings_page_saves_and_checks_the_options(pp_app, fake):
     r = c.post("/pp/settings", data=base, follow_redirects=True)
     assert "mindestens einem PP-Konto" in r.text
     assert reg.system.pp_settings(st.id).cash_accounts == {A1: DEPOT}
+
+
+def test_gnucash_only_account_takes_no_interest_fees_taxes_from_pp(state, setup):
+    only = _settings(gnucash_only=[A1])
+    # the interest, fees and taxes booked from PP before are taken out of the book again; dividends stay
+    r = sync(state, only, setup.export("book-1"))
+    assert r.ok and r.deleted == 6 and r.created == 0, r.summary()
+    assert {k for op, k, _d in r.changes if op == "delete"} == {"int-1", "intc-1", "fee-1", "tax-1", "taxr-1",
+                                                                 "feer-1"}
+    # with "replace" PP's own entries are deleted there; GnuCash's interest goes to PP instead
+    _book(state, date(2024, 1, 31), "Zinsgutschrift", (DEPOT, "3"), ("Erträge:Zinsen", "-3"))
+    m = _mirror(state, setup, _settings(gnucash_only=[A1], cashflows_replace=True))
+    assert {"int-1", "fee-1", "tax-1", "taxr-1", "feer-1", "dep-1"} <= set(m.replaced)
+    assert [(f.type, f.amount) for f in m.create if f.type == "INTEREST"] == [("INTEREST", D("3"))]
+
+
+def test_gnucash_only_needs_cashflows():
+    s = PPSettings(cashflows=False, cash_accounts={A1: DEPOT}, gnucash_only=[A1])
+    assert s.gnucash_master() == set()
+    assert PPSettings.from_json('{"gnucash_only": ["x"]}').gnucash_only == []  # not mapped: dropped

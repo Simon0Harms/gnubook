@@ -259,7 +259,8 @@ def transactions():
     if export is not None:
         base = idx.root.commodity.mnemonic if idx.root.commodity else "EUR"
         plan = build_plan(export, base, sync_from=settings.start, realized_gains=settings.realized_gains,
-                          capitalize_fees=settings.capitalize_fees, cash_accounts=settings.cash_accounts)
+                          capitalize_fees=settings.capitalize_fees, cash_accounts=settings.cash_accounts,
+                          gnucash_master=settings.gnucash_master())
         records = st.appdb.pp_records()
         names = {p["uuid"]: p["name"] for p in export.get("portfolios", [])}
         names.update({a["uuid"]: a["name"] for a in export.get("accounts", [])})
@@ -698,6 +699,7 @@ def settings():
         for key, value in f.items():
             if key.startswith("cash_") and value.strip():
                 new.cash_accounts[key[5:]] = value.strip()
+        new.gnucash_only = [u for u in new.cash_accounts if f.get(f"gnucash_only_{u}") == "1"]
         new.bank_accounts = [v for v in f.getlist("bank_accounts") if v]
         sync_from = _parse_date(f.get("sync_from"))
         new.sync_from = sync_from.isoformat() if sync_from else ""
@@ -781,6 +783,8 @@ def _check_settings(s: PPSettings, idx) -> list[str]:
             if acc.guid in seen:
                 problems.append(_("{a0} ist mehreren PP-Konten zugeordnet – so ist nicht klar, wohin die Ein-/Auszahlungen gehören.", a0=acc.full_name))  # noqa: E501
             seen[acc.guid] = ref
+    if s.gnucash_only and not s.cashflows:
+        problems.append(_("„Nur aus GnuCash“ braucht die Übernahme der Ein-/Auszahlungen aus GnuCash – sonst fehlen diese Zinsen, Gebühren und Steuern in PP."))  # noqa: E501
     for ref in s.bank_accounts:
         acc = idx.find(ref)
         if acc is not None and acc.full_name == clearing:
