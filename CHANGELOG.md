@@ -1,5 +1,8 @@
 # Changelog
 ## Unreleased
+- Portfolio Performance import: the target of a Baader Bank document is chosen per *Stamm-Nr.* and *Portfolio*
+  (printed on every finanzen invest document, also on tax statements without a *Depot-Nr.*), else per *Depot-Nr.*;
+  targets chosen per *Depot-Nr.* before are asked for once more
 - Portfolio Performance import: duplicates of transactions with a document number (*Vorgangs-Nr.* of Baader Bank /
   finanzen invest PDFs, *Beleg* of the finanzen invest Excel list) are found by that number instead of PP's check,
   which flagged every identical trade of a day once one of them was in the file (#2). A number already in the file

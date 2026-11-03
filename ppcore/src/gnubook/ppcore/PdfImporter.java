@@ -65,10 +65,13 @@ final class PdfImporter
     private static final Duration KEEP = Duration.ofHours(6);
     static final String CSV_LABEL = "CSV: "; //$NON-NLS-1$
     /**
-     * One PP extractor reads the documents of several brokers (e.g. Baader Bank for Scalable Capital and finanzen.net
-     * zero), so the target is chosen per extractor and securities account number of the document.
+     * One PP extractor reads the documents of several brokers and customers (e.g. Baader Bank for Scalable Capital
+     * and finanzen invest), so the target is chosen per extractor and customer of the document: the "Stamm-Nr." with
+     * its "Portfolio" (printed on every finanzen invest document, also on tax statements without a "Depot-Nr."),
+     * else the "Depot-Nr.".
      */
-    static final String DEPOT_LABEL = " · Depot "; //$NON-NLS-1$
+    private static final java.util.regex.Pattern STAMM_NR = java.util.regex.Pattern
+                    .compile("Stamm-?Nr\\.?\\s*:?\\s*([0-9]{5,})(?:\\s+Portfolio\\s*:?\\s*([0-9]{1,4}))?"); //$NON-NLS-1$
     private static final java.util.regex.Pattern DEPOT_NR = java.util.regex.Pattern
                     .compile("Depot(?:-?Nr\\.?|nummer)\\s*:?\\s*([0-9]{5,})"); //$NON-NLS-1$
 
@@ -329,7 +332,7 @@ final class PdfImporter
                         if (file != null)
                             extractedFiles.add(file);
                         String depot = file == null ? null : depots.get(file);
-                        session.entries.add(new Entry(i++, depot == null ? label : label + DEPOT_LABEL + depot, file,
+                        session.entries.add(new Entry(i++, depot == null ? label : label + depot, file,
                                         item));
                     }
                 }
@@ -755,7 +758,7 @@ final class PdfImporter
         return null;
     }
 
-    /** File name → securities account number printed on the PDF (files without one are left out). */
+    /** File name → " · Stamm-Nr. …" or " · Depot …" of the PDF (files without either are left out). */
     private static Map<String, String> depotNumbers(Collection<File> inputs)
     {
         Map<String, String> depots = new HashMap<>();
@@ -767,9 +770,17 @@ final class PdfImporter
             {
                 PDFInputFile in = new PDFInputFile(f);
                 in.convertPDFtoText();
-                java.util.regex.Matcher m = DEPOT_NR.matcher(in.getText());
+                String text = in.getText();
+                java.util.regex.Matcher m = STAMM_NR.matcher(text);
                 if (m.find())
-                    depots.put(f.getName(), m.group(1));
+                {
+                    depots.put(f.getName(), " · Stamm-Nr. " + m.group(1) //$NON-NLS-1$
+                                    + (m.group(2) != null ? " Portfolio " + m.group(2) : "")); //$NON-NLS-1$ //$NON-NLS-2$
+                    continue;
+                }
+                m = DEPOT_NR.matcher(text);
+                if (m.find())
+                    depots.put(f.getName(), " · Depot " + m.group(1)); //$NON-NLS-1$
             }
             catch (IOException | RuntimeException e)
             {
