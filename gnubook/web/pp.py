@@ -479,16 +479,33 @@ def _after_import(svc, result: dict):
 @bp.route("/import/<sid>/apply", methods=["POST"])
 @login_required
 def pdf_import_apply(sid):
+    """Forced items of one part; a chosen target is applied to every part of the upload (form field "sessions")."""
     svc = _svc()
-    try:
-        result = svc.client.import_apply(svc.cid, sid, force=request.form.getlist("force"),
-                                         portfolio=request.form.get("portfolio") or None,
-                                         account=request.form.get("account") or None,
-                                         extractor=request.form.get("extractor") or None)
-        _after_import(svc, result)
-    except PPCoreError as exc:
-        flash(str(exc), "danger")
-    return redirect(url_for("pp.pdf_import", session=sid))
+    sids = [s for s in (request.form.get("sessions") or "").split(",") if _SESSION_ID.fullmatch(s)]
+    if sid not in sids:
+        sids.insert(0, sid)
+    sids = sids[:IMPORT_MAX_BATCHES]
+    portfolio = request.form.get("portfolio") or None
+    account = request.form.get("account") or None
+    extractor = request.form.get("extractor") or None
+    total = {"imported": 0, "needsTarget": False}
+    for s in sids if (portfolio or account) else [sid]:
+        try:
+            result = svc.client.import_apply(svc.cid, s, force=request.form.getlist("force") if s == sid else (),
+                                             portfolio=portfolio, account=account, extractor=extractor)
+        except PPCoreError as exc:
+            if s == sid:
+                flash(str(exc), "danger")
+            elif exc.status != 404:
+                flash(_("Teil {a0}: {a1}", a0=sids.index(s) + 1, a1=exc), "warning")
+            continue
+        total["imported"] += int(result.get("imported") or 0)
+        total["needsTarget"] = total["needsTarget"] or bool(result.get("needsTarget"))
+    _after_import(svc, total)
+    return redirect(url_for("pp.pdf_import", session=",".join(sids)))
+
+
+_SESSION_ID = re.compile(r"[0-9a-f-]{36}")
 
 
 # ------------------------------------------------------------------------------------------ manual deliveries

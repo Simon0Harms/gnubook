@@ -357,7 +357,8 @@ final class PdfImporter
                 resolveTargets(holder, client, session, Json.str(body, "portfolio"), Json.str(body, "account"));
                 check(client, session);
                 sessions.put(session.id, session);
-                if (Json.bool(body, "apply", true) && session.missingTargets.isEmpty())
+                // what has a target is imported now; items of a bank without one wait for the choice
+                if (Json.bool(body, "apply", true))
                     apply(holder, client, session, Set.of(), Json.bool(body, "autoFeed", true));
                 return describe(holder, client, session);
             }
@@ -419,8 +420,6 @@ final class PdfImporter
             Set<Integer> forced = new HashSet<>();
             if (body.has("force") && body.get("force").isJsonArray())
                 body.getAsJsonArray("force").forEach(e -> forced.add(e.getAsInt()));
-            if (!session.missingTargets.isEmpty())
-                throw ApiException.conflict("target_missing", "choose the securities account and cash account first");
             apply(holder, client, session, forced, Json.bool(body, "autoFeed", true));
             return describe(holder, client, session);
         }
@@ -569,7 +568,12 @@ final class PdfImporter
     private void apply(ClientHolder holder, Client client, Session session, Set<Integer> forced, boolean autoFeed)
                     throws IOException
     {
+        // a new security only together with a transaction of it that is imported now (not while its target is missing)
+        Set<Entry> needed = session.entries.stream().filter(e -> e.dependency != null && e.importable(forced))
+                        .map(e -> e.dependency).collect(Collectors.toSet());
         List<Entry> todo = session.entries.stream().filter(e -> e.importable(forced))
+                        .filter(e -> !(e.item instanceof Extractor.SecurityItem) || needed.contains(e)
+                                        || session.entries.stream().noneMatch(o -> o.dependency == e))
                         .sorted(Comparator.comparing((Entry e) -> e.item instanceof Extractor.SecurityItem ? 0 : 1)
                                         .thenComparing(e -> e.item.getDate() == null ? java.time.LocalDateTime.MIN
                                                         : e.item.getDate()))
