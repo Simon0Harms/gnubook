@@ -1,5 +1,8 @@
 # Changelog
 ## Unreleased
+- Portfolio Performance import of several parts: choosing a target or forcing items keeps every part on the result
+  page (it showed only the part of the form), and a chosen target is set for every part. Items of a bank with a
+  target are imported even while another bank of the same upload still waits for its choice
 - Portfolio Performance import: the target of a Baader Bank document is chosen per *Stamm-Nr.* and *Portfolio*
   (printed on every finanzen invest document, also on tax statements without a *Depot-Nr.*), else per *Depot-Nr.*;
   targets chosen per *Depot-Nr.* before are asked for once more

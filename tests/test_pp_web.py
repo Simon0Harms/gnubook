@@ -412,3 +412,17 @@ def test_import_batches_stay_below_the_upload_limit(monkeypatch):
     assert [[n for n, _ in f] for f, _ in batches] == [["a.pdf", "b.pdf"], ["c.pdf"], ["d.pdf"], ["e.pdf"]]
     assert [len(t) for _, t in batches] == [1, 0, 0, 0]  # the lists go with the first request only
     assert ppweb._import_batches([], [("t.csv", b"y")]) == [([], [("t.csv", b"y")])]
+
+
+def test_import_apply_keeps_every_part_and_sets_the_target_for_all(web, fake):
+    a, b = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
+    parts = f"{a},{b}"
+    page = web.get(f"/pp/import?session={parts}").text
+    assert f'name="sessions" value="{parts}"' in page
+    r = web.post(f"/pp/import/{a}/apply", data={"csrf_token": web.csrf, "sessions": parts, "force": ["1"]})
+    assert r.headers["Location"].endswith("session=" + parts)
+    assert fake.calls[-1] == ("apply", a, ["1"], None, None, None)  # forcing concerns the one part only
+    r = web.post(f"/pp/import/{b}/apply", data={"csrf_token": web.csrf, "sessions": parts + ",../x",
+                                                 "portfolio": "P", "account": "A", "extractor": "Bank"})
+    assert [c[1:] for c in fake.calls[-2:]] == [(a, [], "P", "A", "Bank"), (b, [], "P", "A", "Bank")]
+    assert "session=" + parts in r.headers["Location"]

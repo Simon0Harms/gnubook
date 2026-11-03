@@ -269,6 +269,15 @@ c4 = call("POST", "/clients/xfer/import", {"csv": [{"name": "same.csv", "data": 
           "portfolio": PA, "account": KONTO, "apply": True})
 st4 = [i["status"] for i in c4["items"] if i["kind"] != "SecurityItem"]
 assert st4 == ["WARNING", "OK"] and c4["imported"] == 1, c4["items"]
+# a bank with a target is imported although another one of the same upload still waits for its choice
+STATEMENT2 = STATEMENT.replace("12345678", "12345680").replace("05.04.2022", "06.05.2022")
+doc2 = base64.b64encode(STATEMENT2.encode()).decode()
+waits = HEAD + "2022-09-01;10:00:00;BUY;DE0008430026;843002;Muster Rück AG;1;300.00;0.00;0.00;EUR;Beleg 777777\n"
+mx = call("POST", "/clients/xfer/import", {"files": [{"name": "mixed.txt", "data": doc2}],
+          "csv": [{"name": "waits.csv", "data": base64.b64encode(waits.encode()).decode()}], "apply": True})
+by_file = {i["file"]: i["status"] for i in mx["items"] if i["kind"] != "SecurityItem"}
+assert mx["needsTarget"] and mx["imported"] == 1, mx
+assert by_file == {"mixed.txt": "OK", "waits.csv": "ERROR"}, mx["items"]
 bad = base64.b64encode(b"date;type;shares;value\n2022-13-01;BUY;1;10.00\n").decode()
 cb = call("POST", "/clients/xfer/import", {"csv": [{"name": "kaputt.csv", "data": bad}], "apply": False})
 assert cb["fileErrors"] and not [i for i in cb["items"] if i["kind"] != "SecurityItem"], cb

@@ -1275,4 +1275,5 @@ EN = {
     'Nicht nach PP übernommen: {a0}': 'Not taken into PP: {a0}',
     'Teil {a0} von {a1} nicht importiert: {a2}': 'Part {a0} of {a1} not imported: {a2}',
     'Upload in {a0} Teilen an Portfolio Performance übergeben.': 'Upload passed to Portfolio Performance in {a0} parts.',
+    'Teil {a0}: {a1}': 'Part {a0}: {a1}',
 }
