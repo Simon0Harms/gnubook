@@ -1273,4 +1273,6 @@ EN = {
     '{a0} ist mehreren PP-Konten zugeordnet – so ist nicht klar, wohin die Ein-/Auszahlungen gehören.': '{a0} is assigned to several PP accounts – so it is unclear where the deposits/removals belong.',
     'Probelauf nach PP: {a0} Ein-/Auszahlungen neu, {a1} zu ändern, {a2} zu löschen (davon {a3} vorhandene Einlagen/Entnahmen ersetzt).': 'Dry run to PP: {a0} deposits/removals new, {a1} to change, {a2} to delete (of these {a3} existing deposits/removals replaced).',
     'Nicht nach PP übernommen: {a0}': 'Not taken into PP: {a0}',
+    'Teil {a0} von {a1} nicht importiert: {a2}': 'Part {a0} of {a1} not imported: {a2}',
+    'Upload in {a0} Teilen an Portfolio Performance übergeben.': 'Upload passed to Portfolio Performance in {a0} parts.',
 }

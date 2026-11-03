@@ -386,7 +386,7 @@ def resolve():
 @login_required
 def pdf_import():
     svc = _svc()
-    result = None
+    results = []
     try:
         summary = _summary(svc)
         if request.method == "POST":
@@ -410,24 +410,57 @@ def pdf_import():
                 if not problems:
                     flash(_("Bitte mindestens eine PDF-, CSV- oder Excel-Datei oder ein Archiv auswählen."), "warning")
                 return redirect(url_for("pp.pdf_import"))
-            result = svc.client.import_pdfs(svc.cid, files, portfolio=request.form.get("portfolio") or None,
-                                            account=request.form.get("account") or None,
-                                            auto_feed=request.form.get("auto_feed") == "1", csv=tables)
-            session["pp_import"] = result.get("session")
-            _after_import(svc, result)
-            return redirect(url_for("pp.pdf_import", session=result.get("session")))
-        sid = request.args.get("session")
-        if sid:
+            batches = _import_batches(files, tables)
+            sids, total = [], {"imported": 0, "needsTarget": False}
+            for n, (batch_files, batch_tables) in enumerate(batches, start=1):
+                try:
+                    part = svc.client.import_pdfs(svc.cid, batch_files, portfolio=request.form.get("portfolio") or None,
+                                                  account=request.form.get("account") or None,
+                                                  auto_feed=request.form.get("auto_feed") == "1", csv=batch_tables)
+                except PPCoreError as exc:
+                    if not sids:
+                        raise
+                    flash(_("Teil {a0} von {a1} nicht importiert: {a2}", a0=n, a1=len(batches), a2=exc), "danger")
+                    break
+                if part.get("session"):
+                    sids.append(part["session"])
+                total["imported"] += int(part.get("imported") or 0)
+                total["needsTarget"] = total["needsTarget"] or bool(part.get("needsTarget"))
+            if len(batches) > 1:
+                flash(_("Upload in {a0} Teilen an Portfolio Performance übergeben.", a0=len(batches)), "info")
+            session["pp_import"] = sids[-1] if sids else None
+            _after_import(svc, total)
+            return redirect(url_for("pp.pdf_import", session=",".join(sids)))
+        for sid in [s for s in (request.args.get("session") or "").split(",") if s][:IMPORT_MAX_BATCHES]:
             try:
-                result = svc.client.import_session(svc.cid, sid)
+                results.append(svc.client.import_session(svc.cid, sid))
             except PPCoreError as exc:
                 if exc.status != 404:
                     raise
                 flash(_("Das Importergebnis ist nicht mehr verfügbar."), "info")
     except PPCoreError as exc:
         return _pp_error(exc)
-    return render_template("pp/import.html", summary=summary, result=result, IMPORT_STATUS=IMPORT_STATUS,
+    return render_template("pp/import.html", summary=summary, results=results, IMPORT_STATUS=IMPORT_STATUS,
                            ACCEPT=archive.ACCEPT)
+
+
+IMPORT_BATCH_BYTES = 32 * 1024 * 1024  # raw bytes per request: base64 adds a third, pp-core takes 64 MB by default
+IMPORT_MAX_BATCHES = 50
+
+
+def _import_batches(files: list[tuple[str, bytes]], tables: list[tuple[str, bytes]]) -> list[tuple[list, list]]:
+    """Documents split into requests of at most IMPORT_BATCH_BYTES each (a larger single file goes alone), so that
+    pp-core's upload limit (max_upload_mb) is not hit. The CSV/Excel lists go with the first request."""
+    batches, cur, size = [], [], sum(len(d) for _, d in tables)
+    for name, data in files:
+        if cur and size + len(data) > IMPORT_BATCH_BYTES:
+            batches.append(cur)
+            cur, size = [], 0
+        cur.append((name, data))
+        size += len(data)
+    if cur or not batches:
+        batches.append(cur)
+    return [(b, tables if i == 0 else []) for i, b in enumerate(batches)][:IMPORT_MAX_BATCHES]
 
 
 def _after_import(svc, result: dict):

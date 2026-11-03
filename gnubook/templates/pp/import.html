@@ -47,9 +47,9 @@
   </div>
 </div>
 
-{% if result %}
+{% for result in results %}
 <div class="card mb-4">
-  <div class="card-header"><h3 class="card-title">{{ _("Ergebnis") }}</h3>
+  <div class="card-header"><h3 class="card-title">{{ _("Ergebnis") }}{% if results|length > 1 %} {{ loop.index }}/{{ results|length }}{% endif %}</h3>
     <div class="card-tools small">{{ _("{n} übernommen", n=result.imported) }}</div></div>
   <div class="card-body">
     {% for e in result.fileErrors %}
@@ -114,6 +114,6 @@
     {% endif %}
   </div>
 </div>
-{% endif %}
+{% endfor %}
 {% endif %}
 {% endblock %}

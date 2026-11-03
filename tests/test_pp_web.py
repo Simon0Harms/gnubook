@@ -401,3 +401,14 @@ def test_new_portfolio(web, fake):
     # no open redirect
     r = web.post("/pp/portfolios", data={"csrf_token": web.csrf, "name": "", "next": "https://evil.example/"})
     assert r.headers["Location"].endswith("/pp/settings")
+
+
+def test_import_batches_stay_below_the_upload_limit(monkeypatch):
+    from gnubook.web import pp as ppweb
+
+    monkeypatch.setattr(ppweb, "IMPORT_BATCH_BYTES", 100)
+    files = [("a.pdf", b"x" * 60), ("b.pdf", b"x" * 30), ("c.pdf", b"x" * 50), ("d.pdf", b"x" * 150), ("e.pdf", b"x")]
+    batches = ppweb._import_batches(files, [("t.csv", b"y" * 5)])
+    assert [[n for n, _ in f] for f, _ in batches] == [["a.pdf", "b.pdf"], ["c.pdf"], ["d.pdf"], ["e.pdf"]]
+    assert [len(t) for _, t in batches] == [1, 0, 0, 0]  # the lists go with the first request only
+    assert ppweb._import_batches([], [("t.csv", b"y")]) == [([], [("t.csv", b"y")])]
