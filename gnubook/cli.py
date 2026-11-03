@@ -692,3 +692,69 @@ def serve(ctx, host, port):
 
 if __name__ == "__main__":
     main()
+
+
+@main.command("pp-delete")
+@book_option
+@click.option("--portfolio", "portfolio_name", help="Depot in PP (Name), dessen Buchungen gelöscht werden")
+@click.option("--account", "account_name", help="Verrechnungskonto in PP (Name): auch dessen eigene Buchungen "
+                                                "(Dividenden, Gebühren, ...) löschen")
+@click.option("--from", "day_from", required=True, type=click.DateTime(["%Y-%m-%d"]), help="ab Tag (JJJJ-MM-TT)")
+@click.option("--to", "day_to", type=click.DateTime(["%Y-%m-%d"]), help="bis Tag einschließlich (JJJJ-MM-TT)")
+@click.option("--yes", is_flag=True, help="wirklich löschen (ohne: nur auflisten)")
+@click.pass_context
+def pp_delete(ctx, book_ref, portfolio_name, account_name, day_from, day_to, yes):
+    """Buchungen eines Depots/Kontos in Portfolio Performance für einen Zeitraum löschen.
+
+    Ohne --yes wird nur aufgelistet. Käufe/Verkäufe werden samt Gegenbuchung im Konto gelöscht. Danach in gnubook
+    synchronisieren: in GnuCash unveränderte Buchungen werden dort ebenfalls entfernt."""
+    from .pp.client import PPCoreClient, PPCoreError
+
+    if not portfolio_name and not account_name:
+        raise click.ClickException("--portfolio und/oder --account angeben.")
+    reg = _registry(ctx)
+    if not reg.cfg.pp.url:
+        raise click.ClickException("[pp] url fehlt in config.toml.")
+    client = PPCoreClient(reg.cfg.pp.url, reg.cfg.pp.token, reg.cfg.pp.timeout)
+    cid = _book_ctx(reg, book_ref).pp.cid
+    try:
+        export = client.export(cid, prices="none")
+    except PPCoreError as exc:
+        raise click.ClickException(str(exc))
+
+    def owner(kind, name):
+        if not name:
+            return None
+        hits = [o for o in export.get(kind, []) if o["name"].casefold() == name.casefold()]
+        if len(hits) != 1:
+            raise click.ClickException(f"{name!r}: {len(hits)} Treffer – vorhanden: "
+                                       + ", ".join(o["name"] for o in export.get(kind, [])))
+        return hits[0]["uuid"]
+
+    owners = {u for u in (owner("portfolios", portfolio_name), owner("accounts", account_name)) if u}
+    lo, hi = day_from.date().isoformat(), (day_to.date().isoformat() if day_to else "9999-12-31")
+    securities = {s["uuid"]: s["name"] for s in export.get("securities", [])}
+    todo, covered = [], set()
+    # portfolio transactions first: deleting them also deletes their cross entry in the cash account
+    for t in sorted(export.get("transactions", []), key=lambda t: (t["owner"] not in owners or t.get("shares") is None,
+                                                                  t["date"])):
+        if t["owner"] not in owners or not (lo <= t["date"][:10] <= hi) or t["uuid"] in covered:
+            continue
+        todo.append(t)
+        cross = t.get("cross") or {}
+        if cross.get("uuid"):
+            covered.add(cross["uuid"])
+    for t in sorted(todo, key=lambda t: t["date"]):
+        click.echo(f"{t['date'][:10]}  {t['kind']:<20} {t.get('shares') or '':>10}  {t['amount']:>12} "
+                   f"{t['currency']}  {securities.get(t.get('security'), '')}")
+    click.echo(f"{len(todo)} Buchungen{'' if yes else ' würden gelöscht (Probelauf – mit --yes löschen)'}.")
+    if yes and todo:
+        done = 0
+        for t in todo:
+            try:
+                client.delete_transaction(cid, t["uuid"])
+                done += 1
+            except PPCoreError as exc:
+                click.echo(f"  {t['uuid']}: {exc}", err=True)
+        click.echo(f"{done} gelöscht. Jetzt in gnubook „Jetzt synchronisieren“ ausführen.")
+    reg.dispose()
