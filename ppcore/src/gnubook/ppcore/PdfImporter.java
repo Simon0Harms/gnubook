@@ -40,6 +40,7 @@ import name.abuchen.portfolio.datatransfer.actions.InsertAction;
 import name.abuchen.portfolio.datatransfer.csv.CSVExtractor;
 import name.abuchen.portfolio.datatransfer.csv.CSVImporter;
 import name.abuchen.portfolio.datatransfer.pdf.PDFImportAssistant;
+import name.abuchen.portfolio.datatransfer.pdf.PDFInputFile;
 import name.abuchen.portfolio.model.Account;
 import name.abuchen.portfolio.model.Annotated;
 import name.abuchen.portfolio.model.BuySellEntry;
@@ -62,6 +63,13 @@ final class PdfImporter
 {
     private static final Duration KEEP = Duration.ofHours(6);
     static final String CSV_LABEL = "CSV: "; //$NON-NLS-1$
+    /**
+     * One PP extractor reads the documents of several brokers (e.g. Baader Bank for Scalable Capital and finanzen.net
+     * zero), so the target is chosen per extractor and securities account number of the document.
+     */
+    static final String DEPOT_LABEL = " · Depot "; //$NON-NLS-1$
+    private static final java.util.regex.Pattern DEPOT_NR = java.util.regex.Pattern
+                    .compile("Depot(?:-?Nr\\.?|nummer)\\s*:?\\s*([0-9]{5,})"); //$NON-NLS-1$
 
     /** Reads a canonical CSV file (see extract) with PP's CSV importer for securities account transactions. */
     @SuppressWarnings({ "unchecked", "rawtypes" })
@@ -309,6 +317,7 @@ final class PdfImporter
                         session.fileErrors.add(Json.obj().with("file", err.getKey().getName()).with("message",
                                         ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage()));
                 Set<String> extractedFiles = new HashSet<>();
+                Map<String, String> depots = depotNumbers(inputs);
                 int i = 0;
                 for (Map.Entry<Extractor, List<Extractor.Item>> r : result.entrySet())
                 {
@@ -318,7 +327,9 @@ final class PdfImporter
                         String file = sourceFile(item);
                         if (file != null)
                             extractedFiles.add(file);
-                        session.entries.add(new Entry(i++, label, file, item));
+                        String depot = file == null ? null : depots.get(file);
+                        session.entries.add(new Entry(i++, depot == null ? label : label + DEPOT_LABEL + depot, file,
+                                        item));
                     }
                 }
                 for (Map.Entry<String, File> c : csvInputs.entrySet())
@@ -725,6 +736,30 @@ final class PdfImporter
         if (subject instanceof Transaction t)
             return t;
         return null;
+    }
+
+    /** File name → securities account number printed on the PDF (files without one are left out). */
+    private static Map<String, String> depotNumbers(Collection<File> inputs)
+    {
+        Map<String, String> depots = new HashMap<>();
+        for (File f : inputs)
+        {
+            if (!f.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".pdf")) //$NON-NLS-1$
+                continue;
+            try
+            {
+                PDFInputFile in = new PDFInputFile(f);
+                in.convertPDFtoText();
+                java.util.regex.Matcher m = DEPOT_NR.matcher(in.getText());
+                if (m.find())
+                    depots.put(f.getName(), m.group(1));
+            }
+            catch (IOException | RuntimeException e)
+            {
+                // no number: the target stays the one of the extractor
+            }
+        }
+        return depots;
     }
 
     private static String sourceFile(Extractor.Item item)
