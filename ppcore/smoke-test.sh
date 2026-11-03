@@ -240,6 +240,26 @@ cd = call("POST", f"/clients/xfer/import/{ci['session']}/apply", {"portfolio": P
 status = {i.get("note") or i.get("kind"): i["status"] for i in cd["items"] if i["kind"] != "SecurityItem"}
 assert cd["imported"] == 3 and not cd["needsTarget"], cd
 assert sorted(i["status"] for i in cd["items"] if i["kind"] != "SecurityItem") == ["OK", "OK", "OK", "WARNING"], cd["items"]
+# identical trades of one day with document numbers (issue #2): one existing identical transaction without a
+# number explains exactly one of them, the others are new; a second import finds every number in the file
+KONTO = "acc00000-0000-4000-8000-000000000001"
+ROW = "2022-08-01;{t};BUY;DE0008430026;843002;Muster Rück AG;1;300.00;0.00;0.00;EUR;{note}\n"
+HEAD = "date;time;type;isin;wkn;name;shares;value;fees;taxes;currency;note\n"
+one = base64.b64encode((HEAD + ROW.format(t="09:00:00", note="ohne Nummer")).encode()).decode()
+c1 = call("POST", "/clients/xfer/import", {"csv": [{"name": "one.csv", "data": one}], "portfolio": PA,
+          "account": KONTO, "apply": True})
+assert c1["imported"] == 1, c1
+twins = HEAD + "".join(ROW.format(t=f"1{i}:00:00", note=f"finanzen.net zero Depot 1, Beleg 90000{i}, Kauf")
+                       for i in range(1, 4))
+tw = base64.b64encode(twins.encode()).decode()
+c2 = call("POST", "/clients/xfer/import", {"csv": [{"name": "twins.csv", "data": tw}], "portfolio": PA,
+          "account": KONTO, "apply": True})
+st2 = sorted(i["status"] for i in c2["items"] if i["kind"] != "SecurityItem")
+assert c2["imported"] == 2 and st2 == ["OK", "OK", "WARNING"], c2["items"]
+c3 = call("POST", "/clients/xfer/import", {"csv": [{"name": "twins.csv", "data": tw}], "portfolio": PA,
+          "account": KONTO, "apply": True})
+st3 = [i["status"] for i in c3["items"] if i["kind"] != "SecurityItem"]
+assert c3["imported"] == 0 and st3 == ["WARNING"] * 3, c3["items"]
 bad = base64.b64encode(b"date;type;shares;value\n2022-13-01;BUY;1;10.00\n").decode()
 cb = call("POST", "/clients/xfer/import", {"csv": [{"name": "kaputt.csv", "data": bad}], "apply": False})
 assert cb["fileErrors"] and not [i for i in cb["items"] if i["kind"] != "SecurityItem"], cb

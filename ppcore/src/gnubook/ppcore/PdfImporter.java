@@ -46,6 +46,7 @@ import name.abuchen.portfolio.model.Annotated;
 import name.abuchen.portfolio.model.BuySellEntry;
 import name.abuchen.portfolio.model.Client;
 import name.abuchen.portfolio.model.Portfolio;
+import name.abuchen.portfolio.model.PortfolioTransaction;
 import name.abuchen.portfolio.model.Security;
 import name.abuchen.portfolio.model.Transaction;
 import name.abuchen.portfolio.model.Transaction.Unit;
@@ -510,6 +511,19 @@ final class PdfImporter
         List<ImportAction> actions = List.of(new CheckTransactionDateAction(), new CheckValidTypesAction(),
                         new CheckSecurityRelatedValuesAction(), new DetectDuplicatesAction(client),
                         new CheckCurrenciesAction(), new CheckForexGrossValueAction());
+        // items with a document number: own duplicate check instead of PP's (DocumentDuplicates)
+        List<ImportAction> numberedActions = actions.stream().filter(a -> !(a instanceof DetectDuplicatesAction))
+                        .toList();
+        List<Map.Entry<Integer, PortfolioTransaction>> numbered = new ArrayList<>();
+        for (Entry e : session.entries)
+        {
+            if (e.imported || e.item.isFailure() || e.item.isSkipped())
+                continue;
+            PortfolioTransaction t = DocumentDuplicates.transaction(e.item.getSubject());
+            if (t != null && DocumentDuplicates.number(t.getNote()) != null)
+                numbered.add(Map.entry(e.index, t));
+        }
+        Map<Integer, Status> documentStatus = DocumentDuplicates.check(client, numbered);
         for (Entry e : session.entries)
         {
             if (e.imported)
@@ -532,7 +546,10 @@ final class PdfImporter
                 continue;
             }
             TargetContext ctx = new TargetContext(client, session.targets.get(e.extractor));
-            for (ImportAction action : actions)
+            boolean ownCheck = documentStatus.containsKey(e.index);
+            if (ownCheck)
+                e.add(documentStatus.get(e.index));
+            for (ImportAction action : ownCheck ? numberedActions : actions)
             {
                 try
                 {
