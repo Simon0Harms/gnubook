@@ -29,9 +29,9 @@ import name.abuchen.portfolio.model.PortfolioTransaction;
  * identical new items only as many are duplicates as there are such transactions.</li>
  * </ul>
  * Number kinds: "Vorgangs-Nr.: …" (PDF documents of Baader Bank / finanzen invest) and "Beleg …" (finanzen invest
- * Excel list, see gnubook/pp/csvimport.py). Numbers of different kinds are not compared with each other as long as it
- * is not confirmed that both are the same number; such pairs fall back to the 1:1 matching, which never books a
- * trade twice.
+ * Excel list, see gnubook/pp/csvimport.py) are the same number and compared with each other. A future number kind
+ * that is not known to match gets a kind of its own: pairs of different kinds fall back to the 1:1 matching, which
+ * never books a trade twice.
  *
  * Items whose subject is not a securities account transaction, or that carry no number, keep PP's check. If PP gets
  * a 1:1 matching of its own, the counting part here can go; the number part stays more precise.
@@ -61,7 +61,9 @@ final class DocumentDuplicates
         Matcher m = NUMBER.matcher(note);
         if (!m.find())
             return null;
-        return new Number(m.group(1) != null ? "V" : "B", m.group(3)); //$NON-NLS-1$ //$NON-NLS-2$
+        // "Vorgangs-Nr." of the PDF and "Beleg" (BELEG-D) of the Excel list are the same number (checked with a
+        // settlement of 13.10.2026 and the purchase it refers to), so both are one kind
+        return new Number(m.group(1) != null || m.group(2) != null ? "baader" : "other", m.group(3)); //$NON-NLS-1$ //$NON-NLS-2$
     }
 
     /** The securities account transaction of an item (buy/sell or delivery), or null. */

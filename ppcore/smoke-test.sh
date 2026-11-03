@@ -260,6 +260,15 @@ c3 = call("POST", "/clients/xfer/import", {"csv": [{"name": "twins.csv", "data":
           "account": KONTO, "apply": True})
 st3 = [i["status"] for i in c3["items"] if i["kind"] != "SecurityItem"]
 assert c3["imported"] == 0 and st3 == ["WARNING"] * 3, c3["items"]
+# the PDF's Vorgangs-Nr. and the Excel list's Beleg are one number: the statement above (Vorgangs-Nr. 12345678)
+# finds its row of the list, an identical row with another number is new
+same = HEAD + (
+    "2022-04-05;16:54:29;BUY;DE0008430026;843002;Muster Rück AG;2;600.00;0.00;0.00;EUR;Beleg 12345678, Kauf\n"
+    "2022-04-05;17:30:00;BUY;DE0008430026;843002;Muster Rück AG;2;600.00;0.00;0.00;EUR;Beleg 12345679, Kauf\n")
+c4 = call("POST", "/clients/xfer/import", {"csv": [{"name": "same.csv", "data": base64.b64encode(same.encode()).decode()}],
+          "portfolio": PA, "account": KONTO, "apply": True})
+st4 = [i["status"] for i in c4["items"] if i["kind"] != "SecurityItem"]
+assert st4 == ["WARNING", "OK"] and c4["imported"] == 1, c4["items"]
 bad = base64.b64encode(b"date;type;shares;value\n2022-13-01;BUY;1;10.00\n").decode()
 cb = call("POST", "/clients/xfer/import", {"csv": [{"name": "kaputt.csv", "data": bad}], "apply": False})
 assert cb["fileErrors"] and not [i for i in cb["items"] if i["kind"] != "SecurityItem"], cb
