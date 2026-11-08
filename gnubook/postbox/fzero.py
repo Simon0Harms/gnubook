@@ -54,6 +54,9 @@ TZ = ZoneInfo("Europe/Berlin")
 # consent buttons, most privacy-friendly first; only clicked inside a cookie/consent container, before the login
 CONSENT = (re.compile(r"^\s*(nur (technisch )?(notwendige|erforderliche)|alle ablehnen|ablehnen)", re.I),
            re.compile(r"^\s*(alle akzeptieren|alle cookies akzeptieren|akzeptieren|zustimmen|einverstanden)", re.I))
+# frames that hold a consent dialog (URL or attributes of the <iframe> element)
+CONSENT_FRAME = re.compile(r"privacy-mgmt\.com|sp_message_iframe|consent|cookie|usercentrics|onetrust|didomi|"
+                           r"sourcepoint|cmp", re.I)
 LOGOUT = re.compile(r"^\s*(abmelden|ausloggen|logout|log out)\s*$", re.I)
 APPROVAL = re.compile(r"secure ?tan|freigabe|freigeben|tan[- ]?(eingabe|nummer)|bestätigungscode|sicherheitscode|"
                       r"zwei-faktor|2-faktor|push-nachricht", re.I)
@@ -415,6 +418,8 @@ class FinanzenZeroFetcher:
         page.locator(field_sel).first.press("Enter")
 
     def _answer_consent(self, page) -> bool:
+        """Answers a cookie banner – in the page itself or in a CMP iframe (e.g. SourcePoint on
+        cdn.privacy-mgmt.com, which covers the whole login page and swallows the login click)."""
         for pattern in CONSENT:
             buttons = page.get_by_role("button", name=pattern)
             try:
@@ -425,7 +430,32 @@ class FinanzenZeroFetcher:
                         return True
             except Exception:  # noqa: BLE001 – a banner that vanishes while clicking is fine
                 continue
+        frames = [f for f in page.frames if f is not page.main_frame and self._consent_frame(f)]
+        for pattern in CONSENT:
+            for frame in frames:
+                try:
+                    buttons = frame.get_by_role("button", name=pattern)
+                    for i in range(min(buttons.count(), 5)):
+                        b = buttons.nth(i)
+                        if b.is_visible():
+                            b.click(timeout=5000)
+                            return True
+                except Exception:  # noqa: BLE001 – a frame that detaches while clicking is fine
+                    continue
         return False
+
+    @staticmethod
+    def _consent_frame(frame) -> bool:
+        """Is the frame a cookie/consent dialog? Judged by its URL and its <iframe> element (the
+        content of a cross-origin frame has no consent container to look for)."""
+        if CONSENT_FRAME.search(frame.url or ""):
+            return True
+        try:
+            el = frame.frame_element()
+            attrs = " ".join(el.get_attribute(a) or "" for a in ("id", "name", "title", "class"))
+        except Exception:  # noqa: BLE001 – detached frame
+            return False
+        return bool(CONSENT_FRAME.search(attrs))
 
     def _logout(self, page):
         try:

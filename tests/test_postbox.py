@@ -836,3 +836,33 @@ def test_widening_belege_ab_relists_only_when_documents_can_be_missing(reg, book
     web.post("/postbox/source", data=dict(form, password="", since="2026-09-01", rescan_from=""))
     web.post("/postbox/source", data=dict(form, password="", since="2015-01-01", rescan_from=""))
     assert SourceSettings.from_json(reg.system.postbox_source(book.id, KIND)["settings"]).rescan_from == ""
+
+
+def test_consent_in_cmp_iframe_is_declined():
+    """SourcePoint renders its banner in an iframe that covers the login page – 'ablehnen' must be
+    clicked there, before the login (otherwise the login click lands on the banner)."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from gnubook.postbox.fzero import FinanzenZeroFetcher
+
+    inner = ("<button onclick=parent.done=this.textContent>Einstellungen</button>"
+             "<button onclick=parent.done=this.textContent>ablehnen</button>"
+             "<button onclick=parent.done=this.textContent>Alle akzeptieren</button>")
+    html = (f"<form><input><input type=password><button>EINLOGGEN</button></form>"
+            f"<div id='sp_message_container_1' style='position:fixed;inset:0'>"
+            f"<iframe id='sp_message_iframe_1' srcdoc=\"{inner}\"></iframe></div>")
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = p.chromium.launch()
+        except Exception as exc:  # noqa: BLE001 – no browser installed
+            pytest.skip(f"chromium not available: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            page.locator("#sp_message_iframe_1").wait_for()
+            assert FinanzenZeroFetcher._answer_consent(FinanzenZeroFetcher, page)
+            assert page.evaluate("window.done") == "ablehnen"
+            page.set_content("<form><input><input type=password><button>EINLOGGEN</button></form>"
+                             "<iframe id='other' srcdoc='<button>ablehnen</button>'></iframe>")
+            assert not FinanzenZeroFetcher._answer_consent(FinanzenZeroFetcher, page)
+        finally:
+            browser.close()
