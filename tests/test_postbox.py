@@ -838,12 +838,25 @@ def test_widening_belege_ab_relists_only_when_documents_can_be_missing(reg, book
     assert SourceSettings.from_json(reg.system.postbox_source(book.id, KIND)["settings"]).rescan_from == ""
 
 
+
+def _consent_fetcher():
+    from gnubook.postbox.fzero import FinanzenZeroFetcher
+    f = FinanzenZeroFetcher.__new__(FinanzenZeroFetcher)
+    f._consent_settings = False
+    return f
+
+
+def _browser(sync_api, p):
+    try:
+        return p.chromium.launch()
+    except Exception as exc:  # noqa: BLE001 – no browser installed
+        pytest.skip(f"chromium not available: {exc}")
+
+
 def test_consent_in_cmp_iframe_is_declined():
     """SourcePoint renders its banner in an iframe that covers the login page – 'ablehnen' must be
     clicked there, before the login (otherwise the login click lands on the banner)."""
     sync_api = pytest.importorskip("playwright.sync_api")
-    from gnubook.postbox.fzero import FinanzenZeroFetcher
-
     inner = ("<button onclick=parent.done=this.textContent>Einstellungen</button>"
              "<button onclick=parent.done=this.textContent>ablehnen</button>"
              "<button onclick=parent.done=this.textContent>Alle akzeptieren</button>")
@@ -851,18 +864,45 @@ def test_consent_in_cmp_iframe_is_declined():
             f"<div id='sp_message_container_1' style='position:fixed;inset:0'>"
             f"<iframe id='sp_message_iframe_1' srcdoc=\"{inner}\"></iframe></div>")
     with sync_api.sync_playwright() as p:
-        try:
-            browser = p.chromium.launch()
-        except Exception as exc:  # noqa: BLE001 – no browser installed
-            pytest.skip(f"chromium not available: {exc}")
+        browser = _browser(sync_api, p)
         try:
             page = browser.new_page()
             page.set_content(html)
             page.locator("#sp_message_iframe_1").wait_for()
-            assert FinanzenZeroFetcher._answer_consent(FinanzenZeroFetcher, page)
+            assert _consent_fetcher()._answer_consent(page)
             assert page.evaluate("window.done") == "ablehnen"
             page.set_content("<form><input><input type=password><button>EINLOGGEN</button></form>"
                              "<iframe id='other' srcdoc='<button>ablehnen</button>'></iframe>")
-            assert not FinanzenZeroFetcher._answer_consent(FinanzenZeroFetcher, page)
+            assert not _consent_fetcher()._answer_consent(page)
+        finally:
+            browser.close()
+
+
+def test_consent_two_layers_declines_in_settings():
+    """Newer SourcePoint banner: first layer only 'Einstellungen' / 'Alle akzeptieren', the reject
+    button ('Nur notwendige', class sp_choice_type_REJECT_ALL) is in the second layer."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    layer2 = ("<button class=sp_choice_type_SAVE_AND_EXIT onclick=parent.done=this.textContent>Auswahl speichern</button>"
+              "<button class=sp_choice_type_REJECT_ALL onclick=parent.done=this.textContent>Nur notwendige</button>"
+              "<button class=sp_choice_type_ACCEPT_ALL onclick=parent.done=this.textContent>Alle akzeptieren</button>")
+    layer1 = ("<button onclick=parent.openLayer2()>Einstellungen</button>"
+              "<button onclick=parent.done=this.textContent>Alle akzeptieren</button>")
+    html = ("<form><input><input type=password><button>EINLOGGEN</button></form>"
+            f"<div id=c style='position:fixed;inset:0'><iframe id=sp_message_iframe_1 srcdoc=\"{layer1}\"></iframe></div>"
+            "<script>function openLayer2(){document.getElementById('c').innerHTML="
+            "'<iframe id=sp_message_iframe_2 srcdoc=\"'+window.L2+'\"></iframe>'}</script>")
+    with sync_api.sync_playwright() as p:
+        browser = _browser(sync_api, p)
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            page.evaluate("l => window.L2 = l", layer2)
+            page.locator("#sp_message_iframe_1").wait_for()
+            f = _consent_fetcher()
+            assert f._answer_consent(page)               # opens the settings, accepts nothing
+            assert page.evaluate("window.done || null") is None
+            page.locator("#sp_message_iframe_2").wait_for()
+            assert f._answer_consent(page)
+            assert page.evaluate("window.done") == "Nur notwendige"
         finally:
             browser.close()

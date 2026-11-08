@@ -57,6 +57,8 @@ CONSENT = (re.compile(r"^\s*(nur (technisch )?(notwendige|erforderliche)|alle ab
 # frames that hold a consent dialog (URL or attributes of the <iframe> element)
 CONSENT_FRAME = re.compile(r"privacy-mgmt\.com|sp_message_iframe|consent|cookie|usercentrics|onetrust|didomi|"
                            r"sourcepoint|cmp", re.I)
+# second-layer link of a consent banner without a reject button on the first layer
+CONSENT_SETTINGS = re.compile(r"^\s*(einstellungen|cookie-einstellungen|optionen|anpassen)\s*$", re.I)
 LOGOUT = re.compile(r"^\s*(abmelden|ausloggen|logout|log out)\s*$", re.I)
 APPROVAL = re.compile(r"secure ?tan|freigabe|freigeben|tan[- ]?(eingabe|nummer)|bestätigungscode|sicherheitscode|"
                       r"zwei-faktor|2-faktor|push-nachricht", re.I)
@@ -242,6 +244,7 @@ class FinanzenZeroFetcher:
         self.home_dir = Path(home_dir) if home_dir else None
         self.api_paths: list[str] = []
         self._submitted = False
+        self._consent_settings = False
 
     # ------------------------------------------------------------------ run
     def fetch(self, stop: date | None, choose, sink, dry_run: bool = False) -> FetchResult:
@@ -387,7 +390,7 @@ class FinanzenZeroFetcher:
         user_sel = self.cfg.login_user_selector or '[data-gnubook-login="user"]'
         pw_sel = self.cfg.login_password_selector or '[data-gnubook-login="password"]'
         if self.cfg.login_user_selector or marked["user"]:
-            page.locator(user_sel).first.fill(self.login)
+            marked = self._fill(page, user_sel, self.login, "user", marked)
         elif not marked["password"] and not self.cfg.login_password_selector:
             raise LoginFailed(_("Das Anmeldeformular wurde nicht erkannt ([postbox] login_*_selector setzen)."))
         if not marked["password"] and not self.cfg.login_password_selector:
@@ -395,8 +398,28 @@ class FinanzenZeroFetcher:
             self._submit(page, marked)
             page.locator('input[type="password"]').first.wait_for(state="visible", timeout=self.timeout * 1000)
             marked = page.evaluate(JS_MARK)
-        page.locator(pw_sel).first.fill(self.password)
+        marked = self._fill(page, pw_sel, self.password, "password", marked)
         self._submit(page, marked)
+
+    def _fill(self, page, selector: str, value: str, kind: str, marked: dict) -> dict:
+        """Fills a login field. The Angular app re-renders the form (e.g. when a consent banner opens
+        or closes), which drops the data-gnubook-login marks – then the fields are marked again."""
+        own = not getattr(self.cfg, f"login_{kind}_selector")
+        for attempt in range(3):
+            try:
+                page.locator(selector).first.fill(value, timeout=min(10, self.timeout) * 1000)
+                return marked
+            except Exception:  # noqa: BLE001 – field replaced or not there yet
+                if attempt == 2:
+                    raise
+                page.wait_for_timeout(800)
+                if own:
+                    marked = page.evaluate(JS_MARK)
+                    if kind == "password" and marked.get("user") and not self.cfg.login_user_selector:
+                        # the form was rebuilt: the user field has lost its value too
+                        page.locator('[data-gnubook-login="user"]').first.fill(
+                            self.login, timeout=min(10, self.timeout) * 1000)
+        return marked
 
     def _submit(self, page, marked):
         """Clicks the login button; if something covers it (e.g. a banner in a frame), Enter in the last field."""
@@ -431,7 +454,19 @@ class FinanzenZeroFetcher:
             except Exception:  # noqa: BLE001 – a banner that vanishes while clicking is fine
                 continue
         frames = [f for f in page.frames if f is not page.main_frame and self._consent_frame(f)]
-        for pattern in CONSENT:
+        # privacy-friendly order: reject – else open the settings once (the reject button lives there,
+        # e.g. SourcePoint "Einstellungen" → "Alle ablehnen") – only then accept
+        patterns = [CONSENT[0]] + ([] if self._consent_settings else [CONSENT_SETTINGS]) + list(CONSENT[1:])
+        for frame in frames:
+            # SourcePoint marks its buttons by choice type – independent of the label ("Nur notwendige")
+            try:
+                b = frame.locator(".sp_choice_type_REJECT_ALL").first
+                if b.count() and b.is_visible():
+                    b.click(timeout=5000)
+                    return True
+            except Exception:  # noqa: BLE001 – a frame that detaches while clicking is fine
+                continue
+        for pattern in patterns:
             for frame in frames:
                 try:
                     buttons = frame.get_by_role("button", name=pattern)
@@ -439,6 +474,8 @@ class FinanzenZeroFetcher:
                         b = buttons.nth(i)
                         if b.is_visible():
                             b.click(timeout=5000)
+                            if pattern is CONSENT_SETTINGS:
+                                self._consent_settings = True
                             return True
                 except Exception:  # noqa: BLE001 – a frame that detaches while clicking is fine
                     continue
