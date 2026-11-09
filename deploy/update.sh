@@ -20,7 +20,7 @@ GIT="git -C $APP_DIR/src"
 echo ">> Sicherung nach $APP_DIR/backup/gnubook-$STAMP.tar.gz"
 mkdir -p "$APP_DIR/backup"
 EXTRA=""
-for f in gunicorn.conf.py ppcore.properties ppcore.env; do [ -f "$APP_DIR/$f" ] && EXTRA="$EXTRA $f"; done
+for f in gunicorn.conf.py ppcore.properties ppcore.env matrix matrix-store; do [ -e "$APP_DIR/$f" ] && EXTRA="$EXTRA $f"; done
 # the PDFs of the Belegeingang (data/postbox/book-*) are left out: they are in Nextcloud and can take gigabytes
 # shellcheck disable=SC2086
 tar -czf "$APP_DIR/backup/gnubook-$STAMP.tar.gz" -C "$APP_DIR" \
@@ -66,6 +66,11 @@ if install_and_start; then
     # Belegeingang is installed: Playwright, its browser build and the units in step with the new version
     bash "$APP_DIR/src/deploy/install-postbox.sh" --update ||
       echo "!! Belegeingang: Aktualisierung fehlgeschlagen – bitte deploy/install-postbox.sh ausführen" >&2
+  fi
+  if [ -d "$APP_DIR/matrix-venv" ]; then
+    # Matrix bot is installed: matrix-nio and the unit in step, bot restarted with the new code
+    bash "$APP_DIR/src/deploy/install-matrix.sh" --update ||
+      echo "!! Matrix-Bot: Aktualisierung fehlgeschlagen – bitte deploy/install-matrix.sh --update ausführen" >&2
   fi
   echo ">> Aktualisiert auf $($GIT describe --always --tags)"
 else

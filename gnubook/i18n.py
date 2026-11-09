@@ -28,6 +28,15 @@ def gettext(text: str, **kwargs) -> str:
 _ = gettext
 
 
+def translate(lang: str, text: str, **kwargs) -> str:
+    """Like gettext, but in a given language (messages to someone other than the requester, e.g. via Matrix)."""
+    if lang == "en":
+        from .translations_en import EN
+
+        text = EN.get(text, text)
+    return text.format(**kwargs) if kwargs else text
+
+
 def missing(texts) -> list[str]:
     from .translations_en import EN
 

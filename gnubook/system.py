@@ -71,6 +71,11 @@ CREATE TABLE IF NOT EXISTS postbox_sources (
     settings TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, updated_at TEXT,
     UNIQUE (book_id, kind)
 );
+CREATE TABLE IF NOT EXISTS matrix_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, purpose TEXT NOT NULL, code_hash TEXT NOT NULL UNIQUE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires REAL NOT NULL, used_at REAL, status TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL
+);
 """
 
 MIN_PASSWORD = 10
@@ -117,6 +122,11 @@ class SystemDB:
                 c.execute("ALTER TABLE users ADD COLUMN language TEXT NOT NULL DEFAULT ''")
             if "is_demo" not in {r[1] for r in c.execute("PRAGMA table_info(users)")}:
                 c.execute("ALTER TABLE users ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0")
+            if "mxid" not in {r[1] for r in c.execute("PRAGMA table_info(users)")}:  # Matrix link
+                c.execute("ALTER TABLE users ADD COLUMN mxid TEXT NOT NULL DEFAULT ''")
+                c.execute("ALTER TABLE users ADD COLUMN matrix_room TEXT NOT NULL DEFAULT ''")
+                c.execute("ALTER TABLE users ADD COLUMN matrix_notify INTEGER NOT NULL DEFAULT 1")
+            c.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_mxid ON users (lower(mxid)) WHERE mxid <> ''")
         try:
             self.path.chmod(0o600)  # contains database URLs with passwords
         except OSError:
@@ -837,6 +847,7 @@ class Registry:
         return str(self.data / "backup" / f"{slug(name)}.gnucash")
 
     def dispose(self):
+        self._disposed = True  # ends the Matrix inbox thread
         with self._lock:
             for _key, ctx in self._contexts.values():
                 ctx.book.dispose()

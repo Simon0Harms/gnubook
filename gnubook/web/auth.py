@@ -109,7 +109,9 @@ def _safe_next(target: str | None) -> str:
 
 @bp.app_context_processor
 def inject_csrf():
-    return {"csrf_token": csrf_token}
+    from .. import matrix
+
+    return {"csrf_token": csrf_token, "matrix_login_enabled": lambda: matrix.login_enabled(registry().cfg)}
 
 
 @bp.route("/login", methods=["GET", "POST"])
@@ -127,11 +129,7 @@ def login():
         user = system.authenticate(request.form.get("username", "").strip(), request.form.get("password", ""))
         if user is not None:
             system.clear_login_failures(ip)
-            session.clear()
-            session.permanent = True
-            session["user_id"] = user["id"]
-            session["user"] = user["username"]
-            csrf_token()
+            _start_session(user)
             return redirect(_safe_next(request.args.get("next")))
         system.add_login_failure(ip, now)
         time.sleep(0.5)
@@ -140,6 +138,146 @@ def login():
     if _load_user() is not None:
         return redirect(url_for("views.dashboard"))
     return render_template("auth/login.html")
+
+
+def _start_session(user):
+    session.clear()
+    session.permanent = True
+    session["user_id"] = user["id"]
+    session["user"] = user["username"]
+    csrf_token()
+
+
+# ------------------------------------------------------------------------------------------------- Matrix
+@bp.route("/login/matrix", methods=["POST"])
+def login_matrix():
+    """Send a login link to the Matrix chat linked with the user. The answer is always the same (no hint which
+    user names exist or have Matrix linked)."""
+    from .. import matrix
+
+    reg = registry()
+    if not matrix.login_enabled(reg.cfg):
+        abort(404)
+    check_csrf()
+    ip, now = _client_ip(), time.time()
+    if reg.system.login_failures(ip, FAILURE_WINDOW, now) >= MAX_FAILURES:
+        flash(_("Zu viele Fehlversuche – bitte 15 Minuten warten."), "danger")
+        return redirect(url_for("auth.login"))
+    login_name = request.form.get("login", "").strip()[:200]
+    user = matrix.user_for_login(reg, login_name)
+    if user is None:
+        reg.system.add_login_failure(ip, now)  # guessing names counts like a wrong password
+    else:
+        matrix.send_login_link(reg, user)
+    flash(_("Wenn zu „{a0}“ ein Matrix-Konto verknüpft ist, kommt der Login-Link gleich per Matrix.",
+            a0=login_name), "info")
+    return redirect(url_for("auth.login"))
+
+
+@bp.route("/login/matrix/<token>", methods=["GET", "POST"])
+def login_matrix_token(token):
+    """GET only shows a button (link previews of Matrix clients must not use the link up), POST logs in."""
+    from .. import matrix
+
+    reg = registry()
+    if not matrix.login_enabled(reg.cfg):
+        abort(404)
+    ip, now = _client_ip(), time.time()
+    if reg.system.login_failures(ip, FAILURE_WINDOW, now) >= MAX_FAILURES:
+        flash(_("Zu viele Fehlversuche – bitte 15 Minuten warten."), "danger")
+        return render_template("auth/login_link.html", valid=False), 429
+    if request.method == "POST":
+        check_csrf()
+        user = matrix.check_login_token(reg, token, consume=True)
+        if user is None:
+            reg.system.add_login_failure(ip, now)
+            flash(_("Der Login-Link ist ungültig, abgelaufen oder schon benutzt."), "danger")
+            return render_template("auth/login_link.html", valid=False), 404
+        reg.system.clear_login_failures(ip)
+        _start_session(user)
+        return redirect(url_for("views.dashboard"))
+    user = matrix.check_login_token(reg, token, consume=False)
+    if user is None:
+        reg.system.add_login_failure(ip, now)
+        return render_template("auth/login_link.html", valid=False), 404
+    return render_template("auth/login_link.html", valid=True, username=user["username"])
+
+
+def _matrix_or_404():
+    from .. import matrix
+
+    if not matrix.enabled(registry().cfg):
+        abort(404)
+    return matrix
+
+
+@bp.route("/account/matrix/link", methods=["POST"])
+@login_required(book=False, demo_never=True)
+def matrix_link():
+    matrix = _matrix_or_404()
+    code, code_id = matrix.create_link_code(registry(), g.user["id"])
+    session["matrix_link"] = {"code": code, "id": code_id}
+    return redirect(url_for("auth.change_password") + "#matrix")
+
+
+@bp.route("/account/matrix/cancel", methods=["POST"])
+@login_required(book=False, demo_never=True)
+def matrix_cancel():
+    session.pop("matrix_link", None)
+    return redirect(url_for("auth.change_password") + "#matrix")
+
+
+@bp.route("/account/matrix/unlink", methods=["POST"])
+@login_required(book=False, demo_never=True)
+def matrix_unlink():
+    matrix = _matrix_or_404()
+    if matrix.unlink(registry(), g.user["id"]):
+        flash(_("Matrix-Verknüpfung gelöst."), "success")
+    return redirect(url_for("auth.change_password") + "#matrix")
+
+
+@bp.route("/account/matrix/notify", methods=["POST"])
+@login_required(book=False, demo_never=True)
+def matrix_notify():
+    matrix = _matrix_or_404()
+    matrix.set_notify(registry(), g.user["id"], request.form.get("on") == "1")
+    flash(_("Gespeichert."), "success")
+    return redirect(url_for("auth.change_password") + "#matrix")
+
+
+@bp.route("/account/matrix/test", methods=["POST"])
+@login_required(book=False, demo_never=True)
+def matrix_test():
+    matrix = _matrix_or_404()
+    if matrix.send_test(registry(), g.user):
+        flash(_("Testnachricht ist unterwegs – sie sollte in wenigen Sekunden im Matrix-Chat ankommen."), "info")
+    else:
+        flash(_("Kein Matrix-Chat bekannt. Schreib dem Bot „login“ oder verknüpfe neu."), "warning")
+    return redirect(url_for("auth.change_password") + "#matrix")
+
+
+def _matrix_context():
+    """What the account page shows about Matrix."""
+    from .. import matrix
+
+    reg = registry()
+    if not matrix.enabled(reg.cfg) or g.user["is_demo"]:
+        return {"matrix_on": False}
+    pending = session.get("matrix_link")
+    link_state = None
+    if pending:
+        link_state = matrix.link_status(reg, g.user["id"], int(pending.get("id") or 0))
+        if link_state != "pending":
+            session.pop("matrix_link", None)
+            if link_state == "done":
+                flash(_("Matrix-Konto verknüpft."), "success")
+                link_state, pending = None, None
+    user = reg.system.user(g.user["id"])
+    return {"matrix_on": True, "matrix_user": user, "matrix_pending": pending, "matrix_link_state": link_state,
+            "matrix_bot": reg.cfg.matrix.bot_mxid, "matrix_to": matrix.matrix_to(reg.cfg),
+            "matrix_login": matrix.login_enabled(reg.cfg),
+            "matrix_notify_on": reg.cfg.matrix.notify and reg.cfg.postbox.enabled,
+            "matrix_link_minutes": reg.cfg.matrix.link_minutes}
 
 
 @bp.route("/demo", methods=["POST"])
@@ -228,4 +366,4 @@ def change_password():
                 return redirect(url_for("views.dashboard"))
             except UserError as exc:
                 flash(str(exc), "danger")
-    return render_template("auth/password.html")
+    return render_template("auth/password.html", **_matrix_context())

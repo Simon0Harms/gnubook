@@ -44,6 +44,20 @@
         </div>
         <div class="d-grid"><button type="submit" class="btn btn-success">{{ _("Anmelden") }}</button></div>
       </form>
+      {% if matrix_login_enabled() %}
+      <details class="mt-3">
+        <summary class="small text-body-secondary"><i class="bi bi-chat-dots"></i> {{ _("Login-Link per Matrix") }}</summary>
+        <form method="post" action="{{ url_for('auth.login_matrix') }}" class="mt-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="input-group">
+            <input type="text" class="form-control" name="login" required maxlength="200" autocomplete="username"
+                   placeholder="{{ _("Benutzer oder @name:server") }}" aria-label="{{ _("Benutzer oder Matrix-ID") }}">
+            <button class="btn btn-outline-success" type="submit">{{ _("Link senden") }}</button>
+          </div>
+          <div class="form-text">{{ _("Nur für Benutzer, die ihr Matrix-Konto unter „Konto und Sprache“ verknüpft haben.") }}</div>
+        </form>
+      </details>
+      {% endif %}
       {% endif %}
       {% if demo_enabled %}
       <div class="text-center text-body-secondary small my-3">{{ _("oder") }}</div>

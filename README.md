@@ -58,6 +58,8 @@ German format in both languages.
   - every PDF is kept, imported into Portfolio Performance with PP's own importers (possible duplicates wait for a
     decision, as on the PDF import page) and copied into a Nextcloud folder;
   - the state of every document in PP and Nextcloud is shown; failed imports and uploads are repeated.
+- **Matrix** (optional, [docs/MATRIX.md](docs/MATRIX.md)). Users link their Matrix account and then log in with a
+  one-time link sent by a bot, and get failed Belegeingang runs as an (end-to-end encrypted) direct message.
 
 - **Accounts and registers.** The chart of accounts (inspired by [GnuDash](https://github.com/QuirkyTurtle94/GnuDash)) shows the hierarchical tree with balances in GnuCash's sign convention, expand/collapse (remembered per browser), coloured account-type badges, a filter by account class and totals per class. Each account has
   a register with running balance, text, amount and date filters, and paging. Placeholder accounts can be
@@ -188,6 +190,8 @@ Portfolio Performance is optional: `bash /opt/gnubook/src/deploy/install-pp.sh` 
 release and the service `gnubook-ppcore` (see [docs/PORTFOLIO-PERFORMANCE.md](docs/PORTFOLIO-PERFORMANCE.md)).
 The Belegeingang is optional as well: `bash /opt/gnubook/src/deploy/install-postbox.sh` installs Playwright with a
 headless Firefox and the timer `gnubook-postbox.timer` (see [docs/POSTBOX.md](docs/POSTBOX.md)).
+The Matrix bot, too: `bash /opt/gnubook/src/deploy/install-matrix.sh @bot:example.org https://buch.example.org`
+installs the sidecar `gnubook-matrix` (see [docs/MATRIX.md](docs/MATRIX.md)).
 
 ## Configuration
 
@@ -219,6 +223,8 @@ or on the command line. Every value can be overridden with an environment variab
 | `[postbox] enabled`, `browser`, `browsers_path` | Belegeingang on, Playwright browser (`firefox`/`chromium`) and where it is installed. Written by `deploy/install-postbox.sh` |
 | `[postbox] timeout`, `max_clicks`, `download_pause_ms`, `debug_keep` | Seconds per step (45); *Mehr anzeigen* clicks per run (0 = no limit); pause between downloads (400 ms); failed runs kept with screenshot (10) |
 | `[postbox] login_user_selector`, `login_password_selector`, `login_submit_selector` | CSS selectors for the login form, only if the automatic recognition fails |
+| `[matrix] bot_mxid`, `public_url` | Matrix bot for login links and notifications, gnubook's public address; empty = off. Written by `deploy/install-matrix.sh` |
+| `[matrix] login`, `notify`, `link_minutes`, `login_minutes`, `poll_seconds` | Login per link (on), Belegeingang notifications (on), validity of link codes (15 min) and login links (5 min), inbox interval (2 s) |
 | `[[checkpoints.patterns]]` | Own balance-line patterns (`stand` regex, `keyword`), used with every bank profile |
 
 The `[import]` values are defaults. Each book can override them under *Bücher → Bankprofil und Import*.

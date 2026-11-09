@@ -10,7 +10,7 @@
       {% for u, ubooks in rows %}
         {% set ids = ubooks|map(attribute='id')|list %}
         <tr>
-          <td class="fw-semibold">{{ u['username'] }}{% if not u['active'] %} <span class="badge text-bg-secondary">{{ _("gesperrt") }}</span>{% endif %}</td>
+          <td class="fw-semibold">{{ u['username'] }}{% if not u['active'] %} <span class="badge text-bg-secondary">{{ _("gesperrt") }}</span>{% endif %}{% if u['mxid'] %}<div class="small text-body-secondary fw-normal" title="{{ _("Matrix") }}"><i class="bi bi-chat-dots"></i> {{ u['mxid'] }}</div>{% endif %}</td>
           <td colspan="3">
             <form method="post" action="{{ url_for('admin.user_update', user_id=u['id']) }}" class="row g-2 align-items-center">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

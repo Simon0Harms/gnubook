@@ -145,6 +145,24 @@ class PostboxConfig:
 
 
 @dataclass
+class MatrixConfig:
+    # Matrix bot that sends login links and notifications (docs/MATRIX.md); empty = off. Must be the account the
+    # sidecar deploy/matrix/gnubook_matrix_bot.py logs in with (GNUBOOK_MATRIX_USER).
+    bot_mxid: str = ""
+    # public address of gnubook incl. path prefix, e.g. https://buch.example.org – needed for login links
+    public_url: str = ""
+    # log in with a one-time link sent to the linked Matrix account
+    login: bool = True
+    # notify users of a book about failed Belegeingang runs
+    notify: bool = True
+    # minutes a link code (account settings) and a login link stay valid
+    link_minutes: int = 15
+    login_minutes: int = 5
+    # seconds between two looks into the inbox of the sidecar (0 = no background thread, e.g. in tests)
+    poll_seconds: int = 2
+
+
+@dataclass
 class Config:
     book: BookConfig = field(default_factory=BookConfig)
     app: AppConfig = field(default_factory=AppConfig)
@@ -156,6 +174,7 @@ class Config:
     nextcloud: NextcloudConfig = field(default_factory=NextcloudConfig)
     pp: PPConfig = field(default_factory=PPConfig)
     postbox: PostboxConfig = field(default_factory=PostboxConfig)
+    matrix: MatrixConfig = field(default_factory=MatrixConfig)
     source: str = ""
 
     @property
@@ -190,7 +209,8 @@ def load_config(path: str | os.PathLike | None = None, env: dict | None = None) 
                 data = tomllib.load(fh)
             sections = {"book": cfg.book, "app": cfg.app, "api": cfg.api, "import": cfg.importer, "backup": cfg.backup,
                         "postgres": cfg.postgres, "checkpoints": cfg.checkpoints,
-                        "nextcloud": cfg.nextcloud, "pp": cfg.pp, "postbox": cfg.postbox}
+                        "nextcloud": cfg.nextcloud, "pp": cfg.pp, "postbox": cfg.postbox,
+                        "matrix": cfg.matrix}
             for name, values in data.items():
                 if name not in sections:
                     raise ConfigError(f"Unbekannter Konfigurationsabschnitt [{name}] in {cand}")
@@ -203,7 +223,7 @@ def load_config(path: str | os.PathLike | None = None, env: dict | None = None) 
 
     for section_name, obj in (("BOOK", cfg.book), ("APP", cfg.app), ("API", cfg.api), ("IMPORT", cfg.importer), ("BACKUP", cfg.backup),
                               ("POSTGRES", cfg.postgres), ("NEXTCLOUD", cfg.nextcloud), ("PP", cfg.pp),
-                              ("POSTBOX", cfg.postbox)):
+                              ("POSTBOX", cfg.postbox), ("MATRIX", cfg.matrix)):
         for key in vars(obj):
             env_key = f"GNUBOOK_{section_name}_{key.upper()}"
             if env_key in env:

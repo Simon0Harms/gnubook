@@ -175,9 +175,20 @@ class PostboxService:
         (pauses after a failed login). wait: seconds to wait for a run of the same source that is in progress."""
         try:
             with self._lock(kind, wait):
-                return self._run(kind, actor, mode, sync_now, scheduled)
+                out = self._run(kind, actor, mode, sync_now, scheduled)
         except Busy:
             return RunOutcome("busy", _("Für dieses Buch läuft gerade schon ein Abruf."))
+        self._notify(kind, out)
+        return out
+
+    def _notify(self, kind: str, out: RunOutcome):
+        """Failed runs (and processing errors) to the book's users via Matrix, if set up."""
+        try:
+            from .. import matrix
+
+            matrix.notify_postbox(self.reg, self.ctx.id, self.ctx.name, kind, out)
+        except Exception:  # noqa: BLE001 – a notification must never change the run's result
+            log.exception("Matrix-Benachrichtigung")
 
     def progress(self, kind: str, text: str):
         """What the run is doing: for the page and, as a line on stderr, for the journal."""

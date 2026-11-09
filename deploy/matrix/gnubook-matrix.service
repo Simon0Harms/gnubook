@@ -1,0 +1,23 @@
+[Unit]
+Description=gnubook – Matrix bot (login links, notifications)
+After=network-online.target gnubook.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# same user as gnubook: shares data/matrix/inbox and data/matrix/outbox
+User=gnubook
+Group=gnubook
+Environment=GNUBOOK_MATRIX_ENV_FILE=/opt/gnubook/matrix/gnubook-matrix.env
+ExecStart=/opt/gnubook/matrix-venv/bin/python /opt/gnubook/src/deploy/matrix/gnubook_matrix_bot.py
+Restart=always
+RestartSec=15
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ReadWritePaths=/opt/gnubook/data/matrix /opt/gnubook/matrix-store /opt/gnubook/matrix
+
+[Install]
+WantedBy=multi-user.target

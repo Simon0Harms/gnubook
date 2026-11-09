@@ -1,5 +1,11 @@
 # Changelog
 ## Unreleased
+- Matrix (docs/MATRIX.md): users link their Matrix account under *Konto und Sprache* (code `GB-XXXX-XXXX` sent to
+  the bot) and can then log in with a one-time link from the login page or by writing `login` to the bot. Failed
+  Belegeingang runs and processing errors are sent to the book's users with Matrix linked (once per failure, and
+  once when it works again; can be turned off per user). Same sidecar principle as Portriga:
+  `deploy/matrix/gnubook_matrix_bot.py` (matrix-nio, E2EE) talks to gnubook through `data/matrix/inbox|outbox`;
+  `deploy/install-matrix.sh` installs it, `gnubook-update` keeps it up to date and backs up its keys
 - Portfolio Performance import of several parts: choosing a target or forcing items keeps every part on the result
   page (it showed only the part of the form), and a chosen target is set for every part. Items of a bank with a
   target are imported even while another bank of the same upload still waits for its choice

@@ -19,6 +19,11 @@ def _python_ids():
             if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_"
                     and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str)):
                 ids.add(node.args[0].value)
+            # messages in a given language (Matrix): translate(lang, "Text")
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "translate"
+                    and len(node.args) > 1 and isinstance(node.args[1], ast.Constant)
+                    and isinstance(node.args[1].value, str)):
+                ids.add(node.args[1].value)
     return ids
 
 def message_ids():
@@ -53,6 +58,9 @@ def message_ids():
     for labels in (postbox_views.PP_LABELS, postbox_views.NC_LABELS, postbox_views.RUN_LABELS,
                    postbox_views.MODE_LABELS, STOP_TEXTS):
         ids.update(labels.values())
+    from gnubook.matrix import POSTBOX_STATUS
+
+    ids.update(POSTBOX_STATUS.values())
     return ids
 
 def test_every_text_has_an_english_translation():

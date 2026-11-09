@@ -42,4 +42,8 @@ def create_app(config: Config | None = None, config_path: str | None = None, che
     from .web import register
 
     register(app)
+
+    from . import matrix
+
+    matrix.start_worker(app.extensions["gnubook"])
     return app
