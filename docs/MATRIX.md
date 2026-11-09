@@ -31,7 +31,9 @@ from the web) write their notifications into the outbox themselves.
 1. Create a Matrix account for the bot, e.g. `@gnubookbot:example.org`.
 2. `bash /opt/gnubook/src/deploy/install-matrix.sh @gnubookbot:example.org https://buch.example.org`
    (3rd parameter, optional: the homeserver's client URL, default `https://<server of the Matrix ID>`).
-   This installs `libolm-dev` and matrix-nio into `/opt/gnubook/matrix-venv`, writes `[matrix] bot_mxid` and
+   Needs only `python3-venv` (installed by the script if missing): matrix-nio ≥ 0.26 brings its encryption
+   (vodozemac) as a binary wheel, libolm and a compiler are not needed. The script installs matrix-nio into
+   `/opt/gnubook/matrix-venv`, writes `[matrix] bot_mxid` and
    `public_url` into `config.toml`, creates `/opt/gnubook/matrix/gnubook-matrix.env` and the unit
    `gnubook-matrix.service`.
 3. Put the bot's password into `/opt/gnubook/matrix/gnubook-matrix.env` (`GNUBOOK_MATRIX_PASSWORD`), then

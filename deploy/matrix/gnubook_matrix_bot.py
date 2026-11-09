@@ -43,7 +43,7 @@ except ImportError:
     sys.stderr.write(
         "Fehlt: matrix-nio mit E2EE. Bitte installieren:\n"
         "  pip install \"matrix-nio[e2e]\"\n"
-        "(benötigt libolm, z. B. 'apt install libolm-dev' vor der Installation)\n"
+        "(matrix-nio >= 0.26 bringt vodozemac mit: deploy/install-matrix.sh --update)\n"
     )
     raise
 

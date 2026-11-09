@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install or update the Matrix bot of gnubook (docs/MATRIX.md): login links and notifications (failed Belegeingang
 # runs) via Matrix direct messages. Same principle as in Portriga: a sidecar (matrix-nio with E2EE) in a venv of its
-# own, talking to gnubook through data/matrix/inbox and data/matrix/outbox. Run as root, after install.sh.
+# own (matrix-nio >= 0.26 with vodozemac, no libolm), talking to gnubook through data/matrix/inbox and data/matrix/outbox. Run as root, after install.sh.
 #
 #   bash /opt/gnubook/src/deploy/install-matrix.sh @gnubookbot:example.org https://buch.example.org [https://matrix.example.org]
 #   bash /opt/gnubook/src/deploy/install-matrix.sh --update     # after an update of gnubook (gnubook-update does this)
@@ -39,15 +39,19 @@ trap 'rm -rf "$TMP"' EXIT
 
 # ---------------------------------------------------------------------------------- matrix-nio with E2EE
 say "matrix-nio (mit E2EE) in $MVENV"
-if ! dpkg -s libolm-dev >/dev/null 2>&1 || ! dpkg -s python3-dev >/dev/null 2>&1; then
+# matrix-nio >= 0.26 encrypts with vodozemac (binary wheel) – libolm and a compiler are no longer needed
+if ! python3 -c 'import ensurepip, venv' >/dev/null 2>&1; then
   apt-get update -qq
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-    libolm-dev python3-dev python3-venv build-essential >/dev/null
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends python3-venv >/dev/null
 fi
 [ -x "$MVENV/bin/python" ] || python3 -m venv "$MVENV"
 "$MVENV/bin/pip" install -q --upgrade pip
-"$MVENV/bin/pip" install -q --upgrade "matrix-nio[e2e]>=0.24"
-"$MVENV/bin/python" -c 'import nio, olm; print("   matrix-nio", nio.__version__ if hasattr(nio, "__version__") else "ok")'
+"$MVENV/bin/pip" install -q --upgrade "matrix-nio[e2e]>=0.26"
+"$MVENV/bin/python" -c 'import sys
+from importlib.metadata import version
+from nio.crypto import ENCRYPTION_ENABLED
+print("   matrix-nio", version("matrix-nio"), "– E2EE", "ok" if ENCRYPTION_ENABLED else "FEHLT")
+sys.exit(0 if ENCRYPTION_ENABLED else 1)' || die "matrix-nio ohne Verschlüsselung installiert (vodozemac fehlt)."
 
 install -d -m 750 -o gnubook -g gnubook "$APP_DIR/matrix"
 install -d -m 700 -o gnubook -g gnubook "$APP_DIR/matrix-store" "$APP_DIR/data/matrix" \
