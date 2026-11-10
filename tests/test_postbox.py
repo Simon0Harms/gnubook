@@ -906,3 +906,27 @@ def test_consent_two_layers_declines_in_settings():
             assert page.evaluate("window.done") == "Nur notwendige"
         finally:
             browser.close()
+
+
+def test_consent_banner_appearing_late_is_seen():
+    """SourcePoint loads asynchronously: the banner can come up after the login form – it must be
+    waited for (and noticed later) so the login click does not land on it."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    html = ("<form><input><input type=password><button>EINLOGGEN</button></form>"
+            "<iframe style='display:none' name='__tcfapiLocator'></iframe>"
+            "<script>setTimeout(() => document.body.insertAdjacentHTML('beforeend',"
+            "\"<div id=sp_message_container_9 style='position:fixed;inset:0'>"
+            "<iframe id=sp_message_iframe_9 srcdoc='<button>Nur notwendige</button>'></iframe></div>\"), 1000)</script>")
+    with sync_api.sync_playwright() as p:
+        browser = _browser(sync_api, p)
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            f = _consent_fetcher()
+            assert not f._consent_visible(page)
+            assert f._consent_visible(page, wait=3000)
+            assert f._consent_visible(page)
+            page.evaluate("document.getElementById('sp_message_container_9').remove()")
+            assert not f._consent_visible(page)
+        finally:
+            browser.close()

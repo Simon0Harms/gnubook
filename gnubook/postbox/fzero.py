@@ -337,7 +337,8 @@ class FinanzenZeroFetcher:
         page.goto(self.base + INBOX_PATH, wait_until="domcontentloaded")
         deadline = time.monotonic() + 3 * self.timeout
         submitted_at = left_login = None
-        consent = gone_to_inbox = 0
+        consent = gone_to_inbox = resubmits = 0
+        banner_waited = False
         st: dict = {}
         while time.monotonic() < deadline:
             now = self._state(page)
@@ -351,7 +352,21 @@ class FinanzenZeroFetcher:
                 consent += 1
                 page.wait_for_timeout(600)
                 continue
+            if self._submitted and resubmits < 1 and self._login_form(st) and self._consent_visible(page):
+                # the banner came up only after the login was sent and swallowed the click:
+                # answer it and send the login once more
+                if consent < 4 and self._answer_consent(page):
+                    consent += 1
+                    resubmits += 1
+                    self._submitted = False
+                    page.wait_for_timeout(600)
+                    continue
             if self._login_form(st):
+                if not self._submitted and not banner_waited:
+                    # the consent banner is loaded asynchronously – give it a moment before logging in
+                    banner_waited = True
+                    if self._consent_visible(page, wait=3000):
+                        continue
                 if not self._submitted:
                     self._login(page)
                     self._submitted = True
@@ -479,6 +494,27 @@ class FinanzenZeroFetcher:
                             return True
                 except Exception:  # noqa: BLE001 – a frame that detaches while clicking is fine
                     continue
+        return False
+
+    def _consent_visible(self, page, wait: int = 0) -> bool:
+        """Is a consent banner covering the page (SourcePoint container or a visible consent iframe)?"""
+        sel = "div[id^='sp_message_container_'], iframe[id^='sp_message_iframe_']"
+        try:
+            if wait:
+                page.locator(sel).first.wait_for(state="visible", timeout=wait)
+                return True
+            if page.locator(sel).first.is_visible():
+                return True
+        except Exception:  # noqa: BLE001 – no banner (in time)
+            pass
+        for f in page.frames:
+            if f is page.main_frame or not self._consent_frame(f):
+                continue
+            try:
+                if f.frame_element().is_visible():
+                    return True
+            except Exception:  # noqa: BLE001 – detached frame
+                continue
         return False
 
     @staticmethod
