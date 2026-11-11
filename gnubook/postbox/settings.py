@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass
 from datetime import date
 
@@ -21,7 +22,8 @@ class SourceSettings:
     rescan_from: str = ""
     # import every new document into Portfolio Performance (pp-core)
     import_pp: bool = True
-    # document types never imported into PP: one text per line, matched case-insensitively anywhere in the title
+    # document types never imported into PP: one text per line, matched case-insensitively anywhere in the file
+    # name (e.g. 2026-11-07_253135382_Loss-Warning-Meldung-DE000HM5D571.pdf)
     pp_skip: str = ""
     # Nextcloud folder of the source's owner for a copy of every document; empty = no copy
     nc_folder: str = ""
@@ -56,13 +58,18 @@ class SourceSettings:
             s.overlap_days = 3
         return s
 
+    @staticmethod
+    def _norm(text: str | None) -> str:
+        """Case, hyphens, underscores and runs of spaces do not count: "Loss-Warning" matches "Loss Warning"."""
+        return " ".join(re.sub(r"[-_\s]+", " ", (text or "").casefold()).split())
+
     @property
     def pp_skip_list(self) -> list[str]:
-        return [t.strip().casefold() for t in (self.pp_skip or "").splitlines() if t.strip()]
+        return [n for n in (self._norm(t) for t in (self.pp_skip or "").splitlines()) if n]
 
-    def pp_skipped(self, title: str | None) -> str | None:
-        """The pp_skip entry that matches this document title, if any."""
-        t = (title or "").casefold()
+    def pp_skipped(self, filename: str | None) -> str | None:
+        """The pp_skip entry that matches this document's file name, if any."""
+        t = self._norm(filename)
         return next((p for p in self.pp_skip_list if p in t), None)
 
     def to_json(self) -> str:

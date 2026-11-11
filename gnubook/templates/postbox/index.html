@@ -117,7 +117,7 @@
               <div class="mt-2 mb-2">
                 <label class="form-label" for="pp_skip">{{ _("Nicht in Portfolio Performance importieren") }}</label>
                 <textarea class="form-control" id="pp_skip" name="pp_skip" rows="3" placeholder="Kontoauszug&#10;Verlustverrechnung&#10;Verlustschwellen" {{ 'disabled' if not pp_on }}>{{ st.pp_skip }}</textarea>
-                <div class="form-text">{{ _("Eine Belegart pro Zeile. Belege, deren Titel einen dieser Texte enthält (Groß-/Kleinschreibung egal), werden übersprungen – auch bereits offene oder zu prüfende. In die Nextcloud kommen sie weiterhin.") }}</div>
+                <div class="form-text">{{ _("Eine Belegart pro Zeile. Belege, deren Dateiname (wie in der Nextcloud-Spalte, z. B. …_Loss-Warning-Meldung-DE000HM5D571.pdf) einen dieser Texte enthält, werden übersprungen – auch bereits offene oder zu prüfende. Groß-/Kleinschreibung egal, Bindestriche, Unterstriche und Leerzeichen zählen gleich. In die Nextcloud kommen sie weiterhin.") }}</div>
               </div>
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="delete_local" name="delete_local" value="1" {{ 'checked' if st.delete_local }}>

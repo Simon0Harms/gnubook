@@ -1331,6 +1331,6 @@ EN = {
     'Belegart ausgeschlossen': 'document type excluded',
     '{a0} Belege für Portfolio Performance übersprungen.': '{a0} documents skipped for Portfolio Performance.',
     'Nicht in Portfolio Performance importieren': 'Do not import into Portfolio Performance',
-    'Eine Belegart pro Zeile. Belege, deren Titel einen dieser Texte enthält (Groß-/Kleinschreibung egal), werden übersprungen – auch bereits offene oder zu prüfende. In die Nextcloud kommen sie weiterhin.': 'One document type per line. Documents whose title contains one of these texts (case-insensitive) are skipped – including ones already open or waiting for review. They are still copied to Nextcloud.',
+    'Eine Belegart pro Zeile. Belege, deren Dateiname (wie in der Nextcloud-Spalte, z. B. …_Loss-Warning-Meldung-DE000HM5D571.pdf) einen dieser Texte enthält, werden übersprungen – auch bereits offene oder zu prüfende. Groß-/Kleinschreibung egal, Bindestriche, Unterstriche und Leerzeichen zählen gleich. In die Nextcloud kommen sie weiterhin.': 'One document type per line. Documents whose file name (as in the Nextcloud column, e.g. …_Loss-Warning-Meldung-DE000HM5D571.pdf) contains one of these texts are skipped – including ones already open or waiting for review. Case does not matter; hyphens, underscores and spaces count the same. They are still copied to Nextcloud.',
     'Testnachricht für „{a0}“ – die Verbindung funktioniert.': 'Test message for “{a0}” – the connection works.',
 }

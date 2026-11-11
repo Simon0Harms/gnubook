@@ -934,6 +934,11 @@ def test_consent_banner_appearing_late_is_seen():
 
 def test_excluded_document_types_skip_pp(reg, book, fetcher, pp_import, nc, cfg):
     assert SourceSettings(pp_skip="Kontoauszug\n  \nverlusttopf").pp_skip_list == ["kontoauszug", "verlusttopf"]
+    assert SourceSettings(pp_skip="Loss-Warning").pp_skipped("2026-11-07_253135382_Loss-Warning-Meldung-DE000HM5D571.pdf")
+    assert SourceSettings(pp_skip="Loss Warning").pp_skipped("2026-11-07_253135382_Loss-Warning-Meldung-DE000HM5D571.pdf")
+    assert not SourceSettings(pp_skip="253135382").pp_skipped("2026-11-07_253135414_Loss-Warning-Meldung.pdf")
+    assert SourceSettings(pp_skip="loss warning").pp_skipped("Loss-Warning_Meldung")
+    assert not SourceSettings(pp_skip="Loss-Warning").pp_skipped("Wertpapierabrechnung")
     _source(reg, book, pp_skip="VERLUSTTOPF")
     svc = PostboxService(reg, book)
     out = svc.run(KIND, "test")

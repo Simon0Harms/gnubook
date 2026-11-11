@@ -382,13 +382,13 @@ class PostboxService:
         return n
 
     def skip_excluded(self, kind: str, st: SourceSettings) -> int:
-        """Marks open documents whose title matches st.pp_skip as skipped for PP. Also documents waiting for a
+        """Marks open documents whose file name matches st.pp_skip as skipped for PP. Also documents waiting for a
         review, so a type excluded later disappears from the list to check. Returns the number marked."""
         if not st.pp_skip_list:
             return 0
         n = 0
         for r in self.store.for_pp(kind, PP_RETRY + PP_ATTENTION):
-            if st.pp_skipped(r["title"]):
+            if st.pp_skipped(r["filename"]):
                 self.store.set_pp(r["id"], "skipped", _("Belegart ausgeschlossen"))
                 n += 1
         return n
