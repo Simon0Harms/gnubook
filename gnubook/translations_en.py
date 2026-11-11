@@ -1328,6 +1328,7 @@ EN = {
     'Fehler bei der Verarbeitung': 'error while processing',
     'Belegeingang „{a0}“: läuft wieder': 'Belegeingang “{a0}”: working again',
     'Belegeingang „{a0}“: {a1} zur Prüfung': 'Belegeingang “{a0}”: {a1} to review',
+    'vorhanden': 'existing',
     'Vorhandene Buchung in Portfolio Performance': 'Existing transaction in Portfolio Performance',
     'Belegart ausgeschlossen': 'document type excluded',
     '{a0} Belege für Portfolio Performance übersprungen.': '{a0} documents skipped for Portfolio Performance.',

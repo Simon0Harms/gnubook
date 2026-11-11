@@ -99,14 +99,22 @@
             <td class="text-end small text-nowrap">{% if i.fees and i.fees.amount != '0' %}{{ money(i.fees) }}{% endif %}{% if i.taxes and i.taxes.amount != '0' %} / {{ money(i.taxes) }}{% endif %}</td>
             <td><span class="badge {{ {'OK': 'text-bg-success', 'WARNING': 'text-bg-warning', 'ERROR': 'text-bg-danger'}.get(i.status, 'text-bg-secondary') }}">{{ _(IMPORT_STATUS.get(i.status, i.status)) }}</span>
               {% for m in i.messages %}<div class="small">{{ m.message }}</div>{% endfor %}
-              {% if i.error %}<div class="small text-danger">{{ i.error }}</div>{% endif %}
-              {% set ex = existing.get((result.session, i.index)) %}
-              {% if ex %}<div class="small mt-1 p-1 border rounded border-warning-subtle">
-                <div class="fw-semibold">{{ _("Vorhandene Buchung in Portfolio Performance") }}</div>
-                {% for e in ex %}<div class="text-body-secondary">{{ e.date|de_date if e.date else '' }} · {{ e.type }}{% if e.security %} · {{ e.security }}{% endif %}{% if e.shares %} · {{ shares(e.shares) }} {{ _("Stück") }}{% endif %} · {{ money(e.amount) }}{% if e.where %} · {{ e.where }}{% endif %}{% if e.source or e.note %}<div class="text-break">{{ e.source }}{% if e.source and e.note %} · {% endif %}{{ e.note }}</div>{% endif %}</div>{% endfor %}
-              </div>{% endif %}</td>
+              {% if i.error %}<div class="small text-danger">{{ i.error }}</div>{% endif %}</td>
             <td class="small text-body-secondary">{{ i.extractor }}{% if i.file %}<div>{{ i.file }}</div>{% endif %}</td>
           </tr>
+          {% for e in existing.get((result.session, i.index), []) %}
+          <tr class="small text-body-secondary">
+            <td class="text-end"><i class="bi bi-arrow-return-right" title="{{ _("Vorhandene Buchung in Portfolio Performance") }}"></i></td>
+            <td class="text-nowrap">{{ e.date|de_date if e.date else '' }}</td>
+            <td>{{ e.type }}</td>
+            <td>{{ e.security }}{% if e.isin %}<div>{{ e.isin }}</div>{% endif %}</td>
+            <td class="text-end">{{ shares(e.shares) if e.shares else '' }}</td>
+            <td class="text-end text-nowrap">{{ money(e.amount) if e.amount.amount else '' }}</td>
+            <td></td>
+            <td><span class="badge text-bg-secondary">{{ _("vorhanden") }}</span>{% if e.where %}<div>{{ e.where }}</div>{% endif %}</td>
+            <td class="text-break">{{ e.source }}{% if e.note %}<div>{{ e.note }}</div>{% endif %}</td>
+          </tr>
+          {% endfor %}
         {% endfor %}
         </tbody>
       </table>

@@ -479,7 +479,8 @@ def _existing_for_warnings(svc, results: list[dict]) -> dict:
             if same or any(n in text for n in numbers):
                 found.append({"date": (t.get("date") or "")[:10], "type": t.get("type"), "shares": t.get("shares"),
                               "amount": {"amount": t.get("amount"), "currency": t.get("currency")},
-                              "security": s.get("name") or "", "where": names.get(t.get("owner") or "", ""),
+                              "security": s.get("name") or "",
+                              "isin": s.get("isin") or s.get("wkn") or "", "where": names.get(t.get("owner") or "", ""),
                               "note": t.get("note") or "", "source": t.get("source") or ""})
         if found:
             out[(sid, item.get("index"))] = sorted(found, key=lambda f: f["date"], reverse=True)[:5]

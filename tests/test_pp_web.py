@@ -439,6 +439,6 @@ def test_pdf_import_shows_the_existing_transaction_for_a_warning(web, fake, monk
         return r
     monkeypatch.setattr(fake, "_import_result", result)
     page = web.get("/pp/import?session=s-1").text
-    assert "Vorhandene Buchung in Portfolio Performance" in page
+    assert "Vorhandene Buchung in Portfolio Performance" in page and ">vorhanden<" in page
     assert "Kauf_2024-01-03.pdf" in page and "Sparplan" in page
     assert page.count("Kauf_2024-01-03.pdf") == 1  # depot side only, not the cash leg as well
