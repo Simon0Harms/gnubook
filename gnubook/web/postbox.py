@@ -170,6 +170,7 @@ def save_source():
     st.overlap_days = overlap
     st.rescan_from = rescan.isoformat() if rescan else ""
     st.import_pp = f.get("import_pp") == "1"
+    st.pp_skip = "\n".join(t.strip() for t in (f.get("pp_skip") or "").splitlines() if t.strip())[:2000]
     st.delete_local = f.get("delete_local") == "1"
     st.nc_folder = nc_folder
     if share is not None:
@@ -180,6 +181,9 @@ def save_source():
     ctx.appdb.audit(session.get("user", "?"), "postbox-source", None,
                     f"{SOURCES[kind]}: {login}, ab {st.since or 'Anfang'}" + (" (Passwort geändert)" if password else ""))
     msg = _("Gespeichert.")
+    skipped = PostboxService(reg, ctx).skip_excluded(kind, st) if row is not None else 0
+    if skipped:
+        msg += " " + _("{a0} Belege für Portfolio Performance übersprungen.", a0=skipped)
     if (nc_folder and not st.nc_share_url and reg.cfg.nextcloud.enabled
             and reg.system.nextcloud_account(g.user["id"]) is None):
         msg += " " + _("Für die Kopie in die Nextcloud zuerst unter Einstellungen eine Nextcloud verbinden.")

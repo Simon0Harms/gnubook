@@ -28,7 +28,7 @@ from ..i18n import gettext as _
 from . import jobs, plan
 from .fzero import Cancelled, FetchError, FinanzenZeroFetcher, _first_line
 from .settings import SourceSettings
-from .store import PP_ATTENTION, PostboxStore
+from .store import PP_ATTENTION, PP_RETRY, PostboxStore
 
 log = logging.getLogger("gnubook.postbox")
 
@@ -381,7 +381,20 @@ class PostboxService:
                 log.warning("Postfach: %s nicht gelöscht: %s", path, exc)
         return n
 
+    def skip_excluded(self, kind: str, st: SourceSettings) -> int:
+        """Marks open documents whose title matches st.pp_skip as skipped for PP. Also documents waiting for a
+        review, so a type excluded later disappears from the list to check. Returns the number marked."""
+        if not st.pp_skip_list:
+            return 0
+        n = 0
+        for r in self.store.for_pp(kind, PP_RETRY + PP_ATTENTION):
+            if st.pp_skipped(r["title"]):
+                self.store.set_pp(r["id"], "skipped", _("Belegart ausgeschlossen"))
+                n += 1
+        return n
+
     def _process_pp(self, kind: str, st: SourceSettings, done: dict, sync_now: bool):
+        self.skip_excluded(kind, st)
         rows = self.store.for_pp(kind)
         if not rows:
             return

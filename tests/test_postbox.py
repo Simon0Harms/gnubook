@@ -930,3 +930,21 @@ def test_consent_banner_appearing_late_is_seen():
             assert not f._consent_visible(page)
         finally:
             browser.close()
+
+
+def test_excluded_document_types_skip_pp(reg, book, fetcher, pp_import, nc, cfg):
+    assert SourceSettings(pp_skip="Kontoauszug\n  \nverlusttopf").pp_skip_list == ["kontoauszug", "verlusttopf"]
+    _source(reg, book, pp_skip="VERLUSTTOPF")
+    svc = PostboxService(reg, book)
+    out = svc.run(KIND, "test")
+    assert out.status == "ok", out.message
+    docs = {d["title"]: d for d in svc.store.docs(KIND, limit=500)}
+    assert docs["Verlusttopfoptimierung"]["pp_status"] == "skipped"
+    assert docs["Verlusttopfoptimierung"]["nc_status"] == "done"  # still copied to Nextcloud
+    assert len(pp_import.calls[0]) == 20
+    # excluding a type later also clears documents waiting for a review
+    assert docs["Steuerausgleichsrechnung"]["pp_status"] == "review"
+    st = SourceSettings(pp_skip="steuerausgleich")
+    assert svc.skip_excluded(KIND, st) == 10  # one per day
+    assert {d["pp_status"] for d in svc.store.docs(KIND, limit=500)
+            if d["title"] == "Steuerausgleichsrechnung"} == {"skipped"}

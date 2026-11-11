@@ -1328,5 +1328,9 @@ EN = {
     'Fehler bei der Verarbeitung': 'error while processing',
     'Belegeingang „{a0}“: läuft wieder': 'Belegeingang “{a0}”: working again',
     'Belegeingang „{a0}“: {a1} zur Prüfung': 'Belegeingang “{a0}”: {a1} to review',
+    'Belegart ausgeschlossen': 'document type excluded',
+    '{a0} Belege für Portfolio Performance übersprungen.': '{a0} documents skipped for Portfolio Performance.',
+    'Nicht in Portfolio Performance importieren': 'Do not import into Portfolio Performance',
+    'Eine Belegart pro Zeile. Belege, deren Titel einen dieser Texte enthält (Groß-/Kleinschreibung egal), werden übersprungen – auch bereits offene oder zu prüfende. In die Nextcloud kommen sie weiterhin.': 'One document type per line. Documents whose title contains one of these texts (case-insensitive) are skipped – including ones already open or waiting for review. They are still copied to Nextcloud.',
     'Testnachricht für „{a0}“ – die Verbindung funktioniert.': 'Test message for “{a0}” – the connection works.',
 }

@@ -21,6 +21,8 @@ class SourceSettings:
     rescan_from: str = ""
     # import every new document into Portfolio Performance (pp-core)
     import_pp: bool = True
+    # document types never imported into PP: one text per line, matched case-insensitively anywhere in the title
+    pp_skip: str = ""
     # Nextcloud folder of the source's owner for a copy of every document; empty = no copy
     nc_folder: str = ""
     # one sub folder per year (posting date) below nc_folder (old setting, read when nc_subfolders is not set)
@@ -53,6 +55,15 @@ class SourceSettings:
         except (TypeError, ValueError):
             s.overlap_days = 3
         return s
+
+    @property
+    def pp_skip_list(self) -> list[str]:
+        return [t.strip().casefold() for t in (self.pp_skip or "").splitlines() if t.strip()]
+
+    def pp_skipped(self, title: str | None) -> str | None:
+        """The pp_skip entry that matches this document title, if any."""
+        t = (title or "").casefold()
+        return next((p for p in self.pp_skip_list if p in t), None)
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), ensure_ascii=False, sort_keys=True)
