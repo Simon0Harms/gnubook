@@ -441,7 +441,49 @@ def pdf_import():
     except PPCoreError as exc:
         return _pp_error(exc)
     return render_template("pp/import.html", summary=summary, results=results, IMPORT_STATUS=IMPORT_STATUS,
-                           ACCEPT=archive.ACCEPT)
+                           ACCEPT=archive.ACCEPT, existing=_existing_for_warnings(svc, results))
+
+
+def _existing_for_warnings(svc, results: list[dict]) -> dict:
+    """Transactions already in the PP file that a WARNING item (usually "Buchung existiert schon") may duplicate:
+    same security (ISIN/WKN) on the same day, or a document number from the warning in the transaction's note or
+    source. Keyed by (session, item index); the export is read only when there is such an item."""
+    warned = [(r.get("session"), i) for r in results for i in r.get("items") or []
+              if i.get("status") == "WARNING" and not i.get("imported")]
+    if not warned:
+        return {}
+    try:
+        export = svc.client.export(svc.cid, prices="none")
+    except PPCoreError as exc:
+        log.warning("PDF-Import: vorhandene Buchungen nicht gelesen: %s", exc)
+        return {}
+    secs = {s["uuid"]: s for s in export.get("securities", [])}
+    names = {p["uuid"]: p["name"] for p in export.get("portfolios", [])}
+    names.update({a["uuid"]: a["name"] for a in export.get("accounts", [])})
+    txs = export.get("transactions", [])
+    shown = {t["uuid"] for t in txs}
+    # a buy/sell is two transactions (depot and cash account): show the depot side only
+    txs = [t for t in txs if not (t.get("kind") == "account" and (t.get("cross") or {}).get("type") == "buysell"
+                                  and (t.get("cross") or {}).get("uuid") in shown)]
+    out = {}
+    for sid, item in warned:
+        sec = item.get("security") or {}
+        ids = {x for x in (sec.get("isin"), sec.get("wkn")) if x}
+        day = (item.get("date") or "")[:10]
+        numbers = set(re.findall(r"\d{6,}", " ".join(m.get("message") or "" for m in item.get("messages") or [])))
+        found = []
+        for t in txs:
+            s = secs.get(t.get("security") or "") or {}
+            text = f"{t.get('note') or ''} {t.get('source') or ''}"
+            same = bool(ids & {s.get("isin"), s.get("wkn")}) and (t.get("date") or "")[:10] == day
+            if same or any(n in text for n in numbers):
+                found.append({"date": (t.get("date") or "")[:10], "type": t.get("type"), "shares": t.get("shares"),
+                              "amount": {"amount": t.get("amount"), "currency": t.get("currency")},
+                              "security": s.get("name") or "", "where": names.get(t.get("owner") or "", ""),
+                              "note": t.get("note") or "", "source": t.get("source") or ""})
+        if found:
+            out[(sid, item.get("index"))] = sorted(found, key=lambda f: f["date"], reverse=True)[:5]
+    return out
 
 
 IMPORT_BATCH_BYTES = 32 * 1024 * 1024  # raw bytes per request: base64 adds a third, pp-core takes 64 MB by default

@@ -135,7 +135,8 @@ def test_csv_import_is_converted_and_checked_by_pp(web, fake):
                                      "files": [(io.BytesIO(data), "depot.csv"), (io.BytesIO(b"%PDF-1.4 x"), "a.pdf")]},
                  content_type="multipart/form-data", follow_redirects=True)
     assert "depot.csv: 2 Depotumsätze gelesen" in r.text
-    assert fake.calls[-1][:2] == ("import", ["a.pdf"])  # PDFs as before, the list as canonical CSV
+    imports = [c for c in fake.calls if c[0] == "import"]
+    assert imports[-1][:2] == ("import", ["a.pdf"])  # PDFs as before, the list as canonical CSV
     (name, canonical), = fake.csv
     assert name == "depot.csv" and canonical.decode().splitlines() == [
         "date;time;type;isin;wkn;name;shares;value;fees;taxes;currency;note",
@@ -426,3 +427,18 @@ def test_import_apply_keeps_every_part_and_sets_the_target_for_all(web, fake):
                                                  "portfolio": "P", "account": "A", "extractor": "Bank"})
     assert [c[1:] for c in fake.calls[-2:]] == [(a, [], "P", "A", "Bank"), (b, [], "P", "A", "Bank")]
     assert "session=" + parts in r.headers["Location"]
+
+
+def test_pdf_import_shows_the_existing_transaction_for_a_warning(web, fake, monkeypatch):
+    orig = fake._import_result
+
+    def result(**kw):
+        r = orig(**kw)
+        r["items"][1].update({"date": "2024-01-03T00:00", "security": {"name": "Musterwelt Aktien ETF",
+                                                                      "isin": "DE000MUSTER1", "wkn": None}})
+        return r
+    monkeypatch.setattr(fake, "_import_result", result)
+    page = web.get("/pp/import?session=s-1").text
+    assert "Vorhandene Buchung in Portfolio Performance" in page
+    assert "Kauf_2024-01-03.pdf" in page and "Sparplan" in page
+    assert page.count("Kauf_2024-01-03.pdf") == 1  # depot side only, not the cash leg as well
