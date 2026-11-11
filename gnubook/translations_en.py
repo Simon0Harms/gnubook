@@ -1327,5 +1327,6 @@ EN = {
     'Belegeingang „{a0}“: {a1}': 'Belegeingang “{a0}”: {a1}',
     'Fehler bei der Verarbeitung': 'error while processing',
     'Belegeingang „{a0}“: läuft wieder': 'Belegeingang “{a0}”: working again',
+    'Belegeingang „{a0}“: {a1} zur Prüfung': 'Belegeingang “{a0}”: {a1} to review',
     'Testnachricht für „{a0}“ – die Verbindung funktioniert.': 'Test message for “{a0}” – the connection works.',
 }

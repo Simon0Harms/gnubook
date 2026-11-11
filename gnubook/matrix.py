@@ -423,15 +423,37 @@ POSTBOX_STATUS = {"error": "Fehler", "login_failed": "Anmeldung fehlgeschlagen",
                   "warning": "Hinweis", "ok": "ok"}
 
 
+def _notify_attention(reg, book_id: int, book_name: str, kind: str, outcome) -> int:
+    """Report documents of this run that Portfolio Performance could not import on its own. The count covers only
+    the documents of this run, so each message is about new documents and needs no de-duplication."""
+    cfg = reg.cfg
+    try:
+        n = int((outcome.processed or {}).get("attention") or 0)
+    except (TypeError, ValueError):
+        return 0
+    if n <= 0:
+        return 0
+    sent = 0
+    for u in recipients(reg, book_id):
+        lang = _lang(cfg, u)
+        lines = [PREFIX, translate(lang, "Belegeingang „{a0}“: {a1} zur Prüfung", a0=book_name, a1=n)]
+        if cfg.matrix.public_url:
+            lines.append(_url(cfg, f"/postbox/?source={kind}&filter=attention#docs"))
+        if enqueue(cfg, u["matrix_room"], "\n".join(lines)):
+            sent += 1
+    return sent
+
+
 def notify_postbox(reg, book_id: int, book_name: str, kind: str, outcome) -> int:
-    """Report a failed Belegeingang run (and, once, that it works again). The same failure is reported only once
-    until something changes. Returns the number of messages queued."""
+    """Report a failed Belegeingang run (and, once, that it works again) and documents that need a review. The
+    same failure is reported only once until something changes. Returns the number of messages queued."""
     cfg = reg.cfg
     if not enabled(cfg) or not cfg.matrix.notify:
         return 0
     status = outcome.status
     if status in ("busy", "paused", "dry_run"):
         return 0
+    sent = _notify_attention(reg, book_id, book_name, kind, outcome)
     errors = list((outcome.processed or {}).get("errors") or [])
     failed = outcome.failed or bool(errors)
     key = f"{int(book_id)}-{kind}"
@@ -441,14 +463,13 @@ def notify_postbox(reg, book_id: int, book_name: str, kind: str, outcome) -> int
         detail = outcome.message if outcome.failed else "; ".join(str(e) for e in errors[:3])
         signature = f"{status}:{detail}"[:500]
         if last == signature:
-            return 0
+            return sent
         state[key] = signature
     elif last:
         state.pop(key, None)
     else:
-        return 0
+        return sent
     _save_state(cfg, state)
-    sent = 0
     for u in recipients(reg, book_id):
         lang = _lang(cfg, u)
         if failed:

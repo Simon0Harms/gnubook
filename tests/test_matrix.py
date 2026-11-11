@@ -185,6 +185,24 @@ def test_postbox_notifications(reg, mclient, state):
     assert matrix.notify_postbox(reg, bid, "Demo", "finanzen-zero", RunOutcome("ok", "2 neu")) == 0
 
 
+def test_documents_to_review_are_reported(reg, mclient, state):
+    link(reg, mclient)
+    outbox(reg)
+    bid = state.id
+    out = RunOutcome("ok", "2 neu", processed={"attention": 1, "errors": []})
+    assert matrix.notify_postbox(reg, bid, "Demo", "finanzen-zero", out) == 1
+    (msg,) = outbox(reg)
+    assert "1 zur Prüfung" in msg["body"]
+    assert "/postbox/?source=finanzen-zero&filter=attention" in msg["body"]
+    # every run with new documents to review is reported
+    assert matrix.notify_postbox(reg, bid, "Demo", "finanzen-zero", out) == 1
+    assert matrix.notify_postbox(reg, bid, "Demo", "finanzen-zero",
+                                 RunOutcome("ok", "2 neu", processed={"attention": 0})) == 0
+    # together with a processing error: two messages
+    both = RunOutcome("ok", "1 neu", processed={"attention": 2, "errors": ["Nextcloud: 503"]})
+    assert matrix.notify_postbox(reg, bid, "Demo", "finanzen-zero", both) == 2
+
+
 def test_notifications_can_be_turned_off(reg, mclient, state):
     link(reg, mclient)
     outbox(reg)

@@ -153,7 +153,7 @@ class MatrixConfig:
     public_url: str = ""
     # log in with a one-time link sent to the linked Matrix account
     login: bool = True
-    # notify users of a book about failed Belegeingang runs
+    # notify users of a book about failed Belegeingang runs and documents to review
     notify: bool = True
     # minutes a link code (account settings) and a login link stay valid
     link_minutes: int = 15
