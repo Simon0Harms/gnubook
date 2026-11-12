@@ -45,6 +45,8 @@ KIND_LABELS = {"BUY": "Kauf", "SELL": "Verkauf", "DIVIDENDS": "Dividende", "INTE
 STATUS_LABELS = {"booked": "übernommen", "edited": "in GnuCash bearbeitet", "conflict": "Konflikt",
                  "gone": "in GnuCash gelöscht", "detached": "abgekoppelt", "pending": "noch nicht übernommen",
                  "skipped": "nicht übernommen"}
+# document number in a PP note, as pp-core's DocumentDuplicates reads it ("Vorgangs-Nr.: …", "Beleg …")
+DOC_NUMBER = re.compile(r"(?:Vorgangs-Nr\.?\s*:?|\bBeleg)\s+([0-9]{6,})")
 IMPORT_STATUS = {"OK": "ok", "WARNING": "Warnung", "ERROR": "Fehler", "SKIP": "übersprungen"}
 
 
@@ -446,9 +448,11 @@ def pdf_import():
 
 
 def _existing_for_warnings(svc, results: list[dict]) -> dict:
-    """Transactions already in the PP file that a WARNING item (usually "Buchung existiert schon") may duplicate:
-    same security (ISIN/WKN) on the same day, or a document number from the warning in the transaction's note or
-    source. Keyed by (session, item index); the export is read only when there is such an item."""
+    """Transactions already in the PP file that a WARNING item (usually "Buchung existiert schon") may duplicate.
+    A warning with a document number ("Beleg-/Vorgangs-Nr. …", pp-core's DocumentDuplicates) shows only the
+    transactions with exactly that number in their note – others with the same security and day are not
+    duplicates. Without a number: same security (ISIN/WKN) on the same day. Keyed by
+    (session, item index); the export is read only when there is such an item."""
     warned = [(r.get("session"), i) for r in results for i in r.get("items") or []
               if i.get("status") == "WARNING" and not i.get("imported")]
     if not warned:
@@ -471,13 +475,16 @@ def _existing_for_warnings(svc, results: list[dict]) -> dict:
         sec = item.get("security") or {}
         ids = {x for x in (sec.get("isin"), sec.get("wkn")) if x}
         day = (item.get("date") or "")[:10]
-        numbers = set(re.findall(r"\d{6,}", " ".join(m.get("message") or "" for m in item.get("messages") or [])))
+        numbers = set(re.findall(r"Nr\.?\s*:?\s*(\d{6,})",
+                                 " ".join(m.get("message") or "" for m in item.get("messages") or [])))
         found = []
         for t in txs:
             s = secs.get(t.get("security") or "") or {}
-            text = f"{t.get('note') or ''} {t.get('source') or ''}"
-            same = bool(ids & {s.get("isin"), s.get("wkn")}) and (t.get("date") or "")[:10] == day
-            if same or any(n in text for n in numbers):
+            if numbers:
+                hit = bool(numbers & set(DOC_NUMBER.findall(t.get("note") or "")))
+            else:
+                hit = bool(ids & {s.get("isin"), s.get("wkn")}) and (t.get("date") or "")[:10] == day
+            if hit:
                 found.append({"date": (t.get("date") or "")[:10], "type": t.get("type"), "shares": t.get("shares"),
                               "amount": {"amount": t.get("amount"), "currency": t.get("currency")},
                               "security": s.get("name") or "",

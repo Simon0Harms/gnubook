@@ -466,3 +466,33 @@ def test_pdf_import_links_the_pdfs_from_the_belegeingang(web, fake, pp_app, monk
     page = web.get("/pp/import?session=s-1").text
     assert f"/postbox/docs/{new_id}/pdf?source=finanzen-zero" in page  # the warned document
     assert f"/postbox/docs/{old_id}/pdf?source=finanzen-zero" in page  # the existing transaction's document
+
+
+def test_import_warning_with_a_number_shows_only_that_transaction(web, fake, monkeypatch):
+    """Grid trading: many trades of one security a day – only the one with the warned number is the duplicate."""
+    from .pp_fixtures import _buysell
+
+    export = fake.export
+    def with_trades(cid, prices="all"):
+        e = export(cid, prices)
+        e["transactions"] += _buysell("g-1", "BUY", "2024-01-03", P1, A1, ETF, "1", "553.40",
+                                      note="Vorgangs-Nr.: 723263920", source="Kauf_A.pdf")
+        e["transactions"] += _buysell("g-2", "SELL", "2024-01-03", P1, A1, ETF, "1", "555.18",
+                                      note="Vorgangs-Nr.: 723271570", source="Verkauf_B.pdf")
+        e["transactions"] += _buysell("g-3", "BUY", "2024-01-02", P1, A1, ETF, "1", "559",
+                                      note="Vorgangs-Nr.: 723493456", source="Kauf_C.pdf")
+        return e
+    monkeypatch.setattr(fake, "export", with_trades)
+    orig = fake._import_result
+
+    def result(**kw):
+        r = orig(**kw)
+        r["items"][1].update({"date": "2024-01-03T00:00", "security": {"name": "Musterwelt Aktien ETF",
+                                                                      "isin": "DE000MUSTER1", "wkn": None},
+                              "messages": [{"code": "WARNING",
+                                            "message": "Buchung existiert schon (Beleg-/Vorgangs-Nr. 723493456)"}]})
+        return r
+    monkeypatch.setattr(fake, "_import_result", result)
+    page = web.get("/pp/import?session=s-1").text
+    assert "Kauf_C.pdf" in page  # the transaction with that number, even on another day
+    assert "Kauf_A.pdf" not in page and "Verkauf_B.pdf" not in page and "Kauf_2024-01-03.pdf" not in page
