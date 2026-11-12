@@ -981,3 +981,8 @@ def test_old_reviews_of_known_numbers_are_cleared(reg, book, fetcher, pp_import,
     assert svc.skip_known_duplicates(KIND) == 1
     row = svc.store.doc(review["id"])
     assert row["pp_status"] == "skipped" and "723493456" in row["pp_message"]
+    # also when PP put another message first, and for a partly imported document
+    svc.store.set_pp(review["id"], "partial", "Hinweis; Buchung existiert schon (Beleg-/Vorgangs-Nr. 1234567)",
+                     items=2, imported=1)
+    assert svc.skip_known_duplicates(KIND) == 1
+    assert svc.store.doc(review["id"])["pp_status"] == "imported"

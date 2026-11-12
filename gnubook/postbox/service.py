@@ -388,12 +388,17 @@ class PostboxService:
         """Documents waiting for a review only because their document number is already in PP (checked before this
         was decided automatically): nothing to decide, marked skipped."""
         n = 0
-        for r in self.store.for_pp(kind, ("review",)):
+        for r in self.store.for_pp(kind, PP_ATTENTION):
             message = r["pp_message"] or ""
-            if message.startswith(KNOWN_DUPLICATE) and (r["pp_imported"] or 0) == 0:
+            if KNOWN_DUPLICATE not in message or r["pp_status"] == "needs_target":
+                continue
+            if r["pp_imported"]:  # the rest of the document is in PP
+                self.store.set_pp(r["id"], "imported", _("{a0} Buchungen übernommen.", a0=r["pp_imported"]),
+                                  r["pp_items"], r["pp_imported"])
+            else:
                 self.store.set_pp(r["id"], "skipped", _("Schon in Portfolio Performance – nicht erneut übernommen "
-                                                        "({a0}).", a0=message))
-                n += 1
+                                                        "({a0}).", a0=message), r["pp_items"], 0)
+            n += 1
         return n
 
     def skip_excluded(self, kind: str, st: SourceSettings) -> int:
