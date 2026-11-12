@@ -986,3 +986,27 @@ def test_old_reviews_of_known_numbers_are_cleared(reg, book, fetcher, pp_import,
                      items=2, imported=1)
     assert svc.skip_known_duplicates(KIND) == 1
     assert svc.store.doc(review["id"])["pp_status"] == "imported"
+
+
+def test_documents_already_in_pp_leave_the_review_list(reg, book, fetcher, pp_import, nc, cfg, fake, monkeypatch):
+    """The review was stored with an older message; PP names the document as source of its transaction."""
+    from .pp_fixtures import A1, ETF, P1, _buysell
+
+    _source(reg, book)
+    svc = PostboxService(reg, book)
+    svc.run(KIND, "test")
+    review = [d for d in svc.store.docs(KIND, limit=500) if d["pp_status"] == "review"]
+    first, second = review[0], review[1]
+    for d in (first, second):
+        svc.store.set_pp(d["id"], "review", "Possible duplicate", items=1, imported=0)
+    export = fake.export
+
+    def with_source(cid, prices="all"):
+        e = export(cid, prices)
+        e["transactions"] += _buysell("x-1", "SELL", "2026-10-29", P1, A1, ETF, "1", "557.50",
+                                      note="Vorgangs-Nr.: 723346665", source=first["filename"])
+        return e
+    monkeypatch.setattr(fake, "export", with_source)
+    assert svc.settle_in_pp(KIND) == 1  # buy/sell counted once, so 1 transaction for 1 item
+    assert svc.store.doc(first["id"])["pp_status"] == "imported"
+    assert svc.store.doc(second["id"])["pp_status"] == "review"  # not in PP: still a question

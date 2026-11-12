@@ -384,6 +384,41 @@ class PostboxService:
                 log.warning("Postfach: %s nicht gelöscht: %s", path, exc)
         return n
 
+    def settle_in_pp(self, kind: str) -> int:
+        """Documents still marked for review although PP already has their transactions – PP names the document
+        as source of every imported transaction ("Beleg: <file name>"), e.g. after "Prüfen" imported it again or a
+        decision on the import page. Such a document is done when PP has at least as many transactions from it as
+        it had items (buy/sell counted once). Returns the number settled."""
+        rows = [r for r in self.store.for_pp(kind, PP_ATTENTION) if r["pp_status"] != "needs_target"]
+        svc = self.ctx.pp
+        if not rows or svc is None:
+            return 0
+        from ..pp.client import PPCoreError
+
+        try:
+            export = svc.client.export(svc.cid, prices="none")
+        except PPCoreError as exc:
+            log.warning("Postfach: PP-Export für den Abgleich nicht gelesen: %s", exc)
+            return 0
+        txs = export.get("transactions") or []
+        uuids = {t.get("uuid") for t in txs}
+        counts = defaultdict(int)
+        for t in txs:
+            cross = t.get("cross") or {}
+            if t.get("kind") == "account" and cross.get("type") == "buysell" and cross.get("uuid") in uuids:
+                continue  # the cash side of a buy/sell: counted with the depot side
+            source = (t.get("source") or "").strip().rsplit("/", 1)[-1]
+            if source:
+                counts[source] += 1
+        n = 0
+        for r in rows:
+            have = counts.get(r["filename"], 0)
+            if have and have >= (r["pp_items"] or 1):
+                self.store.set_pp(r["id"], "imported", _("Schon in Portfolio Performance ({a0} Buchungen).", a0=have),
+                                  r["pp_items"], have)
+                n += 1
+        return n
+
     def skip_known_duplicates(self, kind: str) -> int:
         """Documents waiting for a review only because their document number is already in PP (checked before this
         was decided automatically): nothing to decide, marked skipped."""
@@ -416,6 +451,7 @@ class PostboxService:
     def _process_pp(self, kind: str, st: SourceSettings, done: dict, sync_now: bool):
         self.skip_excluded(kind, st)
         self.skip_known_duplicates(kind)
+        self.settle_in_pp(kind)
         rows = self.store.for_pp(kind)
         if not rows:
             return
