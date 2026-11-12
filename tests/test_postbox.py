@@ -954,3 +954,30 @@ def test_excluded_document_types_skip_pp(reg, book, fetcher, pp_import, nc, cfg)
     assert svc.skip_excluded(KIND, st) == 10  # one per day
     assert {d["pp_status"] for d in svc.store.docs(KIND, limit=500)
             if d["title"] == "Steuerausgleichsrechnung"} == {"skipped"}
+
+
+def test_known_document_number_is_not_imported_again_and_not_a_review():
+    from gnubook.postbox.service import _doc_status
+
+    dup = {"kind": "BuySellEntryItem", "status": "WARNING", "imported": False,
+           "messages": [{"message": "Buchung existiert schon (Beleg-/Vorgangs-Nr. 723493456)"}]}
+    maybe = {"kind": "BuySellEntryItem", "status": "WARNING", "imported": False,
+             "messages": [{"message": "Buchung existiert möglicherweise schon (gleiche Buchung ohne Belegnummer)"}]}
+    ok = {"kind": "BuySellEntryItem", "status": "OK", "imported": True, "messages": []}
+    status, message = _doc_status([dup], [], False)
+    assert status == "skipped" and "Schon in Portfolio Performance" in message and "723493456" in message
+    assert _doc_status([dup, ok], [], False)[0] == "imported"  # the rest of the document is taken
+    assert _doc_status([maybe], [], False)[0] == "review"      # without a number it stays a question
+    assert _doc_status([dup, maybe], [], False)[0] == "review"
+
+
+def test_old_reviews_of_known_numbers_are_cleared(reg, book, fetcher, pp_import, nc, cfg):
+    _source(reg, book)
+    svc = PostboxService(reg, book)
+    svc.run(KIND, "test")
+    review = next(d for d in svc.store.docs(KIND, limit=500) if d["pp_status"] == "review")
+    svc.store.set_pp(review["id"], "review", "Buchung existiert schon (Beleg-/Vorgangs-Nr. 723493456)", items=1,
+                     imported=0)
+    assert svc.skip_known_duplicates(KIND) == 1
+    row = svc.store.doc(review["id"])
+    assert row["pp_status"] == "skipped" and "723493456" in row["pp_message"]

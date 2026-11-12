@@ -1328,6 +1328,7 @@ EN = {
     'Belegeingang „{a0}“: läuft wieder': 'Belegeingang “{a0}”: working again',
     'Belegeingang „{a0}“: {a1} zur Prüfung': 'Belegeingang “{a0}”: {a1} to review',
     'vorhanden': 'existing',
+    'Schon in Portfolio Performance – nicht erneut übernommen ({a0}).': 'Already in Portfolio Performance – not imported again ({a0}).',
     'Beleg aus der Nextcloud nicht geladen ({a0}): {a1}': 'Document not loaded from Nextcloud ({a0}): {a1}',
     'Vorhandene Buchung in Portfolio Performance': 'Existing transaction in Portfolio Performance',
     'Belegart ausgeschlossen': 'document type excluded',

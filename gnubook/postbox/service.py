@@ -35,6 +35,9 @@ log = logging.getLogger("gnubook.postbox")
 PP_CHUNK = 25                    # documents per pp-core import call
 NC_FAILURES_IN_A_ROW = 3         # then Nextcloud is probably unreachable: the rest waits for the next run
 NOT_RECOGNISED = ("no transactions recognised", "unsupported bank or document type")
+# pp-core's DocumentDuplicates: a transaction with the same document number is already in the PP file – a certain
+# duplicate, not a question (unlike "existiert möglicherweise schon" or "zweimal in diesem Import")
+KNOWN_DUPLICATE = "Buchung existiert schon (Beleg-/Vorgangs-Nr."
 TARGET_MISSING = "target account missing"
 PAUSING = ("login_failed", "approval_required")
 TZ = ZoneInfo("Europe/Berlin")
@@ -381,6 +384,18 @@ class PostboxService:
                 log.warning("Postfach: %s nicht gelöscht: %s", path, exc)
         return n
 
+    def skip_known_duplicates(self, kind: str) -> int:
+        """Documents waiting for a review only because their document number is already in PP (checked before this
+        was decided automatically): nothing to decide, marked skipped."""
+        n = 0
+        for r in self.store.for_pp(kind, ("review",)):
+            message = r["pp_message"] or ""
+            if message.startswith(KNOWN_DUPLICATE) and (r["pp_imported"] or 0) == 0:
+                self.store.set_pp(r["id"], "skipped", _("Schon in Portfolio Performance – nicht erneut übernommen "
+                                                        "({a0}).", a0=message))
+                n += 1
+        return n
+
     def skip_excluded(self, kind: str, st: SourceSettings) -> int:
         """Marks open documents whose file name matches st.pp_skip as skipped for PP. Also documents waiting for a
         review, so a type excluded later disappears from the list to check. Returns the number marked."""
@@ -395,6 +410,7 @@ class PostboxService:
 
     def _process_pp(self, kind: str, st: SourceSettings, done: dict, sync_now: bool):
         self.skip_excluded(kind, st)
+        self.skip_known_duplicates(kind)
         rows = self.store.for_pp(kind)
         if not rows:
             return
@@ -657,8 +673,10 @@ def _doc_status(items: list[dict], errors: list[str], needs_target: bool) -> tup
     securities = [i for i in items if i.get("kind") == "SecurityItem"]
     n = sum(1 for i in its if i.get("imported"))
     waiting = [i for i in its if not i.get("imported")]
-    warnings = [i for i in waiting if i.get("status") == "WARNING"]
-    skipped = [i for i in waiting if i.get("status") == "SKIP"]
+    known = [i for i in waiting if i.get("status") == "WARNING"
+             and any(KNOWN_DUPLICATE in (m.get("message") or "") for m in i.get("messages") or [])]
+    warnings = [i for i in waiting if i.get("status") == "WARNING" and i not in known]
+    skipped = [i for i in waiting if i.get("status") == "SKIP"] + known
     target = [i for i in waiting if any(TARGET_MISSING in (m.get("message") or "") for m in i.get("messages") or [])]
     failed = [i for i in waiting if (i.get("status") == "ERROR" or i.get("error")) and i not in target]
     if not its:
@@ -673,6 +691,9 @@ def _doc_status(items: list[dict], errors: list[str], needs_target: bool) -> tup
     if failed:
         return ("partial" if n else "error"), _first_message(failed)
     if n == 0 and skipped and len(skipped) == len(its):
+        if known and len(known) == len(its):
+            return "skipped", _("Schon in Portfolio Performance – nicht erneut übernommen ({a0}).",
+                                a0=_first_message(known))
         return "skipped", _first_message(skipped)
     left = [i for i in waiting if i not in skipped]
     if n == 0 or left:
