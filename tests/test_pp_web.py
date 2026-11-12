@@ -442,3 +442,27 @@ def test_pdf_import_shows_the_existing_transaction_for_a_warning(web, fake, monk
     assert "Vorhandene Buchung in Portfolio Performance" in page and ">vorhanden<" in page
     assert "Kauf_2024-01-03.pdf" in page and "Sparplan" in page
     assert page.count("Kauf_2024-01-03.pdf") == 1  # depot side only, not the cash leg as well
+
+
+def test_pdf_import_links_the_pdfs_from_the_belegeingang(web, fake, pp_app, monkeypatch):
+    from datetime import date as _date
+
+    from gnubook.postbox.plan import Listed
+    from gnubook.postbox.service import PostboxService
+
+    reg = pp_app.extensions["gnubook"]
+    ctx = reg.context(reg.system.books()[0]["id"])
+    store = PostboxService(reg, ctx).store
+    new_id = store.add_doc("finanzen-zero", Listed("1", "Kauf", _date(2024, 3, 2), ""), "Kauf2.pdf", "a", 1)
+    old_id = store.add_doc("finanzen-zero", Listed("2", "Kauf", _date(2024, 1, 3), ""), "Kauf_2024-01-03.pdf", "b", 1)
+    orig = fake._import_result
+
+    def result(**kw):
+        r = orig(**kw)
+        r["items"][1].update({"date": "2024-01-03T00:00", "security": {"name": "Musterwelt Aktien ETF",
+                                                                      "isin": "DE000MUSTER1", "wkn": None}})
+        return r
+    monkeypatch.setattr(fake, "_import_result", result)
+    page = web.get("/pp/import?session=s-1").text
+    assert f"/postbox/docs/{new_id}/pdf?source=finanzen-zero" in page  # the warned document
+    assert f"/postbox/docs/{old_id}/pdf?source=finanzen-zero" in page  # the existing transaction's document

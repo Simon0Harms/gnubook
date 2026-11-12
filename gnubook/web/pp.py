@@ -440,8 +440,9 @@ def pdf_import():
                 flash(_("Das Importergebnis ist nicht mehr verfügbar."), "info")
     except PPCoreError as exc:
         return _pp_error(exc)
+    existing = _existing_for_warnings(svc, results)
     return render_template("pp/import.html", summary=summary, results=results, IMPORT_STATUS=IMPORT_STATUS,
-                           ACCEPT=archive.ACCEPT, existing=_existing_for_warnings(svc, results))
+                           ACCEPT=archive.ACCEPT, existing=existing, pdfs=_postbox_pdfs(results, existing))
 
 
 def _existing_for_warnings(svc, results: list[dict]) -> dict:
@@ -485,6 +486,23 @@ def _existing_for_warnings(svc, results: list[dict]) -> dict:
         if found:
             out[(sid, item.get("index"))] = sorted(found, key=lambda f: f["date"], reverse=True)[:5]
     return out
+
+
+def _postbox_pdfs(results: list[dict], existing: dict) -> dict:
+    """{file name: postbox document} for the files on the import page that came from the Belegeingang, so the page
+    can link their PDF (also once the local copy is deleted: then it comes from Nextcloud)."""
+    names = {i.get("file") for r in results for i in r.get("items") or []}
+    names |= {e.get("source") for found in existing.values() for e in found}
+    names = {n.rsplit("/", 1)[-1] for n in names if n}
+    if not names:
+        return {}
+    from ..postbox.service import PostboxService
+
+    try:
+        return PostboxService(registry(), state()).store.docs_by_filename(names)
+    except Exception:  # noqa: BLE001 – no postbox table yet, etc.: the page works without the links
+        log.exception("PDF-Import: Belege des Belegeingangs nicht gelesen")
+        return {}
 
 
 IMPORT_BATCH_BYTES = 32 * 1024 * 1024  # raw bytes per request: base64 adds a third, pp-core takes 64 MB by default

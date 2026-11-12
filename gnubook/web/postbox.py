@@ -7,6 +7,7 @@ state in Portfolio Performance and Nextcloud.
 from __future__ import annotations
 
 import importlib.util
+import io
 from datetime import date
 
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, send_file, session, url_for
@@ -243,13 +244,16 @@ def doc_pdf(doc_id):
     kind = _kind()
     svc = _svc()
     row = _doc_or_404(svc, doc_id, kind)
-    path = svc.doc_path(row)
-    if not path.is_file():
-        if row["nc_status"] == "done":
-            flash(_("Die lokale Kopie ist gelöscht – der Beleg liegt in der Nextcloud: {a0}", a0=row["nc_path"] or "?"), "info")
-            return _back(kind, "#docs")
+    from ..nextcloud import NextcloudError
+
+    try:
+        data = svc.pdf_bytes(row)  # local copy, else from Nextcloud
+    except FileNotFoundError:
         abort(404)
-    return send_file(path, mimetype="application/pdf", download_name=row["filename"],
+    except NextcloudError as exc:
+        flash(_("Beleg aus der Nextcloud nicht geladen ({a0}): {a1}", a0=row["nc_path"] or "?", a1=exc), "warning")
+        return _back(kind, "#docs")
+    return send_file(io.BytesIO(data), mimetype="application/pdf", download_name=row["filename"],
                      as_attachment=request.args.get("download") == "1")
 
 

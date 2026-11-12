@@ -47,6 +47,7 @@
   </div>
 </div>
 
+{% macro pdf_link(name) %}{% set d = pdfs.get((name or '').rsplit('/', 1)[-1]) %}{% if d %} <a class="btn btn-sm btn-outline-secondary py-0 px-1" href="{{ url_for('postbox.doc_pdf', doc_id=d['id'], source=d['source']) }}" target="_blank" rel="noopener" title="{{ _("PDF ansehen") }}"><i class="bi bi-file-earmark-pdf"></i></a>{% endif %}{% endmacro %}
 {% for result in results %}
 <div class="card mb-4">
   <div class="card-header"><h3 class="card-title">{{ _("Ergebnis") }}{% if results|length > 1 %} {{ loop.index }}/{{ results|length }}{% endif %}</h3>
@@ -100,7 +101,7 @@
             <td><span class="badge {{ {'OK': 'text-bg-success', 'WARNING': 'text-bg-warning', 'ERROR': 'text-bg-danger'}.get(i.status, 'text-bg-secondary') }}">{{ _(IMPORT_STATUS.get(i.status, i.status)) }}</span>
               {% for m in i.messages %}<div class="small">{{ m.message }}</div>{% endfor %}
               {% if i.error %}<div class="small text-danger">{{ i.error }}</div>{% endif %}</td>
-            <td class="small text-body-secondary">{{ i.extractor }}{% if i.file %}<div>{{ i.file }}</div>{% endif %}</td>
+            <td class="small text-body-secondary">{{ i.extractor }}{% if i.file %}<div>{{ i.file }}{{ pdf_link(i.file) }}</div>{% endif %}</td>
           </tr>
           {% for e in existing.get((result.session, i.index), []) %}
           <tr class="small text-body-secondary">
@@ -112,7 +113,7 @@
             <td class="text-end text-nowrap">{{ money(e.amount) if e.amount.amount else '' }}</td>
             <td></td>
             <td><span class="badge text-bg-secondary">{{ _("vorhanden") }}</span>{% if e.where %}<div>{{ e.where }}</div>{% endif %}</td>
-            <td class="text-break">{{ e.source }}{% if e.note %}<div>{{ e.note }}</div>{% endif %}</td>
+            <td class="text-break">{{ e.source }}{{ pdf_link(e.source) }}{% if e.note %}<div>{{ e.note }}</div>{% endif %}</td>
           </tr>
           {% endfor %}
         {% endfor %}

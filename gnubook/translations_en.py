@@ -1227,7 +1227,6 @@ EN = {
     '„{a0}“ ist kein Datum': '“{a0}” is not a date',
     '„{a0}“ ist keine Zahl': '“{a0}” is not a number',
     '{a0} lokale Kopien gelöscht': '{a0} local copies deleted',
-    'Die lokale Kopie ist gelöscht – der Beleg liegt in der Nextcloud: {a0}': 'The local copy is deleted – the document is in Nextcloud: {a0}',
     'Lokale Kopie löschen, sobald der Beleg in der Nextcloud ist und für Portfolio Performance nichts mehr offen ist': 'Delete the local copy once the document is in Nextcloud and nothing is left to do for Portfolio Performance',
     # ---------------------------------------------------------------- pause of the book connection
     "Die Verbindung zum Buch ist bis {a0} pausiert ({a1}).": "The connection to the book is paused until {a0} ({a1}).",
@@ -1329,6 +1328,7 @@ EN = {
     'Belegeingang „{a0}“: läuft wieder': 'Belegeingang “{a0}”: working again',
     'Belegeingang „{a0}“: {a1} zur Prüfung': 'Belegeingang “{a0}”: {a1} to review',
     'vorhanden': 'existing',
+    'Beleg aus der Nextcloud nicht geladen ({a0}): {a1}': 'Document not loaded from Nextcloud ({a0}): {a1}',
     'Vorhandene Buchung in Portfolio Performance': 'Existing transaction in Portfolio Performance',
     'Belegart ausgeschlossen': 'document type excluded',
     '{a0} Belege für Portfolio Performance übersprungen.': '{a0} documents skipped for Portfolio Performance.',

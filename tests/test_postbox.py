@@ -795,8 +795,9 @@ def test_local_copy_is_deleted_when_nothing_is_left_to_do(reg, book, fetcher, pp
             assert d["pp_status"] == "review" and svc.doc_path(d).exists()  # still needed for the decision
     review = next(d for d in docs if d["pp_status"] == "review")
     gone = next(d for d in docs if d["pp_status"] == "imported")
-    r = web.get(f"/postbox/docs/{gone['id']}/pdf", follow_redirects=True)
-    assert "liegt in der Nextcloud" in r.text and gone["nc_path"] in r.text
+    r = web.get(f"/postbox/docs/{gone['id']}/pdf")  # local copy deleted: served from Nextcloud
+    assert r.status_code == 200 and r.data.startswith(b"%PDF") and r.mimetype == "application/pdf"
+    assert r.data == nc.files[gone["nc_path"]]
     web.post(f"/postbox/docs/{review['id']}/done", data={"csrf_token": web.csrf})
     assert not svc.doc_path(review).exists()
     # a later run does not fetch the deleted ones again

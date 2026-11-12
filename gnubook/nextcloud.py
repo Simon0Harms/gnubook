@@ -170,6 +170,10 @@ class Client:
         self._request("PUT", self._dav(f"{folder}/{filename}"), data=data,
                       headers={"Content-Type": content_type}, ok=(201, 204))
 
+    def download(self, path: str) -> bytes:
+        _status, body = self._request("GET", self._dav(path), ok=(200,))
+        return body
+
     def delete(self, path: str):
         self._request("DELETE", self._dav(path), ok=(204, 404))
 

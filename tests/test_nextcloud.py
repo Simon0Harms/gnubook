@@ -80,6 +80,8 @@ class FakeNextcloud(BaseHTTPRequestHandler):
             return
         if self.path.startswith("/ocs/v2.php/cloud/user"):
             self._send(200, json.dumps({"ocs": {"data": {"id": DAV_USER, "display-name": "Simon"}}}).encode())
+        elif any(unquote(urlsplit(self.path).path).startswith(x) for x in self.PREFIXES) and self._path() in self.files:
+            self._send(200, self.files[self._path()], "application/octet-stream")
         else:
             self._send(404)
 

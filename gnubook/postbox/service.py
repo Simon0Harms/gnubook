@@ -559,6 +559,24 @@ class PostboxService:
         except Exception as exc:  # noqa: BLE001 – key changed
             return None, str(exc)
 
+    def pdf_bytes(self, row) -> bytes:
+        """The document's PDF: the local copy, or – once that is deleted – the copy in Nextcloud."""
+        from ..nextcloud import NextcloudError
+
+        try:
+            return self.doc_path(row).read_bytes()
+        except FileNotFoundError:
+            pass
+        if row["nc_status"] != "done" or not row["nc_path"]:
+            raise FileNotFoundError(row["filename"])
+        source = self.source(row["source"])
+        if source is None:
+            raise FileNotFoundError(row["filename"])
+        client, why = self._nc_client(source, self.settings_of(source))
+        if client is None:
+            raise NextcloudError(why)
+        return client.download(row["nc_path"])
+
     def nc_folder(self, st: SourceSettings, day: str | None) -> str:
         from ..nextcloud import clean_folder
 

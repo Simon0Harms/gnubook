@@ -65,6 +65,16 @@ class PostboxStore:
         with self.appdb.conn() as c:
             return c.execute("SELECT * FROM postbox_docs WHERE id = ?", (int(doc_id),)).fetchone()
 
+    def docs_by_filename(self, names) -> dict:
+        """{file name: newest document with that name} for the given names (any source)."""
+        names = [n for n in {str(n) for n in names if n}][:500]
+        if not names:
+            return {}
+        with self.appdb.conn() as c:
+            rows = c.execute(f"SELECT * FROM postbox_docs WHERE filename IN ({','.join('?' * len(names))}) "
+                             f"ORDER BY id", names).fetchall()
+        return {r["filename"]: r for r in rows}
+
     def docs(self, source: str | None = None, attention: bool = False, limit: int = 200, offset: int = 0):
         where, args = [], []
         if source:
