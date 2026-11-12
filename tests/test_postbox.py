@@ -282,7 +282,9 @@ def test_first_and_second_run(reg, book, fetcher, pp_import, nc, cfg):
     out = svc.run(KIND, "test")
     assert fetcher.stops[-1] == D(2026, 10, 7)
     assert out.new == 3 and out.downloaded == 3
-    assert len(pp_import.calls) == 2 and len(pp_import.calls[1]) == 3  # only the new ones
+    # the reviews of the first run are checked once more (their message is not from pp-core's number check),
+    # then only the new documents are imported
+    assert len(pp_import.calls) == 3 and len(pp_import.calls[1]) == 10 and len(pp_import.calls[2]) == 3
     assert svc.store.complete_day(KIND) == D(2026, 10, 12)
     assert svc.store.counts(KIND)["total"] == 24
 
@@ -1010,3 +1012,55 @@ def test_documents_already_in_pp_leave_the_review_list(reg, book, fetcher, pp_im
     assert svc.settle_in_pp(KIND) == 1  # buy/sell counted once, so 1 transaction for 1 item
     assert svc.store.doc(first["id"])["pp_status"] == "imported"
     assert svc.store.doc(second["id"])["pp_status"] == "review"  # not in PP: still a question
+
+
+def test_old_reviews_are_checked_once_more_without_importing(reg, book, fetcher, pp_import, nc, cfg):
+    """A review stored before the document-number check: pp-core now says the number is in PP (Excel import)."""
+    _source(reg, book)
+    svc = PostboxService(reg, book)
+    svc.run(KIND, "test")
+    review = [d for d in svc.store.docs(KIND, limit=500) if d["pp_status"] == "review"]
+    target = review[0]["filename"]
+    plain = pp_import.import_pdfs
+    applied = []
+
+    def check(cid, files, portfolio=None, account=None, apply=True, auto_feed=True):
+        applied.append(apply)
+        r = plain(cid, files, portfolio, account, apply, auto_feed)
+        for it in r["items"]:
+            if it["file"] == target:
+                it["messages"] = [{"code": "WARNING", "message": "Buchung existiert schon (Beleg-/Vorgangs-Nr. 719672992)"}]
+        return r
+    pp_import.fake.import_pdfs = check
+    assert svc.recheck_reviews(KIND) == 1 and applied == [False]
+    assert svc.store.doc(review[0]["id"])["pp_status"] == "skipped"
+    assert svc.store.doc(review[1]["id"])["pp_status"] == "review"
+    assert svc.recheck_reviews(KIND) == 0 and applied == [False]  # each document only once
+
+
+def test_old_reviews_are_checked_again_once(reg, book, fetcher, pp_import, nc, cfg):
+    """A review stored by an older check: pp-core now knows the number (e.g. from the Excel list) – skipped."""
+    _source(reg, book)
+    svc = PostboxService(reg, book)
+    svc.run(KIND, "test")
+    review = [d for d in svc.store.docs(KIND, limit=500) if d["pp_status"] == "review"]
+    assert review and all("möglicherweise" in d["pp_message"] for d in review)
+    calls = len(pp_import.calls)
+    orig = pp_import.import_pdfs
+
+    def known(cid, files, portfolio=None, account=None, apply=True, auto_feed=True):
+        assert apply is False  # a re-check never imports
+        r = orig(cid, files, portfolio, account, apply, auto_feed)
+        for it in r["items"]:
+            if it["file"] == review[0]["filename"]:
+                it["messages"] = [{"code": "WARNING", "message": "Buchung existiert schon (Beleg-/Vorgangs-Nr. 719672992)"}]
+        return r
+    pp_import.fake.import_pdfs = known
+    assert svc.recheck_reviews(KIND) == 1
+    assert len(pp_import.calls) == calls + 1  # all in one call
+    first = svc.store.doc(review[0]["id"])
+    assert first["pp_status"] == "skipped" and "719672992" in first["pp_message"]
+    rest = svc.store.doc(review[1]["id"])
+    assert rest["pp_status"] == "review" and rest["pp_message"].startswith("Neu geprüft")
+    # checked once: the next run does not ask pp-core again for them
+    assert svc.recheck_reviews(KIND) == 0 and len(pp_import.calls) == calls + 1

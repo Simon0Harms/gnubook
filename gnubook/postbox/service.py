@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import fcntl
 import hashlib
+import json
 import logging
 import os
 import sys
@@ -35,9 +36,16 @@ log = logging.getLogger("gnubook.postbox")
 PP_CHUNK = 25                    # documents per pp-core import call
 NC_FAILURES_IN_A_ROW = 3         # then Nextcloud is probably unreachable: the rest waits for the next run
 NOT_RECOGNISED = ("no transactions recognised", "unsupported bank or document type")
+# messages of pp-core's DocumentDuplicates (numbered documents): reviews with any other message were stored before it
+# existed or with PP's own check and are checked once more (recheck_reviews)
+NUMBER_CHECK = ("Beleg-/Vorgangs-Nr.", "gleiche Buchung ohne Belegnummer")
 # pp-core's DocumentDuplicates: a transaction with the same document number is already in the PP file – a certain
 # duplicate, not a question (unlike "existiert möglicherweise schon" or "zweimal in diesem Import")
 KNOWN_DUPLICATE = "Buchung existiert schon (Beleg-/Vorgangs-Nr."
+# review messages of the current duplicate check (pp-core's DocumentDuplicates, or a re-check here): a review
+# stored with another message comes from an older check and is checked once more (PostboxService.recheck_reviews)
+RECHECKED = "Neu geprüft"
+CURRENT_REVIEW = ("Beleg-/Vorgangs-Nr.", "gleiche Buchung ohne Belegnummer", RECHECKED)
 TARGET_MISSING = "target account missing"
 PAUSING = ("login_failed", "approval_required")
 TZ = ZoneInfo("Europe/Berlin")
@@ -419,6 +427,112 @@ class PostboxService:
                 n += 1
         return n
 
+    def recheck_reviews(self, kind: str) -> int:
+        """Reviews stored with a message not from the document-number check: pp-core checks them once more without
+        importing anything (apply=false). A document whose number is already in PP is skipped; one still in
+        question keeps its status with the new message. Each document is checked once (rechecked.json).
+        Returns the number skipped."""
+        marker = self.book_dir(kind) / "rechecked.json"
+        try:
+            checked = set(json.loads(marker.read_text(encoding="utf-8")))
+        except (OSError, ValueError, TypeError):
+            checked = set()
+        rows = [r for r in self.store.for_pp(kind, ("review",))
+                if r["id"] not in checked and not any(m in (r["pp_message"] or "") for m in NUMBER_CHECK)]
+        svc = self.ctx.pp
+        if not rows or svc is None:
+            return 0
+        from ..pp.client import PPCoreError
+
+        def remember(ids):
+            checked.update(ids)
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            tmp = marker.with_name(marker.name + ".tmp")
+            tmp.write_text(json.dumps(sorted(checked)), encoding="utf-8")
+            os.replace(tmp, marker)
+
+        n = 0
+        for i in range(0, len(rows), PP_CHUNK):
+            chunk, files = [], []
+            for r in rows[i:i + PP_CHUNK]:
+                try:
+                    files.append((r["filename"], self.pdf_bytes(r)))
+                    chunk.append(r)
+                except Exception as exc:  # noqa: BLE001 – PDF gone, Nextcloud down: keep the review
+                    log.info("Postfach: %s nicht erneut geprüft: %s", r["filename"], exc)
+            if not files:
+                continue
+            try:
+                result = svc.client.import_pdfs(svc.cid, files, apply=False, auto_feed=False)
+            except PPCoreError as exc:
+                log.warning("Postfach: erneute Prüfung fehlgeschlagen: %s", exc)
+                break
+            items = defaultdict(list)
+            for it in result.get("items") or []:
+                items[it.get("file")].append(it)
+            for r in chunk:
+                its = items.get(r["filename"], [])
+                status, message = _doc_status(its, [], False)
+                if status == "skipped":
+                    self.store.set_pp(r["id"], "skipped", message, r["pp_items"], 0)
+                    n += 1
+                elif status == "review":
+                    self.store.set_pp(r["id"], "review", message, r["pp_items"], r["pp_imported"],
+                                      session=result.get("session"))
+            remember(r["id"] for r in chunk)
+        return n
+
+    def recheck_reviews(self, kind: str) -> int:
+        """Reviews stored by an older duplicate check (e.g. PP's own before pp-core knew document numbers) are
+        checked once more by pp-core, without importing anything. A document whose number is already in PP – also
+        from the Excel list, which names no document file – is then skipped; otherwise only the message is updated,
+        so it is not checked again. Returns the number of documents that left the review list."""
+        rows = [r for r in self.store.for_pp(kind, ("review",))
+                if not any(m in (r["pp_message"] or "") for m in CURRENT_REVIEW)]
+        svc = self.ctx.pp
+        if not rows or svc is None:
+            return 0
+        from ..nextcloud import NextcloudError
+        from ..pp.client import PPCoreError
+
+        settled = 0
+        for i in range(0, len(rows), PP_CHUNK):
+            if self.cancelled(kind):
+                break
+            self.progress(kind, _("Portfolio Performance: offene Prüfungen {a0}–{a1} von {a2} neu prüfen", a0=i + 1,
+                                  a1=min(i + PP_CHUNK, len(rows)), a2=len(rows)))
+            chunk, files = [], []
+            for r in rows[i:i + PP_CHUNK]:
+                try:
+                    files.append((r["filename"], self.pdf_bytes(r)))
+                    chunk.append(r)
+                except (OSError, NextcloudError) as exc:
+                    log.warning("Postfach: %s nicht neu geprüft: %s", r["filename"], exc)
+            if not files:
+                continue
+            try:
+                result = svc.client.import_pdfs(svc.cid, files, apply=False, auto_feed=False)
+            except PPCoreError as exc:
+                log.warning("Postfach: Neuprüfung abgebrochen: %s", exc)
+                break
+            items = defaultdict(list)
+            for it in result.get("items") or []:
+                items[it.get("file")].append(it)
+            for r in chunk:
+                its = [it for it in items.get(r["filename"], []) if it.get("kind") != "SecurityItem"]
+                status, message = _doc_status(its, [], False)
+                if status == "skipped":
+                    self.store.set_pp(r["id"], "skipped", message, len(its), 0)
+                    settled += 1
+                elif status == "review":
+                    self.store.set_pp(r["id"], "review", f"{RECHECKED}: {message}", len(its), 0,
+                                      session=result.get("session"))
+                else:
+                    # pp-core sees no duplicate any more: the document is still to decide on ("Prüfen" imports it)
+                    self.store.set_pp(r["id"], "review", _("{a0}: keine Warnung mehr – mit „Prüfen“ übernehmen.",
+                                                           a0=RECHECKED), r["pp_items"], 0)
+        return settled
+
     def skip_known_duplicates(self, kind: str) -> int:
         """Documents waiting for a review only because their document number is already in PP (checked before this
         was decided automatically): nothing to decide, marked skipped."""
@@ -452,6 +566,7 @@ class PostboxService:
         self.skip_excluded(kind, st)
         self.skip_known_duplicates(kind)
         self.settle_in_pp(kind)
+        self.recheck_reviews(kind)
         rows = self.store.for_pp(kind)
         if not rows:
             return
