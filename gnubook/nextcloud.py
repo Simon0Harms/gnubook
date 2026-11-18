@@ -197,7 +197,7 @@ class Client:
         """Creates the folder, writes and removes a small probe file."""
         import tempfile
 
-        probe = ".gnubook-schreibtest.txt"
+        probe = "gnubook-schreibtest.txt"  # no leading dot: web servers often block dot files (404)
         with tempfile.NamedTemporaryFile(delete=False) as fh:
             fh.write(b"gnubook")
         try:
@@ -228,7 +228,7 @@ def client_for(row, password: str, timeout: float = TIMEOUT) -> Client:
 def parse_share_link(link: str, allow_http: bool = False) -> tuple[str, str]:
     """'https://cloud.example.org/s/AbC123' (also with index.php) -> (server, token)."""
     link = (link or "").strip()
-    m = re.match(r"^(.*?)/(?:index\.php/)?s/([A-Za-z0-9]{8,64})/?(?:[?#].*)?$", link)
+    m = re.match(r"^(.*?)/(?:index\.php/)?s/([A-Za-z0-9_-]{8,64})/?(?:[?#].*)?$", link)
     if not m:
         raise NextcloudError(_("Das ist kein Nextcloud-Freigabelink (…/s/…)."))
     return normalize_server(m.group(1), allow_http), m.group(2)

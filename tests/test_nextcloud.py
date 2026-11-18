@@ -308,6 +308,7 @@ def test_disabled_in_config(app, client):
 
 def test_parse_share_link():
     assert parse_share_link("https://cloud.example.org/s/AbCdEf123456") == ("https://cloud.example.org", SHARE)
+    assert parse_share_link("https://x.org/cloud/s/WmEbyn9Opt-Big0l_N7TF") == ("https://x.org/cloud", "WmEbyn9Opt-Big0l_N7TF")
     assert parse_share_link("https://x.org/nc/index.php/s/AbCdEf123456/") == ("https://x.org/nc", SHARE)
     for bad in ("https://x.org/apps/files", "https://x.org/s/a"):
         with pytest.raises(NextcloudError):
