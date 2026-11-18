@@ -204,6 +204,10 @@ class Client:
             self.ensure_folder(folder)
             self._request("PUT", self._dav(f"{folder}/{probe}"), data=Path(fh.name).read_bytes(), ok=(201, 204))
             self.delete(f"{folder}/{probe}")
+        except NextcloudError as exc:
+            if self.dav_root and exc.code in (403, 404):  # share found and readable, but writing is refused
+                raise NextcloudError(_("Freigabe gefunden, aber Schreiben abgelehnt (HTTP {a0}) – ist beim Link „Bearbeiten erlauben“ bzw. „Hochladen und Bearbeiten“ gesetzt und gespeichert?", a0=exc.code), exc.code)
+            raise
         finally:
             Path(fh.name).unlink(missing_ok=True)
 

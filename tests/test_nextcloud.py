@@ -396,3 +396,14 @@ def test_share_errors_report_the_telling_endpoint(nc):
     with pytest.raises(NextcloudError) as exc:  # wrong sub path: both endpoints answer 404
         connect_share(nc.url + "/falsch", SHARE, SHARE_PW)
     assert exc.value.code == 404 and "Freigabe nicht gefunden" in str(exc.value)
+
+
+def test_share_write_refused_is_named(nc):
+    """Share readable but not writable: the message points to the edit permission, not to a wrong address."""
+    from gnubook.nextcloud import NextcloudError, connect_share
+
+    client, _legacy = connect_share(nc.url, SHARE, SHARE_PW)
+    nc.readonly.add("/Share")
+    with pytest.raises(NextcloudError) as exc:
+        client.test_write("/")
+    assert "Schreiben abgelehnt" in str(exc.value)
