@@ -36,12 +36,15 @@ class FakeNextcloud(BaseHTTPRequestHandler):
     def _auth(self):
         path = urlsplit(self.path).path
         if path.startswith("/public.php/dav/"):
-            if self.legacy_only:
+            if self.legacy_only or not unquote(path).startswith(f"/public.php/dav/files/{SHARE}"):
                 self._send(404)
                 return False
             expected = self._basic("anonymous", SHARE_PW)
         elif path.startswith("/public.php/webdav"):
             expected = self._basic(SHARE, SHARE_PW)
+        elif not any(unquote(path).startswith(x) for x in self.PREFIXES + ("/ocs/", "/index.php/")):
+            self._send(404)  # e.g. wrong sub path of the server
+            return False
         else:
             expected = self._basic(LOGIN, APP_PW)
         if self.headers.get("Authorization") != expected:
@@ -377,3 +380,19 @@ def test_backup_writer_copies_the_pp_file_next_to_the_book(state, nc, tmp_path):
     bw.request()
     bw.flush()  # the book copy still goes up
     assert "/gnubook/Hauptbuch.gnucash" in nc.files and bw.remote_status[1]["error"] is None
+
+
+def test_share_errors_report_the_telling_endpoint(nc):
+    """A 404 of the new endpoint must not hide a 401 of the legacy one; both 404 = share unknown."""
+    from gnubook.nextcloud import NextcloudError, connect_share
+
+    FakeNextcloud.legacy_only = True  # new endpoint answers 404
+    try:
+        with pytest.raises(NextcloudError) as exc:
+            connect_share(nc.url, SHARE, "falsch")
+        assert exc.value.code == 401 and "Anmeldung" in str(exc.value)
+    finally:
+        FakeNextcloud.legacy_only = False
+    with pytest.raises(NextcloudError) as exc:  # wrong sub path: both endpoints answer 404
+        connect_share(nc.url + "/falsch", SHARE, SHARE_PW)
+    assert exc.value.code == 404 and "Freigabe nicht gefunden" in str(exc.value)

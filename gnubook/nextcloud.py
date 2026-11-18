@@ -29,7 +29,9 @@ _CTRL = re.compile(r"[\x00-\x1f\x7f]")
 
 
 class NextcloudError(RuntimeError):
-    pass
+    def __init__(self, message: str = "", code: int | None = None):
+        super().__init__(message)
+        self.code = code  # HTTP status, when the error came from one
 
 
 # ------------------------------------------------------------------------------------------ validation
@@ -112,7 +114,7 @@ class Client:
             body = exc.read()
             if exc.code in ok:
                 return exc.code, body
-            raise NextcloudError(self._explain(exc.code, method))
+            raise NextcloudError(self._explain(exc.code, method), exc.code)
         except (urllib.error.URLError, OSError) as exc:
             reason = getattr(exc, "reason", exc)
             raise NextcloudError(_("Nextcloud nicht erreichbar: {a0}", a0=reason))
@@ -233,15 +235,21 @@ def connect_share(server: str, token: str, password: str, timeout: float = TIMEO
 
     Returns (client, legacy). Raises the error of the new endpoint when neither works.
     """
-    first = None
+    errors = []
     for legacy in (False, True):
         client = Client.for_share(server, token, password, legacy, timeout)
         try:
             client.probe()
             return client, legacy
         except NextcloudError as exc:
-            first = first or exc
-    raise first
+            errors.append(exc)
+    # a 404 of one endpoint only says "not this endpoint": the other one's error (e.g. 401) says more
+    telling = [e for e in errors if e.code != 404]
+    if telling:
+        raise telling[0]
+    if all(e.code == 404 for e in errors):
+        raise NextcloudError(_("Freigabe nicht gefunden – ist der Link in der Nextcloud gespeichert (Passwort bestätigt, „Freigabe aktualisieren“), nicht gelöscht und nicht abgelaufen?"), 404)
+    raise errors[0]
 
 
 # ------------------------------------------------------------------------------------------ login flow v2

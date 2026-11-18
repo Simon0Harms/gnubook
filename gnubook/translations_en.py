@@ -591,6 +591,7 @@ EN = {
     'Nextcloud verbunden.': 'Nextcloud connected.',
     'Nextcloud-Ziel entfernt. Die Datei in der Nextcloud bleibt erhalten.': 'Nextcloud target removed. The file in Nextcloud is kept.',
     'Nicht gefunden – Adresse der Nextcloud oder Ordner prüfen.': 'Not found – check the Nextcloud address or folder.',
+    'Freigabe nicht gefunden – ist der Link in der Nextcloud gespeichert (Passwort bestätigt, „Freigabe aktualisieren“), nicht gelöscht und nicht abgelaufen?': 'Share not found – is the link saved in Nextcloud (password confirmed, “Update share”), not deleted and not expired?',
     'Nicht gespeichert: {a0}': 'Not saved: {a0}',
     'Nur https-Adressen sind erlaubt ([nextcloud] allow_http in config.toml).': 'Only https addresses are allowed ([nextcloud] allow_http in config.toml).',
     'Optional: Nach jeder Änderung landet eine Kopie dieses Buchs als .gnucash-Datei in deiner eigenen Nextcloud. Ältere Stände hebt Nextcloud selbst als Versionen auf.': 'Optional: after every change a copy of this book is stored as a .gnucash file in your own Nextcloud. Nextcloud keeps older states as versions.',
